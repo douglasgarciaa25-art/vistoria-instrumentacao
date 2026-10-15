@@ -1,0 +1,20 @@
+VISTORIA CMOC — V6 — VERCEL
+
+Publicação: https://vistoria-instrumentacao.vercel.app
+
+Envie TODOS os arquivos deste ZIP para a raiz do repositório, substituindo os arquivos anteriores. Não crie uma subpasta. Preserve outros arquivos do repositório que não façam parte deste pacote.
+
+A Vercel já possui armazenamento privado e variáveis de ambiente configuradas. A chave pessoal é entregue separadamente e não deve ser colocada no GitHub.
+
+COMO USAR A NUVEM
+1. Abra a seção de cópias na nuvem e informe sua chave pessoal.
+2. Salve o formulário atual ou todos os formulários.
+3. Em outro aparelho, abra o mesmo site, informe a mesma chave e escolha Recuperar cópia.
+4. As vistorias recuperadas aparecem na lista de vistorias salvas, com novos identificadores. As existentes são preservadas.
+5. Excluir da nuvem remove somente aquela cópia. Excluir um formulário local não remove cópias anteriores da nuvem.
+
+O salvamento na nuvem é MANUAL. Alterações posteriores precisam de uma nova cópia. Os dados locais ficam no navegador e aparelho em uso. A chave dá acesso a todas as cópias deste aplicativo; guarde-a e compartilhe apenas com quem deve ter acesso.
+
+Recursos: histórico local, edição e exclusão, duplicação, checklists, fotos antes/depois, filtros, PDF individual ou conjunto e cópias privadas na Vercel.
+
+O modelo visual se baseia na referência CMOC enviada pelo usuário; a aprovação institucional do documento deve seguir o processo interno da empresa.

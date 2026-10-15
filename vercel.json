@@ -1,0 +1,1 @@
+{"version":2,"regions":["gru1"],"builds":[{"src":"cloud-server.mjs","use":"@vercel/node"},{"src":"index.html","use":"@vercel/static"},{"src":"*.js","use":"@vercel/static"},{"src":"PDF-LIB-LICENSE.md","use":"@vercel/static"}],"routes":[{"src":"/api/cloud","dest":"/cloud-server.mjs"},{"src":"/","dest":"/index.html"},{"handle":"filesystem"},{"src":"/.*","status":404}]}
