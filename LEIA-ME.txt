@@ -18,3 +18,5 @@ O salvamento na nuvem é MANUAL. Alterações posteriores precisam de uma nova c
 Recursos: histórico local, edição e exclusão, duplicação, checklists, fotos antes/depois, filtros, PDF individual ou conjunto e cópias privadas na Vercel.
 
 O modelo visual se baseia na referência CMOC enviada pelo usuário; a aprovação institucional do documento deve seguir o processo interno da empresa.
+
+V6.1: instalação como aplicativo pelo Chrome. Abra o site online uma vez para preparar o uso offline. A nuvem exige internet. Depois de uma atualização, feche todas as janelas do aplicativo e abra novamente.
