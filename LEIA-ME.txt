@@ -30,3 +30,17 @@ Lixeira local: os formulários excluídos a partir desta versão podem ser resta
 Prazos vencidos: pontos Pendentes ou Em acompanhamento com data anterior ao dia atual.
 PDF por seleção: marque formulários no histórico e use PDF das selecionadas.
 Atualização: o botão Salvar e atualizar aparece quando uma próxima versão estiver pronta; antes da primeira abertura da V8, feche todas as janelas antigas do aplicativo.
+
+V9 — FERRAMENTAS DE CAMPO
+Cadastro de equipamentos e histórico por TAG: disponíveis em Início. Informe a TAG cadastrada para preencher área e equipamento; dados já preenchidos só são substituídos após confirmação pelo botão.
+Conclusão: em Relatório, use Concluir pendência. Informe data, executante e serviço; adicione uma foto depois, quando disponível. As informações entram no PDF e no resumo.
+Fotos: Marcar foto permite desenhar setas e círculos; a imagem original fica preservada na cópia editável.
+Resumo: em Relatório, gere e revise o texto, depois copie ou use Compartilhar para escolher o WhatsApp. Nenhuma mensagem é enviada automaticamente.
+Nuvem automática: habilite em Nuvem e entre com sua chave. Funciona enquanto o aplicativo está aberto, com internet; aguarda 15 segundos após as alterações e limita tentativas a uma por minuto. Usa cópias independentes, não sincronização com sobrescrita. Recuperar adiciona versões; compare antes de editar. Cópias incluem o cadastro de equipamentos, mas divergências de cadastro preservam a configuração local. Cópias automáticas acumulam armazenamento; exclua cópias antigas pela lista da nuvem quando não precisar delas.
+
+V10 — ACOMPANHAMENTO E REVISÃO
+Referência automática: gerada ao preencher ou criar uma nova vistoria, no formato RV-ANO-identificador. Não é uma sequência compartilhada entre aparelhos. Referências já preenchidas são preservadas e podem ser editadas.
+Plano de ação: em Início, reúna pendências locais, filtre por responsável, prioridade e prazo e abra o ponto para tratamento. Vistorias recuperadas são versões separadas e podem conter pontos repetidos.
+Busca no relatório: filtra os pontos exibidos por TAG, área, equipamento e descrição; não altera os registros incluídos no PDF.
+Fotos: Ver fotos / comparar abre o visualizador ampliado. Escolha fotos antes e depois lado a lado. Use Ampliar detalhe para examinar a imagem.
+Revisão: antes do PDF individual, conjunto ou selecionado, o app aponta campos faltantes, falta de fotos e pontos ainda não adicionados. Cancele para revisar ou confirme para emitir mesmo assim. O PDF inclui somente pontos já adicionados.

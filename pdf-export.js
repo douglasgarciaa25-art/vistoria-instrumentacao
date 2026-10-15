@@ -36,7 +36,7 @@ async function exportReportDocuments(documents){
  need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
  grid([['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
- detail('Condição encontrada',r.problem);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);
+ detail('Condição encontrada',r.problem);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
  if(r.photos.length){need(425);heading('REGISTRO FOTOGRÁFICO');for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j],img=await doc.embedJpg(p.src),scale=Math.min((CW-20)/img.width,330/img.height),w=img.width*scale,h=img.height*scale;
  need(h+53);page.drawRectangle({x:M,y:y-h-10,width:CW,height:h+10,color:light});page.drawImage(img,{x:(W-w)/2,y:y-h-5,width:w,height:h});y-=h+27;
@@ -52,5 +52,5 @@ async function exportReportDocuments(documents){
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };
 
-$('pdf').onclick=()=>{if(ready())return exportReportDocuments([structuredClone(data())])};
-$('pdfAll').onclick=()=>guarded(async()=>{if(($('tag').value||$('problem').value||photos.length)&&!confirm('Há um ponto ainda não adicionado ao relatório. Gerar o PDF apenas com os pontos já adicionados?'))return;await persistCurrent();const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());const docs=rows.sort((a,b)=>(a.document.meta.date||'').localeCompare(b.document.meta.date||'')||a.updated.localeCompare(b.updated)).map(r=>r.document);if(!docs.length)return notify('Nenhum formulário salvo para exportar.');const b=$('pdfAll');b.disabled=true;b.textContent='Gerando PDF completo…';try{await exportReportDocuments(docs)}finally{b.disabled=false;b.textContent='Baixar todos em um PDF'}});
+$('pdf').onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();return exportReportDocuments([structuredClone(data())])});
+$('pdfAll').onclick=()=>guarded(async()=>{await persistCurrent();const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());const docs=rows.sort((a,b)=>(a.document.meta.date||'').localeCompare(b.document.meta.date||'')||a.updated.localeCompare(b.updated)).map(r=>r.document);if(!docs.length)return notify('Nenhum formulário salvo para exportar.');const b=$('pdfAll');b.disabled=true;b.textContent='Gerando PDF completo…';try{await exportReportDocuments(docs)}finally{b.disabled=false;b.textContent='Baixar todos em um PDF'}});
