@@ -22,3 +22,11 @@ O modelo visual se baseia na referência CMOC enviada pelo usuário; a aprovaç�
 V6.1: instalação como aplicativo pelo Chrome. Abra o site online uma vez para preparar o uso offline. A nuvem exige internet. Depois de uma atualização, feche todas as janelas do aplicativo e abra novamente.
 
 V7: novo layout com Início, Vistoria, Relatório e Nuvem. Após atualizar, feche todas as abas e janelas do aplicativo e abra novamente. O histórico existente é preservado.
+
+V8 — MELHORIAS
+Salvamento local após uma breve pausa na digitação. O botão Salvar grava imediatamente. Ao trocar de aparelho, envie uma cópia manualmente para a nuvem.
+O indicador de nuvem registra envios feitos neste aparelho e compara o conteúdo com a última cópia registrada; não verifica exclusões feitas por outro aparelho.
+Lixeira local: os formulários excluídos a partir desta versão podem ser restaurados com suas fotos. Exclusões anteriores não podem ser recuperadas por esta função. Sem exclusão automática.
+Prazos vencidos: pontos Pendentes ou Em acompanhamento com data anterior ao dia atual.
+PDF por seleção: marque formulários no histórico e use PDF das selecionadas.
+Atualização: o botão Salvar e atualizar aparece quando uma próxima versão estiver pronta; antes da primeira abertura da V8, feche todas as janelas antigas do aplicativo.
