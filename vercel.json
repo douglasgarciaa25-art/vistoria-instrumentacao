@@ -27,6 +27,10 @@
     {
       "src": "manifest.webmanifest",
       "use": "@vercel/static"
+    },
+    {
+      "src": "*.css",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
