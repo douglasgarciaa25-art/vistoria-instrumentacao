@@ -14,7 +14,7 @@ async function exportReportDocuments(documents){
  function newPage(){page=doc.addPage([W,H]);if(m.watermark)page.drawText(clean(m.watermark),{x:80,y:180,size:53,font:bold,color:rgb(.93,.93,.93),rotate:degrees(52)});page.drawImage(logo,{x:M,y:H-69,width:130,height:130*logo.height/logo.width});draw('CMOC BRASIL',W-M-115,H-43,9,bold);draw('Revisão: '+(m.revision||'A definir'),W-M-115,H-59,9);page.drawLine({start:{x:M,y:H-83},end:{x:W-M,y:H-83},thickness:.6,color:line});y=H-108}
  function need(h){if(y-h<55)newPage()}
  function paragraph(v,size=10,color=ink){for(const t of wrap(v,size,CW)){need(size+5);draw(t,M,y,size,regular,color);y-=size+5}y-=5}
- function heading(v){need(33);y-=7;draw(v,M,y,12,bold,green);y-=10;page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:1.4,color:ink});y-=18}
+ function heading(v){const lines=wrap(v,12,CW,bold);need(33+Math.min(lines.length-1,35)*16);y-=7;for(const t of lines){need(26);draw(t,M,y,12,bold,green);y-=16}y+=6;page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:1.4,color:ink});y-=18}
  function detail(label,value){if(!value)return;need(39);draw(label.toUpperCase(),M,y,8,bold,muted);y-=16;paragraph(value)}
  function grid(items){const gap=10,width=(CW-gap)/2;for(let k=0;k<items.length;k+=2){const cells=items.slice(k,k+2).map(([label,value])=>({label,lines:wrap(value||'Não informado',10,width-20)}));const maxLines=Math.max(...cells.map(c=>c.lines.length));for(let off=0;off<maxLines;off+=30){const n=Math.min(30,maxLines-off),h=34+n*14;need(h+10);cells.forEach((c,i)=>{const x=M+i*(width+gap);page.drawRectangle({x,y:y-h,width,height:h,color:light,borderWidth:.5,borderColor:line});draw(c.label.toUpperCase()+(off?' (CONT.)':''),x+10,y-15,7,bold,muted);c.lines.slice(off,off+n).forEach((t,j)=>draw(t,x+10,y-32-j*14,10))});y-=h+9}}}
  for(const reportDocument of documents){m=reportDocument.meta;const records=reportDocument.records;
@@ -37,10 +37,10 @@ async function exportReportDocuments(documents){
  grid([['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
  detail('Condição encontrada',r.problem);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
- if(r.photos.length){need(425);heading('REGISTRO FOTOGRÁFICO');for(let j=0;j<r.photos.length;j++){
+ if(r.photos.length){for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j],img=await doc.embedJpg(p.src),scale=Math.min((CW-20)/img.width,330/img.height),w=img.width*scale,h=img.height*scale;
- need(h+53);page.drawRectangle({x:M,y:y-h-10,width:CW,height:h+10,color:light});page.drawImage(img,{x:(W-w)/2,y:y-h-5,width:w,height:h});y-=h+27;
- paragraph('Foto '+(i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:''),9,muted);y-=7;
+ const caption='Foto '+(i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');const captionHeight=Math.min(wrap(caption,9,CW).length,3)*14;need(h+53+captionHeight+(j===0?35:0));if(j===0)heading('REGISTRO FOTOGRÁFICO');page.drawRectangle({x:M,y:y-h-10,width:CW,height:h+10,color:light});page.drawImage(img,{x:(W-w)/2,y:y-h-5,width:w,height:h});y-=h+27;
+ paragraph(caption,9,muted);y-=7;
  }}
  }
  if(m.conclusion){heading('3. Conclusão / observações finais');paragraph(m.conclusion)}

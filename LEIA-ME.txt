@@ -1,3 +1,14 @@
+V11.1 — Botão Esvaziar lixeira
+Exclui definitivamente os formulários da lixeira local após confirmação. Não altera vistorias ativas nem cópias na nuvem. Inclui as melhorias da V11.
+
+V11 — Refinamento das funções existentes
+
+PDF: títulos longos com quebra de linha e espaço ajustado ao tamanho das fotos.
+Editor de fotos: ignora falhas de carregamentos antigos e mantém a foto em caso de falha ao salvar marcações.
+Celular: botões maiores, textos longos ajustados e foco visível.
+
+Suba todos os arquivos desta pasta na raiz do repositório. Após a publicação, use Salvar e atualizar no aplicativo.
+
 VISTORIA CMOC — V6 — VERCEL
 
 Publicação: https://vistoria-instrumentacao.vercel.app
