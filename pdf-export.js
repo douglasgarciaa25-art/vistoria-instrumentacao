@@ -36,18 +36,10 @@ async function exportReportDocuments(documents){
  need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
  grid([['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
- detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
+ detail('Condição encontrada',r.problem);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
  if(r.photos.length){for(let j=0;j<r.photos.length;j++){
- const p=r.photos[j],img=await doc.embedJpg(p.src);
- const caption='Foto '+(i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
- const captionLines=wrap(caption,9,CW),captionHeight=captionLines.length*14;
- // Reserve space for the heading, caption and footer before sizing the photo.
- const headingHeight=j===0?35:0;
- const maxHeight=Math.max(80,Math.min(530,H-108-55-headingHeight-39-Math.min(captionHeight,140)));
- const scale=Math.min(CW/img.width,maxHeight/img.height),w=img.width*scale,h=img.height*scale;
- need(h+39+Math.min(captionHeight,140)+headingHeight);
- if(j===0)heading('REGISTRO FOTOGRÁFICO');
- page.drawImage(img,{x:M+(CW-w)/2,y:y-h-5,width:w,height:h});y-=h+23;
+ const p=r.photos[j],img=await doc.embedJpg(p.src),scale=Math.min((CW-20)/img.width,330/img.height),w=img.width*scale,h=img.height*scale;
+ const caption='Foto '+(i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');const captionHeight=Math.min(wrap(caption,9,CW).length,3)*14;need(h+53+captionHeight+(j===0?35:0));if(j===0)heading('REGISTRO FOTOGRÁFICO');page.drawRectangle({x:M,y:y-h-10,width:CW,height:h+10,color:light});page.drawImage(img,{x:(W-w)/2,y:y-h-5,width:w,height:h});y-=h+27;
  paragraph(caption,9,muted);y-=7;
  }}
  }
