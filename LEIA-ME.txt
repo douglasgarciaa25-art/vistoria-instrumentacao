@@ -1,57 +1,31 @@
-V11.1 — Botão Esvaziar lixeira
-Exclui definitivamente os formulários da lixeira local após confirmação. Não altera vistorias ativas nem cópias na nuvem. Inclui as melhorias da V11.
+VISTORIAS TÉCNICAS — NUVEM COMPARTILHADA V12
 
-V11 — Refinamento das funções existentes
+1. Publique todos os arquivos deste ZIP na raiz do mesmo projeto Vercel.
+2. Mantenha o armazenamento Blob PRIVADO e as variáveis já utilizadas:
+   BLOB_READ_WRITE_TOKEN e VISTORIA_ACCESS_HASH (SHA-256 da chave de acesso).
+   Nunca coloque o token Blob no HTML ou compartilhe o token com usuários.
+3. Abra o aplicativo, aceite a atualização se aparecer e conecte com sua chave.
+4. Em cada outro aparelho, abra o MESMO endereço e informe a MESMA chave uma vez.
+   A chave fica lembrada até sair, limpar os dados do navegador ou trocar a chave.
+5. Todos com a chave têm acesso de leitura, edição e exclusão. Compartilhe-a
+   somente com as pessoas autorizadas. Não há contas individuais nesta versão.
 
-PDF: títulos longos com quebra de linha e espaço ajustado ao tamanho das fotos.
-Editor de fotos: ignora falhas de carregamentos antigos e mantém a foto em caso de falha ao salvar marcações.
-Celular: botões maiores, textos longos ajustados e foco visível.
+A lista de vistorias, fotos e dados de cada relatório é sincronizada a cada
+20 segundos com o aplicativo aberto/visível e após salvar. Há também o botão
+Sincronizar agora. Sem internet, o app guarda as alterações no aparelho e tenta
+novamente ao reconectar. Com o app fechado, a nuvem mantém os dados já enviados;
+não é possível garantir novos envios em segundo plano pelo navegador.
 
-Suba todos os arquivos desta pasta na raiz do repositório. Após a publicação, use Salvar e atualizar no aplicativo.
+Exclusões se propagam para os outros aparelhos; a cópia local vai para a lixeira.
+Edições simultâneas diferentes são preservadas como versões para comparação.
+Use uma aba por aparelho para editar. Aguarde o estado de sincronização antes
+de fechar. Cópias antigas continuam acessíveis nos controles de backup: recupere
+uma vez as que desejar compartilhar. Registros antigos com IDs distintos podem
+aparecer como duplicados e devem ser conferidos antes de excluir.
 
-VISTORIA CMOC — V6 — VERCEL
-
-Publicação: https://vistoria-instrumentacao.vercel.app
-
-Envie TODOS os arquivos deste ZIP para a raiz do repositório, substituindo os arquivos anteriores. Não crie uma subpasta. Preserve outros arquivos do repositório que não façam parte deste pacote.
-
-A Vercel já possui armazenamento privado e variáveis de ambiente configuradas. A chave pessoal é entregue separadamente e não deve ser colocada no GitHub.
-
-COMO USAR A NUVEM
-1. Abra a seção de cópias na nuvem e informe sua chave pessoal.
-2. Salve o formulário atual ou todos os formulários.
-3. Em outro aparelho, abra o mesmo site, informe a mesma chave e escolha Recuperar cópia.
-4. As vistorias recuperadas aparecem na lista de vistorias salvas, com novos identificadores. As existentes são preservadas.
-5. Excluir da nuvem remove somente aquela cópia. Excluir um formulário local não remove cópias anteriores da nuvem.
-
-O salvamento na nuvem é MANUAL. Alterações posteriores precisam de uma nova cópia. Os dados locais ficam no navegador e aparelho em uso. A chave dá acesso a todas as cópias deste aplicativo; guarde-a e compartilhe apenas com quem deve ter acesso.
-
-Recursos: histórico local, edição e exclusão, duplicação, checklists, fotos antes/depois, filtros, PDF individual ou conjunto e cópias privadas na Vercel.
-
-O modelo visual se baseia na referência CMOC enviada pelo usuário; a aprovação institucional do documento deve seguir o processo interno da empresa.
-
-V6.1: instalação como aplicativo pelo Chrome. Abra o site online uma vez para preparar o uso offline. A nuvem exige internet. Depois de uma atualização, feche todas as janelas do aplicativo e abra novamente.
-
-V7: novo layout com Início, Vistoria, Relatório e Nuvem. Após atualizar, feche todas as abas e janelas do aplicativo e abra novamente. O histórico existente é preservado.
-
-V8 — MELHORIAS
-Salvamento local após uma breve pausa na digitação. O botão Salvar grava imediatamente. Ao trocar de aparelho, envie uma cópia manualmente para a nuvem.
-O indicador de nuvem registra envios feitos neste aparelho e compara o conteúdo com a última cópia registrada; não verifica exclusões feitas por outro aparelho.
-Lixeira local: os formulários excluídos a partir desta versão podem ser restaurados com suas fotos. Exclusões anteriores não podem ser recuperadas por esta função. Sem exclusão automática.
-Prazos vencidos: pontos Pendentes ou Em acompanhamento com data anterior ao dia atual.
-PDF por seleção: marque formulários no histórico e use PDF das selecionadas.
-Atualização: o botão Salvar e atualizar aparece quando uma próxima versão estiver pronta; antes da primeira abertura da V8, feche todas as janelas antigas do aplicativo.
-
-V9 — FERRAMENTAS DE CAMPO
-Cadastro de equipamentos e histórico por TAG: disponíveis em Início. Informe a TAG cadastrada para preencher área e equipamento; dados já preenchidos só são substituídos após confirmação pelo botão.
-Conclusão: em Relatório, use Concluir pendência. Informe data, executante e serviço; adicione uma foto depois, quando disponível. As informações entram no PDF e no resumo.
-Fotos: Marcar foto permite desenhar setas e círculos; a imagem original fica preservada na cópia editável.
-Resumo: em Relatório, gere e revise o texto, depois copie ou use Compartilhar para escolher o WhatsApp. Nenhuma mensagem é enviada automaticamente.
-Nuvem automática: habilite em Nuvem e entre com sua chave. Funciona enquanto o aplicativo está aberto, com internet; aguarda 15 segundos após as alterações e limita tentativas a uma por minuto. Usa cópias independentes, não sincronização com sobrescrita. Recuperar adiciona versões; compare antes de editar. Cópias incluem o cadastro de equipamentos, mas divergências de cadastro preservam a configuração local. Cópias automáticas acumulam armazenamento; exclua cópias antigas pela lista da nuvem quando não precisar delas.
-
-V10 — ACOMPANHAMENTO E REVISÃO
-Referência automática: gerada ao preencher ou criar uma nova vistoria, no formato RV-ANO-identificador. Não é uma sequência compartilhada entre aparelhos. Referências já preenchidas são preservadas e podem ser editadas.
-Plano de ação: em Início, reúna pendências locais, filtre por responsável, prioridade e prazo e abra o ponto para tratamento. Vistorias recuperadas são versões separadas e podem conter pontos repetidos.
-Busca no relatório: filtra os pontos exibidos por TAG, área, equipamento e descrição; não altera os registros incluídos no PDF.
-Fotos: Ver fotos / comparar abre o visualizador ampliado. Escolha fotos antes e depois lado a lado. Use Ampliar detalhe para examinar a imagem.
-Revisão: antes do PDF individual, conjunto ou selecionado, o app aponta campos faltantes, falta de fotos e pontos ainda não adicionados. Cancele para revisar ou confirme para emitir mesmo assim. O PDF inclui somente pontos já adicionados.
+O catálogo de equipamentos e preferências locais não fazem parte desta
+sincronização; as informações preenchidas dentro das vistorias fazem.
+O histórico de revisões fica na nuvem e não é removido ao esvaziar a lixeira.
+Esta atualização reutiliza o serviço existente: não configura automaticamente
+as variáveis ou o armazenamento de um projeto novo. Os arquivos precisam ser
+publicados para que a alteração entre em funcionamento.
