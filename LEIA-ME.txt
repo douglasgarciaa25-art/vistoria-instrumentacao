@@ -1,1 +1,7 @@
-V12.3: carregar botoes de PDF por ponto e todos os pontos; excluir ponto em edicao; descartar novo ponto; backup JSON identificado. Envie todos os arquivos na raiz, substituindo os anteriores. Reabra e aceite a atualizacao quando oferecida.
+V12.5 — Abrir a vistoria diretamente no relatório
+
+Na página Início, em Suas vistorias, toque em Ver relatório no documento desejado.
+O aplicativo salva a vistoria anterior, carrega a escolhida e abre a aba Relatório.
+Abrir / editar continua disponível.
+
+Extraia e envie todos os arquivos na raiz, substituindo os anteriores. Aceite a atualização no aplicativo após a publicação.

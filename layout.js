@@ -14,7 +14,7 @@
  const settings=document.createElement('details');settings.className='advanced';settings.innerHTML='<summary>Revisão, aprovações e marca d’água <span>Opcional</span></summary><div class="fields"></div>';
  for(const id of ['revision','watermark','approver','approvalDate','homologator','homologDate','revisionNote'])settings.lastElementChild.append($(id).closest('label'));meta.append(settings);
  const filterGroup=$('filterArea').closest('.fields'),filters=document.createElement('details');filters.className='advanced filters';filters.innerHTML='<summary>Filtrar por área, prioridade e situação</summary>';filterGroup.before(filters);filters.append(filterGroup);
- history.querySelector('.step').textContent='HISTÓRICO';history.querySelector('h2').textContent='Suas vistorias';history.querySelector('p.muted').textContent='Abra um formulário para continuar de onde parou.';
+ history.querySelector('.step').textContent='HISTÓRICO';history.querySelector('h2').textContent='Suas vistorias';history.querySelector('p.muted').textContent='Toque em Ver relatório na vistoria desejada para revisar seus pontos e baixar o PDF.';
  cloud.querySelector('.step').textContent='ARMAZENAMENTO PRIVADO';cloud.querySelector('h2').textContent='Cópias na nuvem';
  $('pdfAll').classList.add('secondary');$('saveReport').textContent='Salvar vistoria aberta';$('pdf').innerHTML=icon('report')+'Baixar relatório em PDF';
  backup.querySelector('p').textContent='Baixe uma cópia editável com os registros e fotos. Para levar os dados a outro aparelho, use a nuvem ou restaure o arquivo.';
