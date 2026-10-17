@@ -32,7 +32,7 @@ async function exportReportDocuments(documents){
  const pending=records.filter(r=>r.status==='Pendente'||r.status==='Em acompanhamento').length;
  paragraph(records.length+' ponto(s) registrado(s)  |  '+pending+' em acompanhamento ou pendente(s)',9,muted);
  for(let i=0;i<records.length;i++){
- const r=records[i];need(165);heading('2.'+(i+1)+' Levantamento de campo');
+ const r=records[i];need(165);heading('2.'+(reportDocument.exportPointNumber||i+1)+' Levantamento de campo');
  for(const t of wrap(r.tag+' | '+r.area,14,CW,bold)){need(21);draw(t,M,y,14,bold);y-=20}y-=5;
  const pc={Crítica:rgb(.67,.15,.15),Alta:rgb(.72,.30,.08),'Média':rgb(.47,.35,.08),Baixa:green}[r.priority]||muted;
  need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
@@ -41,7 +41,7 @@ async function exportReportDocuments(documents){
  detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
  if(r.photos.length){for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j],img=await doc.embedJpg(p.src);
- const caption='Foto '+(i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
+ const caption='Foto '+(reportDocument.exportPointNumber||i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
  const captionLines=wrap(caption,9,CW),captionHeight=captionLines.length*14;
  // Reserve space for the heading, caption and footer before sizing the photo.
  const headingHeight=j===0?35:0;
@@ -58,7 +58,7 @@ async function exportReportDocuments(documents){
  }
  const pages=doc.getPages();pages.forEach((p,i)=>{if(originalPages.has(p))return;p.drawLine({start:{x:M,y:39},end:{x:W-M,y:39},thickness:.5,color:line});p.drawText('CMOC Brasil | Levantamento de instrumentação e automação',{x:M,y:25,size:8,font:regular,color:muted});const s=(i+1)+' / '+pages.length;p.drawText(s,{x:W-M-regular.widthOfTextAtSize(s,8),y:25,size:8,font:regular,color:muted})});
  doc.setTitle(clean(m.title||'Relatório de vistoria técnica'));doc.setAuthor(clean(m.author));
- download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+'.pdf');notify('PDF gerado. Confira os downloads.');
+ download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify('PDF gerado. Confira os downloads.');
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };
 
