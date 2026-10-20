@@ -1,7 +1,46 @@
-V12.5 — Abrir a vistoria diretamente no relatório
+V13.1 — Cadastro livre de balanças e histórico de calibrações
+Base: V13, com os recursos de vistoria preservados.
 
-Na página Início, em Suas vistorias, toque em Ver relatório no documento desejado.
-O aplicativo salva a vistoria anterior, carrega a escolhida e abre a aba Relatório.
-Abrir / editar continua disponível.
+INSTALAÇÃO
+Extraia o ZIP e envie TODOS os arquivos na raiz do mesmo projeto, substituindo os anteriores. Não crie uma subpasta. Após publicar, aceite Salvar e atualizar no aplicativo.
 
-Extraia e envie todos os arquivos na raiz, substituindo os anteriores. Aceite a atualização no aplicativo após a publicação.
+CADASTRO E HISTÓRICO
+Abra a nova aba Balanças ou toque em Minhas balanças no Início.
+Cadastre TAG, nome, área, fabricante, modelo, faixa e limite. Não existe limite fixo de seis balanças; a capacidade depende do armazenamento disponível.
+Cada balança tem seu histórico. Nova calibração cria outro registro com pesos e fotos vazios, preservando as anteriores.
+No histórico, você pode abrir/editar, baixar o Excel de uma calibração específica ou movê-la para a lixeira. A restauração pela lixeira existente devolve o registro ao histórico.
+Editar cadastro atualiza os dados usados nas próximas calibrações, sem alterar as anteriores. A TAG de um cadastro existente permanece fixa.
+Calibrações do V13 são agrupadas automaticamente pela TAG. Registros sem TAG permanecem separados até você informar a identificação.
+Cadastros e históricos fazem parte dos mesmos backups completos e sincronização já configurada.
+
+COMO USAR
+Abra a vistoria desejada. Na aba Balanças, selecione Nova calibração na balança desejada. O formulário fica na aba Vistoria.
+Marque Incluir calibração nesta vistoria. Preencha identificação, TAG, área, ordem, data, fabricante, modelo e responsáveis.
+Informe os pesos em kg, usando vírgula para decimais. Ponto em grupos de três dígitos é separador de milhares: 17.976 = 17976 kg.
+Registre a situação inicial e as leituras efetivamente realizadas. As demais ficam vazias.
+O limite inicial é 2%, como no modelo enviado. Confirme o limite do seu procedimento.
+A situação inicial é registrada separadamente. O resultado usa o maior erro absoluto das leituras 1 a 6; leituras incompletas não aprovam a calibração. Sem leituras finais, o resultado é PENDENTE. Esta aplicação não altera parâmetros da balança.
+
+FOTOS
+Em cada leitura, use Adicionar / ler. Selecione uma foto e toque em Ler números da foto. Confira o texto, o peso em kg, os separadores e o campo de destino antes de Confirmar e preencher.
+O reconhecimento usa Tesseract.js e precisa de internet para carregar seus componentes. A imagem é processada no aparelho. A leitura de displays e anotações pode falhar; preenchimento manual e salvamento somente da foto continuam disponíveis.
+Até duas fotos por leitura. Remova uma foto para substituí-la.
+
+SALVAMENTO E EXCEL
+Cada registro guarda uma calibração. Uma balança pode ter vários registros no histórico. Ela participa do salvamento local, backup editável e sincronização já configurada no aplicativo.
+Baixar Excel gera .xlsx com os campos do modelo, fórmulas editáveis, critérios e fotos em uma segunda aba. O modelo distribuído foi limpo dos registros históricos enviados.
+A exportação de PDF existente continua destinada aos pontos de vistoria. Use Baixar Excel para entregar a calibração completa.
+
+VERIFICAÇÃO
+Verificados cálculo com erros positivos/negativos, limite, campos vazios/incompletos, valores inválidos, leitura/gravação do XLSX, sintaxe dos scripts e dependências locais.
+Também testados agrupamento por TAG, vínculo por identificador, histórico separado, preservação dos dados anteriores e cadastro de 120 balanças.
+Não executado teste de interface em navegador nem reconhecimento de foto real de balança nesta sessão. Após publicar, confira o fluxo no celular antes de usar em registros de produção.
+
+
+V14 — Calibração de balança
+Abra o menu Calibração de balança. Use Importar histórico RET4 enviado para carregar os registros da planilha fornecida. Abas com mesmos dados são ignoradas para evitar duplicações. Depois abra Ver histórico: gráfico de erro inicial, maior erro absoluto final e limite por data. Novas calibrações ficam no mesmo histórico e no backup/nuvem existente.
+Limite da planilha: 0,02 em fração = 2%. Confira o procedimento antes de aprovar. Situação inicial separada; sem leitura final o status é PENDENTE.
+Todos os arquivos deste ZIP ficam na raiz. Substitua o pacote completo e recarregue o aplicativo para atualizar o cache.
+
+V14.1 — Melhorias nas balanças
+Filtros por data e resultado aplicados ao histórico e gráfico. Resumo de conformes, não conformes e pendências. Avisos de leituras incompletas ou inválidas. Atalho à próxima leitura e repetição assistida do peso padrão somente em leituras preenchidas sem padrão. Importação dos dados dos padrões de referência. Modelo e exportador Excel mantidos sem alteração de layout.
