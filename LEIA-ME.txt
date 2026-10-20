@@ -1,11 +1,20 @@
-V13 — Calibração de balanças no Vistoria
-Base: pacote V12.5, com layout e recursos existentes preservados.
+V13.1 — Cadastro livre de balanças e histórico de calibrações
+Base: V13, com os recursos de vistoria preservados.
 
 INSTALAÇÃO
 Extraia o ZIP e envie TODOS os arquivos na raiz do mesmo projeto, substituindo os anteriores. Não crie uma subpasta. Após publicar, aceite Salvar e atualizar no aplicativo.
 
+CADASTRO E HISTÓRICO
+Abra a nova aba Balanças ou toque em Minhas balanças no Início.
+Cadastre TAG, nome, área, fabricante, modelo, faixa e limite. Não existe limite fixo de seis balanças; a capacidade depende do armazenamento disponível.
+Cada balança tem seu histórico. Nova calibração cria outro registro com pesos e fotos vazios, preservando as anteriores.
+No histórico, você pode abrir/editar, baixar o Excel de uma calibração específica ou movê-la para a lixeira. A restauração pela lixeira existente devolve o registro ao histórico.
+Editar cadastro atualiza os dados usados nas próximas calibrações, sem alterar as anteriores. A TAG de um cadastro existente permanece fixa.
+Calibrações do V13 são agrupadas automaticamente pela TAG. Registros sem TAG permanecem separados até você informar a identificação.
+Cadastros e históricos fazem parte dos mesmos backups completos e sincronização já configurada.
+
 COMO USAR
-Abra a vistoria desejada. Toque em Calibração de balança na página Início ou na aba Relatório. O formulário fica na aba Vistoria.
+Abra a vistoria desejada. Na aba Balanças, selecione Nova calibração na balança desejada. O formulário fica na aba Vistoria.
 Marque Incluir calibração nesta vistoria. Preencha identificação, TAG, área, ordem, data, fabricante, modelo e responsáveis.
 Informe os pesos em kg, usando vírgula para decimais. Ponto em grupos de três dígitos é separador de milhares: 17.976 = 17976 kg.
 Registre a situação inicial e as leituras efetivamente realizadas. As demais ficam vazias.
@@ -18,10 +27,11 @@ O reconhecimento usa Tesseract.js e precisa de internet para carregar seus compo
 Até duas fotos por leitura. Remova uma foto para substituí-la.
 
 SALVAMENTO E EXCEL
-Cada vistoria guarda uma calibração. Ela participa do salvamento local, backup editável e sincronização já configurada no aplicativo.
+Cada registro guarda uma calibração. Uma balança pode ter vários registros no histórico. Ela participa do salvamento local, backup editável e sincronização já configurada no aplicativo.
 Baixar Excel gera .xlsx com os campos do modelo, fórmulas editáveis, critérios e fotos em uma segunda aba. O modelo distribuído foi limpo dos registros históricos enviados.
 A exportação de PDF existente continua destinada aos pontos de vistoria. Use Baixar Excel para entregar a calibração completa.
 
 VERIFICAÇÃO
 Verificados cálculo com erros positivos/negativos, limite, campos vazios/incompletos, valores inválidos, leitura/gravação do XLSX, sintaxe dos scripts e dependências locais.
+Também testados agrupamento por TAG, vínculo por identificador, histórico separado, preservação dos dados anteriores e cadastro de 120 balanças.
 Não executado teste de interface em navegador nem reconhecimento de foto real de balança nesta sessão. Após publicar, confira o fluxo no celular antes de usar em registros de produção.
