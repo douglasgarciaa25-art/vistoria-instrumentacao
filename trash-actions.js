@@ -29,7 +29,6 @@
    notify('Vistoria movida para a lixeira.');
   });
  }
- window.moveReportToTrash=move;
  async function erase(id){
   const rows=await requestResult(db.transaction('trash').objectStore('trash').getAll());
   const selected=id?rows.filter(r=>r.id===id):rows;
