@@ -31,10 +31,6 @@
     {
       "src": "*.css",
       "use": "@vercel/static"
-    },
-    {
-      "src": "*.xlsx",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
