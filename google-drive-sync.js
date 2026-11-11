@@ -26,6 +26,7 @@
     lastStatus = message;
     const target = $('gdrive-status');
     if (target) { target.textContent = message; target.style.color = isError ? '#a23c28' : ''; }
+    document.dispatchEvent(new CustomEvent('vistoria-google-status'));
   };
   const logError = e => { console.warn('[Vistoria / Google Drive]', e); display(`Falha no Google Drive: ${e.message}`, true); hadErrors = true; };
   const validToken = () => Boolean(accessToken && Date.now() < expiresAt - 120000);
