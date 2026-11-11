@@ -9,6 +9,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "technical-review-server.mjs",
+      "use": "@vercel/node"
+    },
+    {
       "src": "index.html",
       "use": "@vercel/static"
     },
@@ -45,6 +49,10 @@
     {
       "src": "/api/cloud",
       "dest": "/cloud-server.mjs"
+    },
+    {
+      "src": "/api/technical-review",
+      "dest": "/technical-review-server.mjs"
     },
     {
       "src": "/",
