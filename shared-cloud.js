@@ -25,10 +25,13 @@
    let local=await rows();
    // Verifica alterações feitas por outra aba, que não dispara eventos neste documento.
    const startingHashes=new Map(await Promise.all(local.map(async r=>[r.id,await hash(r.document)])));
-   const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());const trashedIds=new Set(trashed.map(r=>r.id));const startEpoch=epoch;
+   const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());const erasedKeys=await requestResult(db.transaction('draft').objectStore('draft').getAllKeys());
+   // Mantém tombstones mesmo após esvaziar a lixeira enquanto o aparelho estava offline.
+   const trashedIds=new Set([...trashed.map(r=>r.id),...erasedKeys.filter(k=>typeof k==='string'&&k.startsWith('deleted-report:')).map(k=>k.slice('deleted-report:'.length))]);
+   const startEpoch=epoch;
    state.textContent='Sincronizando vistorias…';
    // Publish against the revisions actually seen by this device, never unseen edits.
-   const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id)]);
+   const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id),...trashedIds]);
    for(const id of ids){
     if(cloudKey!==key)throw Error('Conexão alterada.');
     const row=local.find(r=>r.id===id);
