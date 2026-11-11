@@ -5,7 +5,31 @@ const newId=()=>crypto.randomUUID();
 const hasContent=d=>d.records.length||(d.meta.number&&!/^RV-\d{4}-[A-F0-9]+$/i.test(d.meta.number))||d.meta.objective||d.meta.conclusion||d.pending?.fields?.tag||d.pending?.fields?.problem||d.pending?.photos?.length;
 function transactionDone(t){return new Promise((resolve,reject)=>{t.oncomplete=resolve;t.onerror=()=>reject(t.error||Error('Falha de armazenamento'));t.onabort=()=>reject(t.error||Error('Gravação cancelada'))})}
 function requestResult(r){return new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function persistCurrent(){clearTimeout(saveTimer);saveTimer=null;if(!historyReady||!db)throw Error('Armazenamento indisponível. Baixe uma cópia antes de sair.');const d=structuredClone(data());const t=db.transaction(['draft','reports'],'readwrite');t.objectStore('draft').put({...d,reportId:activeReportId},'current');const savingId=activeReportId;const deletion=t.objectStore('draft').get('deleted-report:'+savingId);deletion.onsuccess=()=>{if(deletion.result)return;if(hasContent(d))t.objectStore('reports').put({id:savingId,updated:new Date().toISOString(),document:d});else t.objectStore('reports').delete(savingId)};await transactionDone(t);$('saveState').textContent='Formulário salvo automaticamente neste navegador.';await refreshHistory();savedEvent()}
+/* Gravações sequenciais: uma conclusão atrasada nunca sobrescreve a edição seguinte. */
+let persistQueue=Promise.resolve();
+async function persistCurrent(){
+ clearTimeout(saveTimer);saveTimer=null;
+ if(!historyReady||!db)throw Error('Armazenamento indisponível. Baixe uma cópia antes de sair.');
+ // Captura o formulário e seu ID juntos, antes de qualquer operação assíncrona.
+ const snapshot=structuredClone(data()),savingId=activeReportId;
+ const task=async()=>{
+  const t=db.transaction(['draft','reports'],'readwrite');
+  t.objectStore('draft').put({...snapshot,reportId:savingId},'current');
+  const deletion=t.objectStore('draft').get('deleted-report:'+savingId);
+  deletion.onsuccess=()=>{
+   if(deletion.result)return;
+   if(hasContent(snapshot))t.objectStore('reports').put({id:savingId,updated:new Date().toISOString(),document:snapshot});
+   else t.objectStore('reports').delete(savingId);
+  };
+  await transactionDone(t);
+  if(savingId===activeReportId&&!saveTimer)$('saveState').textContent='Formulário salvo automaticamente neste navegador.';
+  await refreshHistory();
+  savedEvent();
+ };
+ const pending=persistQueue.catch(()=>{}).then(task);
+ persistQueue=pending;
+ return pending;
+}
 function save(){clearTimeout(saveTimer);$('saveState').textContent='Alterações pendentes de salvamento…';if(typeof document.dispatchEvent==='function')document.dispatchEvent(new CustomEvent('vistoria-dirty'));saveTimer=setTimeout(()=>persistCurrent().catch(e=>{$('saveState').textContent=e.message;notify(e.message)}),450)}
 if(typeof document.addEventListener==='function'){const flush=()=>{if(saveTimer&&historyReady)persistCurrent().catch(e=>notify(e.message))};document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush()});if(typeof window!=='undefined')window.addEventListener('pagehide',flush)}
 async function refreshHistory(){const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());historyItems=rows.sort((a,b)=>b.updated.localeCompare(a.updated));renderHistory()}
