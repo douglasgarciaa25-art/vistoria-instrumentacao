@@ -16,3 +16,15 @@ input,select,textarea{font-size:16px}
 body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+
+/* Revisão de redação técnica: os registros originais não são alterados sem confirmação. */
+.technical-review { margin:8px 0 14px; padding:10px 12px; border-left:3px solid #126858; background:rgba(18,104,88,.045); border-radius:5px; }
+.technical-review .actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.technical-review button { min-height:38px; white-space:normal; }
+.technical-review-status { font-size:.88rem; margin:7px 0 0; overflow-wrap:anywhere; }
+.technical-review-preview { margin-top:12px; padding:12px; border:1px solid #cbd8d3; background:#fff; border-radius:8px; }
+.technical-review-preview textarea { width:100%; min-height:115px; resize:vertical; margin:8px 0; }
+.technical-review-preview[hidden], .technical-review button[hidden] { display:none!important; }
+.technical-review-note { margin:8px 0; font-size:.85rem; }
+@media(max-width:520px){ .technical-review .actions button { flex:1 1 100%; } }

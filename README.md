@@ -42,3 +42,22 @@ O GitHub Actions roda as verificações de sintaxe e integridade. Antes de uso r
 - Testes de regressão adicionais para as regras acima.
 
 **Limitações:** o Google Drive exige autorização OAuth do proprietário e o aplicativo precisa permanecer aberto para sincronizar. A revisão de código não substitui testes em aparelhos reais, especialmente quando dois operadores alteram uma mesma vistoria.
+
+## Revisão técnica de texto com IA (opcional)
+- A equipe escreve primeiro a descrição, uma etapa de cada vez.
+- Os campos de **andamento**, **condição encontrada**, **impacto**, **ação recomendada**, **serviço realizado**, **objetivo** e **conclusão** oferecem o botão **Revisar redação técnica com IA**.
+- A IA devolve uma sugestão editável; **Usar texto revisado** substitui o campo somente depois da escolha do operador. Há opções **Manter meu texto** e **Desfazer revisão** (antes de mudar o campo novamente). O salvamento e a inclusão da etapa continuam sendo feitos normalmente.
+- Não há revisão automática em segundo plano nem inclusão de fatos novos planejada. TAGs, medições, números, horários, condição de execução e hipóteses devem ser conferidos pela equipe.
+- O botão envia **somente o texto do campo escolhido** ao provedor de IA. Não envia fotos, relatórios completos nem os demais campos. O texto não é enviado sem confirmação explícita.
+- O endpoint `POST /api/technical-review` usa a mesma **chave da nuvem privada** e limita os tamanhos de entrada e saída. Nenhuma chave de IA é incluída no código JavaScript do navegador.
+- O backend usa **Vercel AI Gateway** com um modelo da OpenAI (`openai/gpt-5.5`, alterável por `VISTORIA_AI_MODEL`). No servidor, usa `AI_GATEWAY_API_KEY` quando definida ou `VERCEL_OIDC_TOKEN` fornecido pela Vercel. O serviço depende de credenciais e créditos da AI Gateway; o plano ChatGPT Plus não habilita faturamento de API automaticamente.
+- O funcionamento offline permite escrever e salvar, mas **revisar com IA exige internet**. Se o serviço falhar, o texto original permanece inalterado.
+- Trate a saída como revisão de redação, **não como validação de procedimento, segurança, calibração, bloqueio ou resultado de manutenção**. Só envie dados operacionais da empresa a modelos externos com aprovação da organização.
+
+### Testes da revisão de texto
+```bash
+npm ci
+npm run check
+npm test
+```
+Há testes de validação do payload, autenticação, interface, tratamento de respostas incompletas e requisição simulada sem enviar dados reais.
