@@ -39,8 +39,9 @@ async function exportReportDocuments(documents){
  grid([['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
  detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
- if(r.photos.length){for(let j=0;j<r.photos.length;j++){
- const p=r.photos[j],img=await doc.embedJpg(p.src);
+ if(r.photos?.length){for(let j=0;j<r.photos.length;j++){
+ const p=r.photos[j];let img;
+ try{img=/^data:image\/png;base64,/i.test(p.src)?await doc.embedPng(p.src):await doc.embedJpg(p.src)}catch{detail('Foto '+(j+1),'Imagem não incorporada ao PDF. Confira o original.');continue}
  const caption='Foto '+(reportDocument.exportPointNumber||i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
  const captionLines=wrap(caption,9,CW),captionHeight=captionLines.length*14;
  // Reserve space for the heading, caption and footer before sizing the photo.
@@ -57,7 +58,9 @@ async function exportReportDocuments(documents){
  heading('Controle do documento');grid([['Elaboração',m.author],['Data',datefmt(m.date)]]);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
  }
  const pages=doc.getPages();pages.forEach((p,i)=>{if(originalPages.has(p))return;p.drawLine({start:{x:M,y:39},end:{x:W-M,y:39},thickness:.5,color:line});p.drawText('CMOC Brasil | Levantamento de instrumentação e automação',{x:M,y:25,size:8,font:regular,color:muted});const s=(i+1)+' / '+pages.length;p.drawText(s,{x:W-M-regular.widthOfTextAtSize(s,8),y:25,size:8,font:regular,color:muted})});
- doc.setTitle(clean(m.title||'Relatório de vistoria técnica'));doc.setAuthor(clean(m.author));
+ const first=documents[0].meta;
+ doc.setTitle(clean(documents.length>1?'Vistorias reunidas - '+documents.length+' relatórios':first.title||'Relatório de vistoria técnica'));
+ doc.setAuthor(clean(documents.length>1?'Instrumentação e automação':first.author||''));
  download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify('PDF gerado. Confira os downloads.');
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };

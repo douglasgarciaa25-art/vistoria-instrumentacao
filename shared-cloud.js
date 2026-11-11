@@ -22,13 +22,16 @@
    await persistCurrent();
    const stateKey='shared-cloud-v1:'+await hash(key);
    let meta=await get(stateKey)||{base:{},heads:{}};
-   let local=await rows();const startEpoch=epoch;
+   let local=await rows();const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());const trashedIds=new Set(trashed.map(r=>r.id));const startEpoch=epoch;
    state.textContent='Sincronizando vistorias…';
    // Publish against the revisions actually seen by this device, never unseen edits.
    const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id)]);
    for(const id of ids){
     if(cloudKey!==key)throw Error('Conexão alterada.');
-    const row=local.find(r=>r.id===id),value=row?{deleted:false,document:row.document}:{deleted:true};
+    const row=local.find(r=>r.id===id);
+    // Only an explicitly trashed report can delete shared data.
+    if(!row&&!trashedIds.has(id))continue;
+    const value=row?{deleted:false,document:row.document}:{deleted:true};
     const fingerprint=await hash(value);if(meta.base[id]===fingerprint)continue;
     const revision=await publish(id,meta.heads[id]||[],value);
     meta.base[id]=fingerprint;meta.heads[id]=[revision.id];await set(stateKey,meta);
