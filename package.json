@@ -7,8 +7,8 @@
     "node": "22.x"
   },
   "scripts": {
-    "test": "node --test graph.test.js app-integrity.test.js cloud-rules.test.js sync-regressions.test.js",
-    "check": "node --check cloud-server.mjs && node --check cloud-rules.js && node --check history.js && node --check google-drive-sync.js && node --check shared-cloud.js && node --check pdf-export.js && node --check sw.js && node --check pwa.js"
+    "test": "node --test graph.test.js app-integrity.test.js cloud-rules.test.js sync-regressions.test.js technical-review.test.js",
+    "check": "node --check cloud-server.mjs && node --check cloud-rules.js && node --check history.js && node --check google-drive-sync.js && node --check shared-cloud.js && node --check pdf-export.js && node --check sw.js && node --check pwa.js && node --check technical-review-core.mjs && node --check technical-review-server.mjs && node --check technical-review.js && node --check analysis-progress.js"
   },
   "dependencies": {
     "@vercel/blob": "2.8.2"
