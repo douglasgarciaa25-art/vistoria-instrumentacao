@@ -33,3 +33,9 @@ test('nuvem compartilhada não sobrescreve alterações de outra aba',()=>{
  assert.match(src,/const latest=await rows\(\)/);
  assert.match(src,/Outra aba alterou as vistorias/);
 });
+
+test('PDF registra aviso quando o arquivo de origem falha',()=>{
+ const src=file('pdf-export.js');
+ assert.match(src,/sourcePdfFailed=true;sourcePdfWarnings\+\+/);
+ assert.match(src,/O PDF de origem não pôde ser incorporado/);
+});
