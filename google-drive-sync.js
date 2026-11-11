@@ -18,7 +18,7 @@
   let folderId = '', photosId = '', pdfsId = '', scheduled = null, authClient = null;
   let enabled = false, lastStatus = '', hadErrors = false;
   const PHOTOS_KEY=STORE+':photoSynced';
-  let photoSynced={};try{photoSynced=JSON.parse(localStorage.getItem(PHOTOS_KEY)||'{}')}catch(_){}
+  let photoSynced={}, syncScope=''; // Estado de envio vinculado à pasta/conta do Drive.
   let syncMap = {}, remoteItems = [];
   const $ = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,11 +29,16 @@
   };
   const logError = e => { console.warn('[Vistoria / Google Drive]', e); display(`Falha no Google Drive: ${e.message}`, true); hadErrors = true; };
   const validToken = () => Boolean(accessToken && Date.now() < expiresAt - 120000);
-  function readSyncMap() {
-    try { return JSON.parse(localStorage.getItem(SYNC_KEY) || '{}'); }
-    catch (_) { return {}; }
+  function loadScope(id) {
+    if (syncScope===id) return;
+    syncScope=id;
+    try { syncMap=JSON.parse(localStorage.getItem(SYNC_KEY+':'+id)||'{}'); }
+    catch (_) { syncMap={}; }
+    try { photoSynced=JSON.parse(localStorage.getItem(PHOTOS_KEY+':'+id)||'{}'); }
+    catch (_) { photoSynced={}; }
   }
-  function saveMap() { localStorage.setItem(SYNC_KEY, JSON.stringify(syncMap)); }
+  function saveMap() { if(syncScope)localStorage.setItem(SYNC_KEY+':'+syncScope,JSON.stringify(syncMap)); }
+  function savePhotoMap() { if(syncScope)localStorage.setItem(PHOTOS_KEY+':'+syncScope,JSON.stringify(photoSynced)); }
   function ensureDb() {
     if (typeof db === 'undefined' || !db || !historyReady) throw Error('Aguarde o carregamento das vistorias locais.');
   }
@@ -169,12 +174,13 @@
     await api(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:content});
     return api(`${API}/${encodeURIComponent(remoteId)}?fields=id,modifiedTime,appProperties`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({appProperties:{hash}})});
   }
-  async function downloadJson(id) {
+  async function downloadJson(id, expectedReportId) {
     const r=await request(`${API}/${encodeURIComponent(id)}?alt=media`);
     const doc=await r.json();
     if(doc.app!=='vistoria-tecnica'||doc.version!==1||!doc.document||!Array.isArray(doc.document.records)||!doc.document.meta) {
       throw Error('Arquivo remoto incompatível com a Vistoria Técnica.');
     }
+    if(expectedReportId && doc.reportId!==expectedReportId)throw Error('Identificador da vistoria no Drive não confere com o arquivo.');
     return doc;
   }
   async function uploadPhotos(row) {
@@ -182,7 +188,7 @@
     if(photoSynced[row.id]===photoHashes)return;
     const entries=[];
     (row.document.records||[]).forEach((r, i) => (r.photos||[]).forEach((photo,j)=>entries.push({photo,i,j,tag:String(r.tag||'ponto').slice(0,24)})));
-    if (!entries.length) {photoSynced[row.id]=photoHashes;localStorage.setItem(PHOTOS_KEY,JSON.stringify(photoSynced));return;}
+    if (!entries.length) {photoSynced[row.id]=photoHashes;savePhotoMap();return;}
     const parent=await ensureSubfolder('Fotos');
     const existing=new Set((await listFolder(parent)).map(f=>f.name));
     for (const item of entries) {
@@ -198,7 +204,7 @@
       await createData(name,new Blob([buffer],{type}),type,parent,{reportId:String(row.id),hash});
       existing.add(name);
     }
-    photoSynced[row.id]=photoHashes;localStorage.setItem(PHOTOS_KEY,JSON.stringify(photoSynced));
+    photoSynced[row.id]=photoHashes;savePhotoMap();
   }
   async function savePdf(blob,name) {
     if (!enabled || !validToken() || !navigator.onLine) return;
@@ -220,18 +226,28 @@
     let sent=0,received=0,conflicts=0;
     try {
       await ensureFolder();
+      // Nunca reutilizar hashes de outro Drive. Evita sobrescrever arquivos de outra conta.
+      loadScope(folderId);
       // Do not upload the draft until the main app commits it to IndexedDB.
       if (typeof persistCurrent==='function' && !historyBusy && !busy) await persistCurrent();
       let local=await reports();
+      const removedIds=new Set([
+        ...(await idbReq(db.transaction('trash').objectStore('trash').getAllKeys())),
+        ...(await idbReq(db.transaction('draft').objectStore('draft').getAllKeys()))
+          .filter(key=>typeof key==='string'&&key.startsWith('deleted-report:'))
+          .map(key=>key.slice('deleted-report:'.length))
+      ]);
       const items=await listFolder(folderId);
       remoteItems=items.filter(f=>f.name.startsWith(PREFIX)&&f.name.endsWith('.json')&&f.mimeType==='application/json');
       const remotes=new Map(remoteItems.filter(f=>f.appProperties?.reportId).map(f=>[f.appProperties.reportId,f]));
       for (const remote of remoteItems) {
         if (!remote.appProperties?.reportId) continue;
         const id=remote.appProperties.reportId;
+        // Exclusão local não pode ser desfeita silenciosamente pelo backup no Drive.
+        if(removedIds.has(id))continue;
         const current=local.find(r=>r.id===id);
         if (current) continue;
-        const packet=await downloadJson(remote.id);
+        const packet=await downloadJson(remote.id,id);
         if (!validate({id,document:packet.document})) continue;
         await putReport({id,updated:packet.savedAt||new Date().toISOString(),document:packet.document});
         syncMap[id]=remote.appProperties.hash||await digest(packet.document);saveMap();received++;
@@ -262,7 +278,7 @@
           await uploadPhotos(row);
         } else if (last && last===docHash) {
           // The remote record changed; download without losing local unsaved changes.
-          const packet=await downloadJson(remote.id);
+          const packet=await downloadJson(remote.id,row.id);
           if (!validate({id:row.id,document:packet.document})) continue;
           if(row.id===activeReportId) {
             const cloneId=crypto.randomUUID();
@@ -273,12 +289,15 @@
             syncMap[row.id]=remoteHash;saveMap();
             conflicts++;
           } else {
+            // Outra aba pode ter editado esta vistoria durante o download remoto.
+            const latest=await idbReq(db.transaction('reports').objectStore('reports').get(row.id));
+            if(!latest||await digest(latest.document)!==docHash){conflicts++;continue;}
             await putReport({id:row.id,updated:packet.savedAt||new Date().toISOString(),document:packet.document});
             syncMap[row.id]=remoteHash;saveMap();received++;
           }
         } else {
           // When two devices edit without a shared baseline, preserve BOTH copies.
-          const packet=await downloadJson(remote.id);
+          const packet=await downloadJson(remote.id,row.id);
           const cloneId=crypto.randomUUID();
           const document=structuredClone(packet.document);
           document.meta={...document.meta,title:(document.meta.title||'Vistoria')+' (cópia remota)'};
@@ -326,7 +345,7 @@
         accessToken=token.access_token;
         expiresAt=Date.now()+(Number(token.expires_in||3600)*1000);
         enabled=true;folderId='';photosId='';pdfsId='';
-        syncMap=readSyncMap();
+        syncScope='';syncMap={};photoSynced={};
         $('gdrive-disconnect').hidden=false;
         display('Conectado ao Google Drive. Preparando pasta na raiz…');
         await sync();
