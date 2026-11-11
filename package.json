@@ -1,7 +1,16 @@
 {
-  "name": "vistoria-onedrive-integracao",
+  "name": "vistoria-instrumentacao",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/*.test.js" },
-  "dependencies": { "@azure/msal-browser": "^4.26.0" }
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "test": "node --test graph.test.js",
+    "check": "node --check cloud-server.mjs && node --check google-drive-sync.js && node --check shared-cloud.js && node --check pdf-export.js && node --check sw.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "2.8.2"
+  }
 }
