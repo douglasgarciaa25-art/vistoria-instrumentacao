@@ -1,7 +1,70 @@
-V12.5 — Abrir a vistoria diretamente no relatório
+VISTORIA TÉCNICA — GOOGLE DRIVE PESSOAL
+Versão da integração: 10/11/2026
 
-Na página Início, em Suas vistorias, toque em Ver relatório no documento desejado.
-O aplicativo salva a vistoria anterior, carrega a escolhida e abre a aba Relatório.
-Abrir / editar continua disponível.
+O QUE ESTE PACOTE FAZ
+- Acrescenta a seção Google Drive à tela de nuvem da versão existente.
+- Cria, ao conectar, uma pasta "Vistoria Técnica" diretamente na RAIZ de "Meu Drive".
+- Grava vistorias com campos e fotos em arquivos JSON; salva cada foto também em "Fotos".
+- Ao baixar um PDF pelo aplicativo, também envia uma cópia à subpasta "PDFs".
+- Recupera automaticamente vistorias que estão no Drive e faltam no aparelho.
+- Preserva cópias quando detecta divergências entre versões.
+- Mantém o armazenamento local e a nuvem antiga; não remove nada.
 
-Extraia e envie todos os arquivos na raiz, substituindo os anteriores. Aceite a atualização no aplicativo após a publicação.
+ATENÇÃO: este ZIP é a integração e NÃO contém a versão completa do aplicativo.
+Não substitua o index.html publicado por uma versão mais antiga.
+Não existe autenticação Google pronta sem que o proprietário crie um ID OAuth do Google Cloud.
+
+INSTALAÇÃO FÁCIL (COMPUTADOR)
+1. Baixe o código ATUAL do repositório GitHub onde o site é publicado.
+2. Descompacte este pacote.
+3. Execute, dentro da pasta deste pacote:
+   python instalar_na_versao_atual.py "CAMINHO_DA_PASTA_DO_REPOSITORIO"
+4. O programa copia google-drive-sync.js e insere o script no index.html atual.
+5. Confira os arquivos modificados e envie ao GitHub (commit/push).
+6. Aguarde a Vercel publicar a nova versão.
+
+INSTALAÇÃO MANUAL (PELO GITHUB, SEM PYTHON)
+1. Abra o repositório no GitHub.
+2. Envie o arquivo google-drive-sync.js para a mesma pasta de index.html.
+3. Abra index.html, clique Edit e adicione, IMEDIATAMENTE antes do último </body>:
+   <script src="/google-drive-sync.js?v=20261110"></script>
+4. Salve as alterações (Commit changes). A Vercel deve publicar normalmente.
+
+CONFIGURAR GOOGLE DRIVE — UMA VEZ
+1. Acesse https://console.cloud.google.com/ e crie/selecione seu projeto.
+2. APIs e serviços > Biblioteca: ative "Google Drive API".
+3. Google Auth Platform > Tela de consentimento: configure aplicativo Externo.
+4. Configure o escopo: https://www.googleapis.com/auth/drive.file
+5. Se estiver em modo de teste, inclua seu e-mail como usuário de teste.
+6. Clientes > Criar cliente OAuth > "Aplicativo da Web".
+7. Em origens JavaScript autorizadas, inclua exatamente:
+   https://vistoria-instrumentacao.vercel.app
+8. Copie o "ID do cliente" terminado em .apps.googleusercontent.com.
+9. Abra o Vistoria Técnica, entre na aba "Nuvem", informe esse ID e toque
+   "Conectar Google Drive". Autorize pela tela oficial do Google.
+10. A pasta Meu Drive/Vistoria Técnica será criada automaticamente.
+
+SEGURANÇA E LIMITES
+- Nunca use "chave secreta do cliente" dentro do navegador, GitHub ou HTML.
+- Token de acesso do Google é guardado apenas na memória temporária da aba.
+- O escopo drive.file dá acesso aos arquivos criados/autorizados pelo app, não ao Drive todo.
+- A sincronização automática acontece enquanto a página/app estiver aberto, com internet
+  e autorização válida. O token expira e a reconexão pode ser necessária.
+- Sem internet, o aplicativo mantém as vistorias no aparelho; quando reconectar, envia.
+- Para equipe usando contas Google DIFERENTES, precisa configurar permissões e uma
+  política de compartilhamento separadamente; não compartilhe a senha da sua conta.
+- Em conflitos, mantenha ambas as versões e confira antes de excluir qualquer uma.
+- Cópias antigas ou excluídas no app não são removidas automaticamente do Drive.
+- Não envie dados operacionais sigilosos da empresa para uma conta pessoal sem autorização.
+- O aplicativo necessita do próprio código e dependências já existentes; subir apenas
+  estes arquivos em um repositório vazio NÃO cria o aplicativo completo.
+
+ARQUIVOS
+- google-drive-sync.js: integração.
+- instalar_na_versao_atual.py: adiciona o módulo sem trocar seu index.html atual.
+- LEIA-ME.txt: este manual.
+
+REFERÊNCIAS
+https://developers.google.com/workspace/drive/api/guides/api-specific-auth
+https://developers.google.com/identity/oauth2/web/guides/use-token-model
+https://developers.google.com/workspace/drive/api/guides/manage-uploads
