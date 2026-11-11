@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "test": "node --test graph.test.js",
+    "test": "node --test graph.test.js app-integrity.test.js",
     "check": "node --check cloud-server.mjs && node --check google-drive-sync.js && node --check shared-cloud.js && node --check pdf-export.js && node --check sw.js"
   },
   "dependencies": {
