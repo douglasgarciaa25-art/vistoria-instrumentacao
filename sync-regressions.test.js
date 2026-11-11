@@ -32,6 +32,8 @@ test('nuvem compartilhada não sobrescreve alterações de outra aba',()=>{
  assert.match(src,/startingHashes=new Map/);
  assert.match(src,/const latest=await rows\(\)/);
  assert.match(src,/Outra aba alterou as vistorias/);
+ assert.match(src,/erasedKeys\.filter/);
+ assert.match(src,/\.\.\.trashedIds/);
 });
 
 test('PDF registra aviso quando o arquivo de origem falha',()=>{
