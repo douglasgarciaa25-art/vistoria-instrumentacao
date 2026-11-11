@@ -22,7 +22,10 @@
    await persistCurrent();
    const stateKey='shared-cloud-v1:'+await hash(key);
    let meta=await get(stateKey)||{base:{},heads:{}};
-   let local=await rows();const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());const trashedIds=new Set(trashed.map(r=>r.id));const startEpoch=epoch;
+   let local=await rows();
+   // Verifica alterações feitas por outra aba, que não dispara eventos neste documento.
+   const startingHashes=new Map(await Promise.all(local.map(async r=>[r.id,await hash(r.document)])));
+   const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());const trashedIds=new Set(trashed.map(r=>r.id));const startEpoch=epoch;
    state.textContent='Sincronizando vistorias…';
    // Publish against the revisions actually seen by this device, never unseen edits.
    const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id)]);
@@ -61,6 +64,11 @@
    }
    // Never replace work typed, saved or opened while network requests were running.
    if(epoch!==startEpoch||saveTimer||busy||historyBusy||cloudKey!==key){state.textContent='Novas alterações locais. Sincronização continuará em instantes.';schedule();return}
+   const latest=await rows();
+   if(latest.length!==local.length|| (await Promise.all(latest.map(async r=>startingHashes.get(r.id)===await hash(r.document)))).some(ok=>!ok)){
+    state.textContent='Outra aba alterou as vistorias. Nova verificação agendada sem sobrescrever os dados locais.';
+    schedule();return;
+   }
    const t=db.transaction(['reports','trash','draft'],'readwrite');
    let activeChange=null;
    for(const change of changes){
