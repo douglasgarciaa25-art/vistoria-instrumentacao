@@ -31,3 +31,14 @@ npm test
 O GitHub Actions roda as verificações de sintaxe e integridade. Antes de uso real, teste no Android e em dois aparelhos as funções de sincronização, recuperação, edição, PDF por ponto e reunido, fotos e modo offline.
 
 **Atenção:** dados operacionais confidenciais da CMOC não devem ser enviados a contas pessoais sem autorização formal da empresa.
+
+## Auditoria de integridade (11/11/2026)
+- Gravações automáticas locais em fila sequencial, para não sobrescrever uma edição mais recente.
+- Google Drive: cópias na lixeira ou marcadas como removidas não são restauradas silenciosamente; hashes de sincronização e fotos separados por pasta/conta.
+- Nuvem compartilhada: verificação das alterações de outras abas antes de aplicar dados recebidos.
+- API: valida identificadores, índices, limites e relação entre quantidade de partes e tamanho antes de aceitar revisões.
+- PWA: com internet, busca os arquivos atuais; sem internet, utiliza a última versão em cache.
+- PDF: anexo de origem ilegível não interrompe o relatório; aparece uma advertência no PDF gerado.
+- Testes de regressão adicionais para as regras acima.
+
+**Limitações:** o Google Drive exige autorização OAuth do proprietário e o aplicativo precisa permanecer aberto para sincronizar. A revisão de código não substitui testes em aparelhos reais, especialmente quando dois operadores alteram uma mesma vistoria.
