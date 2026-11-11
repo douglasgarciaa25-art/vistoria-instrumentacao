@@ -1,5 +1,3 @@
-import {createHash,timingSafeEqual} from 'node:crypto';
-
 export const FIELD_NAMES=Object.freeze({
  analysisDraft:'Etapa ou andamento da análise',
  problem:'Condição encontrada',
@@ -21,14 +19,6 @@ export function reviewInput(body){
  if(!text)return {error:'Escreva a descrição da atividade antes de revisar.'};
  if(text.length>MAX_REVIEW_INPUT)return {error:'Texto muito longo. Limite de 3.500 caracteres por revisão.'};
  return {field:body.field,text};
-}
-
-export function isAuthorized(authorization,expectedHash){
- if(typeof authorization!=='string'||typeof expectedHash!=='string'||!/^[a-f0-9]{64}$/i.test(expectedHash))return false;
- const key=authorization.replace(/^Bearer\s+/i,'');
- if(!key||key===authorization)return false;
- const actual=createHash('sha256').update(key).digest();
- return timingSafeEqual(actual,Buffer.from(expectedHash,'hex'));
 }
 
 export function reviewMessages(field,text){
