@@ -64,3 +64,14 @@ export function extractReview(response){
  if(!clean||clean.length>MAX_REVIEW_OUTPUT)throw Error('A IA não retornou uma revisão válida.');
  return clean;
 }
+
+/* Autoriza apenas contas Google explicitamente permitidas para o cliente OAuth da Vistoria. */
+export function verifiedGoogleIdentity(info,expectedClientId,allowedEmails){
+ const email=typeof info?.email==='string'?info.email.trim().toLowerCase():'';
+ const allow=new Set(String(allowedEmails||'').split(/[;,\s]+/).map(s=>s.toLowerCase()).filter(Boolean));
+ return !!expectedClientId&&!!email&&allow.size>0&&
+  (info.aud===expectedClientId)&&
+  (info.email_verified===true||info.email_verified==='true')&&
+  typeof info.scope==='string'&&info.scope.split(/\s+/).includes('https://www.googleapis.com/auth/drive.file')&&
+  allow.has(email);
+}
