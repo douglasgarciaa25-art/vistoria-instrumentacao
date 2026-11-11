@@ -8,6 +8,7 @@ async function exportReportDocuments(documents){
  const W=595.28,H=841.89,M=42,CW=W-2*M;
  const ink=rgb(0,0,0),green=rgb(0,0,0),muted=rgb(.25,.25,.25),light=rgb(1,1,1),line=rgb(.3,.3,.3),white=rgb(1,1,1);
  const originalPages=new Set();
+ let sourcePdfWarnings=0;
  let m,page,y;
  function clean(v){return String(v??'').replace(/[–—]/g,'-').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").split('').map(c=>{if(c==='\n')return c;if(c==='\r')return '';try{regular.encodeText(c);return c}catch{return '?'}}).join('')}
  function wrap(value,size,width,font=regular){let lines=[];for(const para of clean(value).split('\n')){let current='';for(const word of para.split(/\s+/)){if(!word)continue;const candidate=current?current+' '+word:word;if(font.widthOfTextAtSize(candidate,size)<=width){current=candidate;continue}if(current){lines.push(current);current=''}for(const c of word){if(font.widthOfTextAtSize(current+c,size)>width){lines.push(current);current=''}current+=c}}lines.push(current)}return lines}
@@ -19,8 +20,15 @@ async function exportReportDocuments(documents){
  function detail(label,value){if(!value)return;need(39);draw(label.toUpperCase(),M,y,8,bold,muted);y-=16;paragraph(value)}
  function grid(items){const gap=10,width=(CW-gap)/2;for(let k=0;k<items.length;k+=2){const cells=items.slice(k,k+2).map(([label,value])=>({label,lines:wrap(value||'Não informado',10,width-20)}));const maxLines=Math.max(...cells.map(c=>c.lines.length));for(let off=0;off<maxLines;off+=30){const n=Math.min(30,maxLines-off),h=34+n*14;need(h+10);cells.forEach((c,i)=>{const x=M+i*(width+gap);page.drawRectangle({x,y:y-h,width,height:h,color:light,borderWidth:.5,borderColor:line});draw(c.label.toUpperCase()+(off?' (CONT.)':''),x+10,y-15,7,bold,muted);c.lines.slice(off,off+n).forEach((t,j)=>draw(t,x+10,y-32-j*14,10))});y-=h+9}}}
  for(const reportDocument of documents){m=reportDocument.meta;const records=reportDocument.records;
- if(m.sourcePdf){const original=await PDFDocument.load(m.sourcePdf);const copied=await doc.copyPages(original,original.getPageIndices());for(const p of copied){doc.addPage(p);originalPages.add(p)}}
- newPage();for(const t of wrap(m.title||'Relatório de levantamento técnico',16,CW,bold)){need(27);draw(t,M,y,16,bold);y-=22}y-=12;
+ let sourcePdfFailed=false;
+ if(m.sourcePdf){
+  try{
+   const original=await PDFDocument.load(m.sourcePdf);
+   const copied=await doc.copyPages(original,original.getPageIndices());
+   for(const p of copied){doc.addPage(p);originalPages.add(p)}
+  }catch(e){sourcePdfFailed=true;sourcePdfWarnings++}
+ }
+ newPage();if(sourcePdfFailed)detail('Aviso de anexação','O PDF de origem não pôde ser incorporado. Confira o arquivo original antes de enviar este relatório.');for(const t of wrap(m.title||'Relatório de levantamento técnico',16,CW,bold)){need(27);draw(t,M,y,16,bold);y-=22}y-=12;
  grid([['Data da vistoria',datefmt(m.date)],['Código / referência',m.number||'Não informado'],['Responsável pelo levantamento',m.author],['Empresa / unidade',m.company],['Setor',m.sector],['Pontos inspecionados',String(records.length)]]);
  heading('1. Objetivo');detail('Objetivo do levantamento',m.objective);
  
@@ -61,7 +69,7 @@ async function exportReportDocuments(documents){
  const first=documents[0].meta;
  doc.setTitle(clean(documents.length>1?'Vistorias reunidas - '+documents.length+' relatórios':first.title||'Relatório de vistoria técnica'));
  doc.setAuthor(clean(documents.length>1?'Instrumentação e automação':first.author||''));
- download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify('PDF gerado. Confira os downloads.');
+ download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify(sourcePdfWarnings?'PDF gerado com aviso: '+sourcePdfWarnings+' arquivo(s) de origem não anexado(s). Revise antes do envio.':'PDF gerado. Confira os downloads.');
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };
 
