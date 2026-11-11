@@ -64,23 +64,15 @@
    if(!original.trim())return notify('Escreva primeiro a sua descrição de '+title.toLowerCase()+'.');
    if(original.trim().length>3500)return notify('Revise um trecho com até 3.500 caracteres.');
    if(!navigator.onLine)return notify('Sem internet. Seu texto permanece disponível para edição e salvamento offline.');
-   const key=typeof cloudKey==='string'?cloudKey:'';
-   if(!key)return notify('Conecte a chave da nuvem para habilitar a revisão com IA.');
+   const drive=window.VistoriaGoogleDrive;
+   if(!drive?.getState().enabled)return notify('Conecte sua conta Google Drive para habilitar a revisão técnica por IA.');
    if(!confirm('Enviar APENAS o texto deste campo ao modelo OpenAI para sugestão de redação técnica? Não inclua informações sigilosas sem autorização. O uso da IA pode gerar custos na Vercel.'))return;
 
    requesting=true;review.disabled=true;review.textContent='Revisando...';
    pending=null;panel.hidden=true;undo.hidden=true;applied=null;
    status.textContent='Analisando a redação. O original não será alterado.';
    try{
-    const response=await fetch('/api/technical-review',{
-     method:'POST',
-     cache:'no-store',
-     headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
-     body:JSON.stringify({field:id,text:original}),
-     signal:AbortSignal.timeout(45000)
-    });
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(result.error||'Serviço de revisão indisponível.');
+    const result=await drive.reviewTechnical(id,original);
     if(typeof result.suggested!=='string'||!result.suggested.trim())throw Error('A IA não retornou um texto válido.');
     if(field.value!==original){
      status.textContent='Você alterou o texto enquanto a IA revisava. Nada foi substituído; solicite nova revisão.';

@@ -1,5 +1,3 @@
-import {createHash,timingSafeEqual} from 'node:crypto';
-
 export const FIELD_NAMES=Object.freeze({
  analysisDraft:'Etapa ou andamento da análise',
  problem:'Condição encontrada',
@@ -21,14 +19,6 @@ export function reviewInput(body){
  if(!text)return {error:'Escreva a descrição da atividade antes de revisar.'};
  if(text.length>MAX_REVIEW_INPUT)return {error:'Texto muito longo. Limite de 3.500 caracteres por revisão.'};
  return {field:body.field,text};
-}
-
-export function isAuthorized(authorization,expectedHash){
- if(typeof authorization!=='string'||typeof expectedHash!=='string'||!/^[a-f0-9]{64}$/i.test(expectedHash))return false;
- const key=authorization.replace(/^Bearer\s+/i,'');
- if(!key||key===authorization)return false;
- const actual=createHash('sha256').update(key).digest();
- return timingSafeEqual(actual,Buffer.from(expectedHash,'hex'));
 }
 
 export function reviewMessages(field,text){
@@ -63,4 +53,15 @@ export function extractReview(response){
  const clean=typeof text==='string'?text.trim():'';
  if(!clean||clean.length>MAX_REVIEW_OUTPUT)throw Error('A IA não retornou uma revisão válida.');
  return clean;
+}
+
+/* Autoriza apenas contas Google explicitamente permitidas para o cliente OAuth da Vistoria. */
+export function verifiedGoogleIdentity(info,expectedClientId,allowedEmails){
+ const email=typeof info?.email==='string'?info.email.trim().toLowerCase():'';
+ const allow=new Set(String(allowedEmails||'').split(/[;,\s]+/).map(s=>s.toLowerCase()).filter(Boolean));
+ return !!expectedClientId&&!!email&&allow.size>0&&
+  (info.aud===expectedClientId)&&
+  (info.email_verified===true||info.email_verified==='true')&&
+  typeof info.scope==='string'&&info.scope.split(/\s+/).includes('https://www.googleapis.com/auth/drive.file')&&
+  allow.has(email);
 }

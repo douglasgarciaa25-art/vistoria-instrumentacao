@@ -30,12 +30,14 @@
  });
  trash.addEventListener('toggle',()=>{if(trash.open)window.refreshTrash().catch(e=>notify(e.message))});
  $('trashList').onclick=e=>{const id=e.target.dataset.restoreTrash;if(!id)return;guarded(async()=>{const row=await requestResult(db.transaction('trash').objectStore('trash').get(id));if(!row)return;const t=db.transaction(['trash','reports'],'readwrite');t.objectStore('reports').put({id:newId(),updated:new Date().toISOString(),document:row.document});t.objectStore('trash').delete(id);await transactionDone(t);await refreshHistory();await window.refreshTrash();notify('Formulário restaurado. Abra-o em Suas vistorias.')})};
- async function hash(document){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(document)));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('')}
- async function receipts(){return await requestResult(db.transaction('draft').objectStore('draft').get('cloudReceipts'))||{}}
- async function cloudStatus(){if(!historyReady)return;const revision=++protectionRevision,id=activeReportId,snapshot=structuredClone(data()),all=await receipts(),r=all[id];let text='Nuvem: sem cópia registrada neste aparelho';if(r){const same=r.hash===await hash(snapshot);text=(same&&!dirty?'Cópia na nuvem registrada em ':'Alterações após a cópia de ')+new Date(r.at).toLocaleString('pt-BR')}if(revision===protectionRevision)$('cloudProtection').textContent=text}
- window.recordCloudCopy=async(rows,id)=>{const all=await receipts(),at=new Date().toISOString();for(const row of rows)all[row.id]={at,hash:await hash(row.document),snapshotId:id};const t=db.transaction('draft','readwrite');t.objectStore('draft').put(all,'cloudReceipts');await transactionDone(t);await cloudStatus()};
- window.removeCloudReceipt=async id=>{const all=await receipts();for(const key of Object.keys(all))if(all[key].snapshotId===id)delete all[key];const t=db.transaction('draft','readwrite');t.objectStore('draft').put(all,'cloudReceipts');await transactionDone(t);await cloudStatus()};
- document.addEventListener('vistoria-dirty',()=>{dirty=true;protectionRevision++;$('localProtection').textContent='Salvando no aparelho…';$('cloudProtection').textContent='Alterações locais: confira sua cópia na nuvem'});
+ async function cloudStatus(){
+  const drive=window.VistoriaGoogleDrive?.getState();
+  $('cloudProtection').textContent=drive?.enabled?
+   'Google Drive conectado — confira o status de sincronização na aba Nuvem':
+   'Google Drive: conecte na aba Nuvem para sincronizar';
+ }
+ document.addEventListener('vistoria-google-status',()=>cloudStatus().catch(()=>{}));
+ document.addEventListener('vistoria-dirty',()=>{dirty=true;protectionRevision++;$('localProtection').textContent='Salvando no aparelho…';$('cloudProtection').textContent='Alterações locais: aguardando sincronização com Google Drive'});
  document.addEventListener('vistoria-saved',()=>{dirty=false;$('localProtection').textContent='Salvo no aparelho · '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});cloudStatus().catch(()=>{$('cloudProtection').textContent='Não foi possível conferir a cópia na nuvem'});if(!trash.open&&$('trashList').childElementCount===0)window.refreshTrash().catch(()=>{})});
  new MutationObserver(()=>{if(/indisponível|Falha|Não foi/i.test($('saveState').textContent))$('localProtection').textContent=$('saveState').textContent}).observe($('saveState'),{childList:true});
  if(historyReady){$('localProtection').textContent='Salvo no aparelho';cloudStatus().catch(()=>{});window.refreshTrash().catch(()=>{})}

@@ -5,7 +5,7 @@
 */
 (() => {
   'use strict';
-  const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
   const API = 'https://www.googleapis.com/drive/v3/files';
   const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
   const ROOT_FOLDER = 'Vistoria Técnica';
@@ -26,6 +26,7 @@
     lastStatus = message;
     const target = $('gdrive-status');
     if (target) { target.textContent = message; target.style.color = isError ? '#a23c28' : ''; }
+    document.dispatchEvent(new CustomEvent('vistoria-google-status'));
   };
   const logError = e => { console.warn('[Vistoria / Google Drive]', e); display(`Falha no Google Drive: ${e.message}`, true); hadErrors = true; };
   const validToken = () => Boolean(accessToken && Date.now() < expiresAt - 120000);
@@ -375,9 +376,9 @@
         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
       </div>
       <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Informe o ID OAuth e autorize sua conta Google.</p>
-      <p class="muted">O sincronismo automático funciona enquanto o aplicativo estiver aberto, on-line e a autorização Google estiver válida. Após expirar, basta reconectar. Os dados locais permanecem mesmo offline.</p>`;
-    const anchor=document.getElementById('cloudKey')?.closest('.card')||document.getElementById('cloudControls')?.parentElement;
-    if(anchor)anchor.after(panel);else document.querySelector('main')?.append(panel);
+      <p class="muted">O sincronismo funciona com o aplicativo aberto, internet e a autorização Google válida. Ao conectar, o Google também informa seu e-mail para proteger o acesso opcional à revisão técnica por IA. Dados locais permanecem disponíveis offline.</p>`;
+    const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
+    if(anchor)anchor.prepend(panel);
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
@@ -394,5 +395,18 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});
   else setup();
-  window.VistoriaGoogleDrive={sync,disconnect,getState:()=>({enabled,folderId,lastStatus,hadErrors})};
+  async function reviewTechnical(field,text){
+    assertReady();
+    const response=await fetch('/api/technical-review',{
+      method:'POST',
+      cache:'no-store',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},
+      body:JSON.stringify({field,text}),
+      signal:AbortSignal.timeout(45000)
+    });
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(payload.error||'Revisão técnica indisponível no momento.');
+    return payload;
+  }
+  window.VistoriaGoogleDrive={sync,disconnect,reviewTechnical,getState:()=>({enabled,folderId,lastStatus,hadErrors})};
 })();

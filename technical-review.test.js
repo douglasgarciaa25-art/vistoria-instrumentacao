@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {FIELD_NAMES,MAX_REVIEW_INPUT,reviewInput,isAuthorized,reviewMessages,extractReview} from './technical-review-core.mjs';
+import {FIELD_NAMES,MAX_REVIEW_INPUT,reviewInput,verifiedGoogleIdentity,reviewMessages,extractReview} from './technical-review-core.mjs';
 import handler from './technical-review-server.mjs';
 
-test('aceita somente campos permitidos, texto manual e limites definidos',()=>{
+const CLIENT='123456789-vistoria.apps.googleusercontent.com';
+const EMAIL='responsavel@example.com';
+const SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+
+test('aceita somente campos técnicos permitidos, texto manual e limites',()=>{
  assert.deepEqual(reviewInput({field:'analysisDraft',text:'  teste de entrada  '}),{field:'analysisDraft',text:'teste de entrada'});
  assert.equal(reviewInput({field:'password',text:'teste'}).error,'Campo não permitido.');
  assert.ok(reviewInput({field:'problem',text:' '.repeat(20)}).error);
@@ -13,12 +16,14 @@ test('aceita somente campos permitidos, texto manual e limites definidos',()=>{
  assert.ok(reviewInput({field:'problem',text:{}}).error);
  assert.ok(Object.hasOwn(FIELD_NAMES,'completionWork'));
 });
-test('autentica com a mesma chave da nuvem sem comparar segredos em claro',()=>{
- const hash=createHash('sha256').update('chave-ficticia').digest('hex');
- assert.equal(isAuthorized('Bearer chave-ficticia',hash),true);
- assert.equal(isAuthorized('Bearer chave-incorreta',hash),false);
- assert.equal(isAuthorized('Bearer chave-ficticia','hash-invalido'),false);
- assert.equal(isAuthorized('',hash),false);
+test('aceita apenas contas Google verificadas, com escopo Drive e autorização explícita',()=>{
+ const identity={aud:CLIENT,email:EMAIL,email_verified:'true',scope:SCOPES};
+ assert.equal(verifiedGoogleIdentity(identity,CLIENT,EMAIL),true);
+ assert.equal(verifiedGoogleIdentity({...identity,aud:'another.apps.googleusercontent.com'},CLIENT,EMAIL),false);
+ assert.equal(verifiedGoogleIdentity({...identity,email:'intruso@example.com'},CLIENT,EMAIL),false);
+ assert.equal(verifiedGoogleIdentity({...identity,email_verified:'false'},CLIENT,EMAIL),false);
+ assert.equal(verifiedGoogleIdentity({...identity,scope:'openid email'},CLIENT,EMAIL),false);
+ assert.equal(verifiedGoogleIdentity(identity,CLIENT,''),false);
 });
 test('prompt técnico proíbe inventar medições e conclusões',()=>{
  const messages=reviewMessages('analysisDraft','Foi checado a valvula. Não foi testado.');
@@ -26,13 +31,14 @@ test('prompt técnico proíbe inventar medições e conclusões',()=>{
  for(const term of ['Não invente','TAGs','Não transforme','apenas conteúdo a revisar'])assert.ok(messages[0].content.includes(term),term);
  assert.ok(messages[1].content.includes('Não foi testado.'));
 });
-test('extrai apenas uma sugestão válida; rejeita respostas truncadas',()=>{
+test('extrai só uma sugestão válida; rejeita respostas incompletas',()=>{
  assert.equal(extractReview({choices:[{finish_reason:'stop',message:{content:'  Foi realizada inspeção visual.  '}}]}),'Foi realizada inspeção visual.');
  assert.throws(()=>extractReview({choices:[{finish_reason:'length',message:{content:'Incompleto'}}]}));
  assert.throws(()=>extractReview({choices:[{finish_reason:'stop',message:{content:''}}]}));
 });
-test('interface preserva entrada manual e exige aprovação explícita',()=>{
+test('interface oferece aprovação e desfazer com sessão Google',()=>{
  const js=readFileSync('technical-review.js','utf8');
+ const drive=readFileSync('google-drive-sync.js','utf8');
  const html=readFileSync('index.html','utf8');
  const sw=readFileSync('sw.js','utf8');
  const vercel=JSON.parse(readFileSync('vercel.json','utf8'));
@@ -45,6 +51,9 @@ test('interface preserva entrada manual e exige aprovação explícita',()=>{
  assert.ok(js.includes('Desfazer revisão'));
  assert.ok(js.includes('field.dispatchEvent(new Event'));
  assert.ok(js.includes('Não inclua informações sigilosas'));
+ assert.ok(js.includes('window.VistoriaGoogleDrive'));
+ assert.ok(drive.includes('reviewTechnical'));
+ assert.ok(!js.includes("typeof cloudKey"));
 });
 function response(){
  return {statusCode:200,body:null,headers:{},
@@ -53,26 +62,37 @@ function response(){
   json(value){this.body=value;return this}
  };
 }
-test('API impede usuários sem a chave e não envia o texto ao provedor',async()=>{
- const saved=process.env.VISTORIA_ACCESS_HASH;
- const fetchOriginal=globalThis.fetch;
- process.env.VISTORIA_ACCESS_HASH=createHash('sha256').update('chave-testes').digest('hex');
- globalThis.fetch=()=>{throw Error('Requisição externa inesperada.')};
+function withGoogleConfig(){
+ const original={client:process.env.VISTORIA_GOOGLE_CLIENT_ID,emails:process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS,key:process.env.AI_GATEWAY_API_KEY};
+ process.env.VISTORIA_GOOGLE_CLIENT_ID=CLIENT;
+ process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS=EMAIL;
+ process.env.AI_GATEWAY_API_KEY='credencial-ficticia-de-testes';
+ return ()=>{for(const [k,v] of Object.entries({VISTORIA_GOOGLE_CLIENT_ID:original.client,VISTORIA_GOOGLE_ALLOWED_EMAILS:original.emails,AI_GATEWAY_API_KEY:original.key}))if(v===undefined)delete process.env[k];else process.env[k]=v};
+}
+test('API exige OAuth Google válido sem enviar o relato a usuário não autorizado',async()=>{
+ const restore=withGoogleConfig(),orig=globalThis.fetch;
+ let calls=0;
+ globalThis.fetch=async url=>{
+  calls++;
+  assert.ok(String(url).startsWith('https://oauth2.googleapis.com/tokeninfo?'));
+  return {ok:true,json:async()=>({aud:CLIENT,email:'intruso@example.com',email_verified:'true',scope:SCOPES})};
+ };
  try{
   const res=response();
-  await handler({method:'POST',headers:{authorization:'Bearer errada'},body:{field:'analysisDraft',text:'texto'}},res);
-  assert.equal(res.statusCode,401);
- }finally{globalThis.fetch=fetchOriginal;if(saved===undefined)delete process.env.VISTORIA_ACCESS_HASH;else process.env.VISTORIA_ACCESS_HASH=saved}
+  await handler({method:'POST',headers:{authorization:'Bearer token.mock'},body:{field:'analysisDraft',text:'texto'}},res);
+  assert.equal(res.statusCode,403);
+  assert.equal(calls,1);
+ }finally{globalThis.fetch=orig;restore()}
 });
-test('API revisa somente o campo solicitado e responde sem alterar registros',async()=>{
- const key='chave-teste';
- const savedHash=process.env.VISTORIA_ACCESS_HASH, savedGateway=process.env.AI_GATEWAY_API_KEY;
- const originalFetch=globalThis.fetch;
- process.env.VISTORIA_ACCESS_HASH=createHash('sha256').update(key).digest('hex');
- process.env.AI_GATEWAY_API_KEY='credencial-ficticia-de-testes';
- let called=0;
+test('API revisa somente o campo solicitado após confirmar a conta Google',async()=>{
+ const restore=withGoogleConfig(),orig=globalThis.fetch;
+ let calls=0;
  globalThis.fetch=async(url,options)=>{
-  called++;
+  calls++;
+  if(calls===1){
+   assert.ok(String(url).startsWith('https://oauth2.googleapis.com/tokeninfo?access_token=token.mock'));
+   return {ok:true,json:async()=>({aud:CLIENT,email:EMAIL,email_verified:'true',scope:SCOPES})};
+  }
   assert.equal(url,'https://ai-gateway.vercel.sh/v1/chat/completions');
   assert.equal(options.headers.Authorization,'Bearer credencial-ficticia-de-testes');
   const body=JSON.parse(options.body);
@@ -83,13 +103,9 @@ test('API revisa somente o campo solicitado e responde sem alterar registros',as
  };
  try{
   const res=response();
-  await handler({method:'POST',headers:{authorization:'Bearer '+key},body:{field:'analysisDraft',text:'Não apresentou leitura no painel.'}},res);
+  await handler({method:'POST',headers:{authorization:'Bearer token.mock'},body:{field:'analysisDraft',text:'Não apresentou leitura no painel.'}},res);
   assert.equal(res.statusCode,200);
   assert.deepEqual(res.body,{suggested:'O painel não apresentou leitura.',field:'analysisDraft',fieldLabel:FIELD_NAMES.analysisDraft});
-  assert.equal(called,1);
- }finally{
-  globalThis.fetch=originalFetch;
-  if(savedHash===undefined)delete process.env.VISTORIA_ACCESS_HASH;else process.env.VISTORIA_ACCESS_HASH=savedHash;
-  if(savedGateway===undefined)delete process.env.AI_GATEWAY_API_KEY;else process.env.AI_GATEWAY_API_KEY=savedGateway;
- }
+  assert.equal(calls,2);
+ }finally{globalThis.fetch=orig;restore()}
 });
