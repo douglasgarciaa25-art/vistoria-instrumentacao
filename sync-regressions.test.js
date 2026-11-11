@@ -25,7 +25,7 @@ test('Drive mantém exclusões locais e isola hashes por pasta',()=>{
  assert.match(src,/loadScope\(folderId\)/);
  assert.match(src,/SYNC_KEY\+':'\+syncScope/);
  assert.match(src,/PHOTOS_KEY\+':'\+syncScope/);
- assert.match(src,/packet\.reportId!==expectedReportId/);
+ assert.match(src,/doc\.reportId!==expectedReportId/);
 });
 test('nuvem compartilhada não sobrescreve alterações de outra aba',()=>{
  const src=file('shared-cloud.js');
