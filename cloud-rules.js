@@ -21,9 +21,8 @@ export function validBackupCommit(body){
   Math.ceil(body.length/CHUNK_SIZE)===body.parts;
 }
 export function validSyncPayload(value){
- return !!value&&typeof value.deleted==='boolean'&&
-  (value.deleted===true||(
-   value.document?.version===1&&value.document.meta&&typeof value.document.meta==='object'&&
-   Array.isArray(value.document.records)
-  ));
+ if(!value||typeof value.deleted!=='boolean')return false;
+ if(value.deleted)return true;
+ const doc=value.document;
+ return !!doc&&doc.version===1&&!!doc.meta&&typeof doc.meta==='object'&&Array.isArray(doc.records);
 }
