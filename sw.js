@@ -1,5 +1,5 @@
-const CACHE='vistoria-shell-v14-auditoria';
-const FILES=['/trash-actions.js','/export-current.js','/point-actions.js','/shared-cloud.js','/pdf-import.js','/analysis-progress.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/enhancements.js','/layout.css','/layout.js','/google-drive-sync.js','/','/index.html','/history.js','/pdf-export.js','/improvements.js','/cloud.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
+const CACHE='vistoria-shell-v15-revisao-tecnica';
+const FILES=['/trash-actions.js','/export-current.js','/point-actions.js','/shared-cloud.js','/pdf-import.js','/analysis-progress.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/enhancements.js','/layout.css','/layout.js','/google-drive-sync.js','/','/index.html','/history.js','/pdf-export.js','/improvements.js','/cloud.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const name of await caches.keys())if(name.startsWith('vistoria-shell-')&&name!==CACHE)await caches.delete(name);await self.clients.claim()})()));
 self.addEventListener('fetch',event=>{
