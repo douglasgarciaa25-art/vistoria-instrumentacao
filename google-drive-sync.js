@@ -210,7 +210,7 @@
       display('PDF baixado e copiado para a pasta PDFs no Google Drive.');
     } catch(e) { logError(e); }
   }
-  function validate(row) { return row?.document?.meta && Array.isArray(row.document.records) && row?.id; }
+  function validate(row) { return typeof row?.id==='string' && !!row.document?.meta && Array.isArray(row.document.records) && (typeof valid!=='function'||valid(row.document)) && (typeof checkPending!=='function'||checkPending(row.document)); }
   async function sync() {
     if (!enabled || running) return;
     if (!navigator.onLine) { display('Offline: vistorias preservadas no aparelho.'); return; }
@@ -266,7 +266,11 @@
           if (!validate({id:row.id,document:packet.document})) continue;
           if(row.id===activeReportId) {
             const cloneId=crypto.randomUUID();
-            await putReport({id:cloneId,updated:new Date().toISOString(),document:packet.document});
+            const copy=structuredClone(packet.document);
+            copy.meta={...copy.meta,title:(copy.meta.title||'Vistoria')+' (versão recebida do Drive)'};
+            await putReport({id:cloneId,updated:new Date().toISOString(),document:copy});
+            // Avoid importing the same remote revision repeatedly.
+            syncMap[row.id]=remoteHash;saveMap();
             conflicts++;
           } else {
             await putReport({id:row.id,updated:packet.savedAt||new Date().toISOString(),document:packet.document});
