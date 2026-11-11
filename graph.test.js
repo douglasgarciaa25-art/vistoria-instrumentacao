@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AppFolderClient, safeFolderName, safeFileName, revisionFolderName, GraphHttpError } from '../src/graph.js';
+import { AppFolderClient, safeFolderName, safeFileName, revisionFolderName, GraphHttpError } from './graph.js';
 
 test('nomes de pastas não deixam caminho atravessar diretórios', () => {
   assert.equal(safeFolderName('../OS 123'), 'OS-123');
