@@ -1,4 +1,4 @@
-import {FIELD_NAMES,reviewInput,isAuthorized,reviewMessages,extractReview} from './technical-review-core.mjs';
+import {FIELD_NAMES,reviewInput,verifiedGoogleIdentity,reviewMessages,extractReview} from './technical-review-core.mjs';
 
 const AI_URL='https://ai-gateway.vercel.sh/v1/chat/completions';
 const DEFAULT_MODEL='openai/gpt-5.5';
@@ -9,9 +9,23 @@ export default async function handler(req,res){
  const reply=(status,data)=>res.status(status).json(data);
  if(req.method!=='POST')return reply(405,{error:'Use POST para solicitar a revisão técnica.'});
 
- const expected=process.env.VISTORIA_ACCESS_HASH;
- if(!expected)return reply(503,{error:'A autenticação da Vistoria Técnica ainda não foi configurada.'});
- if(!isAuthorized(req.headers.authorization||'',expected))return reply(401,{error:'Conecte a chave da nuvem na Vistoria Técnica para usar a revisão.'});
+ // Google é a única forma de entrar. Contas fora da lista configurada não consomem créditos de IA.
+ const expectedClient=process.env.VISTORIA_GOOGLE_CLIENT_ID;
+ const allowedEmails=process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS;
+ if(!expectedClient||!allowedEmails)return reply(503,{error:'A revisão por IA requer cadastrar o Client ID e os e-mails autorizados do Google nas configurações privadas do servidor.'});
+ const bearer=String(req.headers.authorization||'').match(/^Bearer ([A-Za-z0-9._~-]+)$/i)?.[1];
+ if(!bearer)return reply(401,{error:'Conecte sua conta Google Drive e tente novamente.'});
+ try{
+  const check=await fetch('https://oauth2.googleapis.com/tokeninfo?access_token='+encodeURIComponent(bearer),{
+   method:'GET',cache:'no-store',signal:AbortSignal.timeout(8000)
+  });
+  if(!check.ok)return reply(401,{error:'Seu acesso Google expirou. Reconecte o Drive.'});
+  const identity=await check.json();
+  if(!verifiedGoogleIdentity(identity,expectedClient,allowedEmails))return reply(403,{error:'Sua conta Google não está autorizada a utilizar a revisão técnica.'});
+ }catch(err){
+  console.error('Falha ao validar acesso Google:',err?.name||'Unknown');
+  return reply(503,{error:'Não foi possível confirmar sua conta Google. Tente novamente.'});
+ }
 
  const headerLength=Number(req.headers['content-length']||0);
  if(headerLength>16000)return reply(413,{error:'Texto enviado excede o limite.'});
