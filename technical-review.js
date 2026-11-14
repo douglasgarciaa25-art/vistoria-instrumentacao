@@ -20,7 +20,7 @@
   objective:'Indique o equipamento e a finalidade da vistoria.',
   conclusion:'Informe a condição final conhecida e eventuais pendências.'
  };
- function reviseLocal(original){
+ function reviseLocal(original,field){
    let revised=original.trim();
    // Substituições conservadoras: não alteram números, TAGs, negações ou resultados.
    const rules=[
@@ -109,6 +109,24 @@
    // Capitaliza somente palavras comuns reconhecidas, sem modificar identificadores.
    revised=revised.replace(/^(foi|foram|realizei|realizamos|identificado|identificada|verificado|verificada|possível|não|durante|após|necessário|é necessário|a válvula|o equipamento)\b/iu,m=>m[0].toUpperCase()+m.slice(1));
    if(revised&&!/[.!?;:]$/.test(revised)&&!/[0-9]$/.test(revised))revised+='.';
+   // Reestrutura apenas construções explícitas, sem inferir execução ou diagnóstico.
+   if(field){
+    const patterns=[
+     [/^Foi realizada a verificação (.+)$/iu,'Realizou-se a verificação $1'],
+     [/^Foi realizada a inspeção (.+)$/iu,'Realizou-se a inspeção $1'],
+     [/^Foram realizados testes (.+)$/iu,'Realizaram-se testes $1'],
+     [/^Foram realizados os testes (.+)$/iu,'Realizaram-se os testes $1'],
+     [/^Foi identificada (.+)$/iu,'Identificou-se $1'],
+     [/^Foi identificado (.+)$/iu,'Identificou-se $1'],
+     [/^Foi constatada (.+)$/iu,'Constatou-se $1'],
+     [/^Foi constatado (.+)$/iu,'Constatou-se $1'],
+     [/^Foi efetuada (.+)$/iu,'Efetuou-se $1']
+    ];
+    if(field==='action')patterns.push([/^É necessário verificar (.+)$/iu,'Recomenda-se verificar $1']);
+    for(const [pattern,value] of patterns){
+     if(pattern.test(revised)){revised=revised.replace(pattern,value);break;}
+    }
+   }
    return revised;
  }
  if(typeof globalThis!=='undefined')globalThis.VistoriaReviseLocal=reviseLocal;
@@ -171,13 +189,15 @@
   review.addEventListener('click',()=>{
    const original=field.value;
    if(!original.trim())return notify('Escreva primeiro a sua descrição.');
-   const revised=reviseLocal(original);
+   const revised=reviseLocal(original,id);
    pending={original};
    originalPreview.value=original;
    suggestion.value=revised;panel.hidden=false;
-   status.textContent=revised===original?'Nenhum ajuste automático identificado. Você pode editar a sugestão.':'Sugestão local pronta. Confira os dados antes de aceitar.';
+   status.textContent=revised===original.trim()?'O assistente local não encontrou uma reformulação segura. Edite a sugestão manualmente; nenhum dado foi alterado.':'Sugestão local pronta. Confira os dados antes de aceitar.';
+   accept.disabled=revised===original.trim();
   });
 
+  suggestion.addEventListener('input',()=>{accept.disabled=!pending||!suggestion.value.trim()||suggestion.value.trim()===pending.original.trim()});
   accept.addEventListener('click',()=>{
    if(!pending)return;
    if(field.value!==pending.original){panel.hidden=true;pending=null;return notify('O texto mudou. Solicite nova revisão.')}
