@@ -36,7 +36,7 @@ test('extrai só uma sugestão válida; rejeita respostas incompletas',()=>{
  assert.throws(()=>extractReview({choices:[{finish_reason:'length',message:{content:'Incompleto'}}]}));
  assert.throws(()=>extractReview({choices:[{finish_reason:'stop',message:{content:''}}]}));
 });
-test('interface oferece aprovação e desfazer com sessão Google',()=>{
+test('interface local oferece aprovação e desfazer',()=>{
  const js=readFileSync('technical-review.js','utf8');
  const drive=readFileSync('google-drive-sync.js','utf8');
  const html=readFileSync('index.html','utf8');
@@ -45,13 +45,13 @@ test('interface oferece aprovação e desfazer com sessão Google',()=>{
  assert.ok(html.includes('<script src="technical-review.js"></script>'));
  assert.ok(sw.includes("'/technical-review.js'"));
  assert.ok(vercel.routes.some(r=>r.src==='/api/technical-review'));
- assert.ok(js.includes("field.value!==original"));
+ assert.ok(js.includes("field.value!==pending.original"));
  assert.ok(js.includes('Usar texto revisado'));
  assert.ok(js.includes('Manter meu texto'));
  assert.ok(js.includes('Desfazer revisão'));
  assert.ok(js.includes('field.dispatchEvent(new Event'));
- assert.ok(js.includes('Não inclua informações sigilosas'));
- assert.ok(js.includes('window.VistoriaGoogleDrive'));
+ assert.ok(js.includes('protectedParts'));
+ assert.ok(!js.includes('window.VistoriaGoogleDrive'));
  assert.ok(drive.includes('reviewTechnical'));
  assert.ok(!js.includes("typeof cloudKey"));
 });
