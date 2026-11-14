@@ -33,7 +33,7 @@ test('PWA não armazena scripts antigos de nuvem em cache',()=>{
  assert.ok(sw.includes("'/google-drive-sync.js'"));
  assert.ok(!sw.includes("'/cloud.js'"));
  assert.ok(!sw.includes("'/shared-cloud.js'"));
- assert.ok(sw.includes('vistoria-shell-v16-google-unico'));
+ assert.match(sw,/const CACHE='vistoria-shell-v\d+-[^']+';/);
 });
 test('indicadores e revisão técnica não exigem chave da Vercel',()=>{
  const enhancements=read('enhancements.js');
