@@ -12,10 +12,12 @@
   const PREFIX = 'vistoria_';
   const STORE = 'vistoria-google-drive';
   const CLIENT_KEY = STORE + ':clientId';
+  const CONNECTED_KEY = STORE + ':connectionWanted';
   const FOLDER_KEY = STORE + ':folderId';
   const SYNC_KEY = STORE + ':syncMap';
   let accessToken = '', expiresAt = 0, googleAccount = '', running = false;
   let folderId = '', photosId = '', pdfsId = '', scheduled = null, authClient = null;
+  let connecting = false;
   let enabled = false, lastStatus = '', hadErrors = false;
   const PHOTOS_KEY=STORE+':photoSynced';
   let photoSynced={}, syncScope=''; // Estado de envio vinculado à pasta/conta do Drive.
@@ -221,7 +223,7 @@
   async function sync() {
     if (!enabled || running) return;
     if (!navigator.onLine) { display('Offline: vistorias preservadas no aparelho.'); return; }
-    if (!validToken()) { enabled=false; display('Reconecte o Google Drive para continuar a sincronização.',true); return; }
+    if (!validToken()) { enabled=false; $('gdrive-connect').textContent='Reconectar Google Drive'; display('Autorização expirada. Toque em Reconectar; seus registros continuam salvos.',true); return; }
     if (typeof historyReady==='undefined'||!historyReady) return;
     running=true;
     let sent=0,received=0,conflicts=0;
@@ -329,7 +331,8 @@
     });
   }
   async function startConnection() {
-    if (running) return;
+    if (running || connecting) return;
+    if (validToken()) { enabled=true; return sync(); }
     const clientId=$('gdrive-client-id')?.value.trim();
     if (!/^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId||'')) {
       display('Informe um ID do cliente OAuth do Google válido.',true);return;
@@ -341,21 +344,25 @@
         loadGoogleScript().then(()=>display('Login Google pronto. Toque em Conectar Google Drive.')).catch(logError);
         return;
       }
+      connecting=true;
       authClient=window.google.accounts.oauth2.initTokenClient({client_id:clientId,scope:SCOPE,callback:async token=>{
+        connecting=false;
         if (!token?.access_token) { display('Autorização não concedida.',true); return; }
         accessToken=token.access_token;
         expiresAt=Date.now()+(Number(token.expires_in||3600)*1000);
+        localStorage.setItem(CONNECTED_KEY,'1');
         enabled=true;folderId='';photosId='';pdfsId='';
         syncScope='';syncMap={};photoSynced={};
         $('gdrive-disconnect').hidden=false;
         display('Conectado ao Google Drive. Preparando pasta na raiz…');
         await sync();
-      },error_callback:()=>display('A janela do Google foi fechada ou bloqueada.',true)});
-      authClient.requestAccessToken({prompt:'consent'});
-    }catch(e){logError(e)}
+      },error_callback:()=>{connecting=false;display('A janela do Google foi fechada ou bloqueada. Toque em Reconectar para tentar novamente.',true)}});
+      authClient.requestAccessToken({prompt:localStorage.getItem(CONNECTED_KEY)==='1'?'':'consent'});
+    }catch(e){connecting=false;logError(e)}
   }
   function disconnect() {
     const token=accessToken;
+    localStorage.removeItem(CONNECTED_KEY);
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
     if(token&&window.google?.accounts?.oauth2)window.google.accounts.oauth2.revoke(token,()=>{});
@@ -367,7 +374,7 @@
     panel.id='gdrive-panel';panel.className='card';
     panel.style.cssText='border:1px solid #b4c5cf;max-width:100%;margin:16px 0;padding:18px;background:#fff';
     panel.innerHTML=`<h3 style="margin-top:0">Google Drive pessoal — sincronização</h3>
-      <p class="muted">Vistorias, fotos e PDFs na pasta <b>Meu Drive / Vistoria Técnica</b>. As fotos ficam também dentro do backup JSON. Não substitui a nuvem antiga.</p>
+      <p class="muted">Vistorias, fotos e PDFs na pasta <b>Meu Drive / Vistoria Técnica</b>. As fotos ficam também dentro do backup JSON. </p>
       <label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
       <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com" style="width:100%;max-width:560px">
       <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
@@ -376,17 +383,27 @@
         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
       </div>
       <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Informe o ID OAuth e autorize sua conta Google.</p>
-      <p class="muted">O sincronismo funciona com o aplicativo aberto, internet e a autorização Google válida. Ao conectar, o Google também informa seu e-mail para proteger o acesso opcional à revisão técnica por IA. Dados locais permanecem disponíveis offline.</p>`;
+      <p class="muted">O sincronismo funciona com o aplicativo aberto, internet e a autorização Google válida. A preferência de conexão é lembrada; o Google pode exigir nova autorização ao expirar a sessão ou fechar o aplicativo. Dados locais permanecem disponíveis offline.</p>`;
     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
-    $('gdrive-now').addEventListener('click',()=>sync());
+    $('gdrive-now').addEventListener('click',()=>validToken()?sync():startConnection());
     $('gdrive-disconnect').addEventListener('click',disconnect);
     document.addEventListener('vistoria-saved',()=>{if(!running)schedule()});
-    addEventListener('online',()=>schedule(1000));
-    addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')schedule(1400)});
+    function resume(){
+      if(validToken()){enabled=true;schedule(1000);return;}
+      if(localStorage.getItem(CONNECTED_KEY)==='1'){
+        enabled=false;
+        $('gdrive-connect').textContent='Reconectar Google Drive';
+        $('gdrive-disconnect').hidden=false;
+        display('Conexão lembrada. Toque em Reconectar para renovar a autorização Google. Vistorias locais preservadas.');
+      }
+    }
+    addEventListener('online',resume);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
+    resume();
     setInterval(()=>{if(enabled && document.visibilityState==='visible')sync()},90000);
     if(typeof window.download==='function') {
       const original=window.download;
