@@ -51,7 +51,8 @@ test('interface local oferece aprovação e desfazer',()=>{
  assert.ok(js.includes('Desfazer revisão'));
  assert.ok(js.includes('field.dispatchEvent(new Event'));
  assert.ok(js.includes('protectedParts'));
- assert.ok(!js.includes('window.VistoriaGoogleDrive'));
+ assert.ok(js.includes('window.VistoriaGoogleDrive'));
+ assert.ok(js.includes('Reescrever com IA'));
  assert.ok(drive.includes('reviewTechnical'));
  assert.ok(!js.includes("typeof cloudKey"));
 });
