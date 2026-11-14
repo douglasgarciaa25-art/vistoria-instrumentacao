@@ -65,6 +65,38 @@
     [/\bconexao\b/gi,'conexão'],
     [/\bsolenoide\b/gi,'solenoide']
    );
+   rules.push(
+    [/\bfoi feito um teste\b/gi,'foi realizado um teste'],
+    [/\bfoi feita a checagem\b/gi,'foi realizada a verificação'],
+    [/\bfoi checado o\b/gi,'foi verificado o'],
+    [/\bfoi checado a\b/gi,'foi verificada a'],
+    [/\bfoi conferido a\b/gi,'foi conferida a'],
+    [/\bfoi efetuado a\b/gi,'foi efetuada a'],
+    [/\bfoi identificado uma\b/gi,'foi identificada uma'],
+    [/\bfoi encontrado uma\b/gi,'foi encontrada uma'],
+    [/\bfoi constatado uma\b/gi,'foi constatada uma'],
+    [/\bfoi feito testes\b/gi,'foram realizados testes'],
+    [/\bfoi realizado testes\b/gi,'foram realizados testes'],
+    [/\bfoi realizado verificações\b/gi,'foram realizadas verificações'],
+    [/\bficou sem comunicação\b/gi,'ficou sem comunicação'],
+    [/\bficou oscilando\b/gi,'apresentou oscilação'],
+    [/\bficou variando\b/gi,'apresentou variação'],
+    [/\bnão tava funcionando\b/gi,'não estava funcionando'],
+    [/\bcom a finalidade de poder\b/gi,'com a finalidade de'],
+    [/\bpara poder verificar\b/gi,'para verificar'],
+    [/\bcom relação a\b/gi,'em relação a'],
+    [/\bpossivel\b/gi,'possível'],
+    [/\bhipotese\b/gi,'hipótese'],
+    [/\bdiagnostico\b/gi,'diagnóstico'],
+    [/\batuacao\b/gi,'atuação'],
+    [/\balimentacao\b/gi,'alimentação'],
+    [/\bconversao\b/gi,'conversão'],
+    [/\bmedicao\b/gi,'medição'],
+    [/\bverificacao\b/gi,'verificação'],
+    [/\bsubstituicao\b/gi,'substituição'],
+    [/\bcorrecao\b/gi,'correção'],
+    [/\bconclusao\b/gi,'conclusão']
+   );
    // Preserva identificadores, valores, unidades e trechos entre aspas.
    const protectedParts=/(["“][^"”\n]+["”]|\b[\w.-]*\d[\w.,:/%-]*|\b[A-Z]{2,}(?:[_-][A-Z0-9]+)*\b|\b(?:mA|mV|kPa|MPa|kgf|kWh|rpm|bar)\b)/g;
    revised=revised.split(protectedParts).map((part,i)=>{
@@ -74,7 +106,8 @@
     }
     return part;
    }).join('');
-   // Não capitalizar automaticamente: a primeira palavra pode ser uma unidade ou TAG.
+   // Capitaliza somente palavras comuns reconhecidas, sem modificar identificadores.
+   revised=revised.replace(/^(foi|foram|realizei|realizamos|identificado|identificada|verificado|verificada|possível|não|durante|após|necessário|é necessário|a válvula|o equipamento)\b/iu,m=>m[0].toUpperCase()+m.slice(1));
    if(revised&&!/[.!?;:]$/.test(revised)&&!/[0-9]$/.test(revised))revised+='.';
    return revised;
  }
