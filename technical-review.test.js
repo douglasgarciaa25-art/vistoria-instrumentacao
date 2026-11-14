@@ -64,11 +64,11 @@ function response(){
  };
 }
 function withGoogleConfig(){
- const original={client:process.env.VISTORIA_GOOGLE_CLIENT_ID,emails:process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS,key:process.env.AI_GATEWAY_API_KEY};
+ const original={client:process.env.VISTORIA_GOOGLE_CLIENT_ID,emails:process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS,key:process.env.GROQ_API_KEY};
  process.env.VISTORIA_GOOGLE_CLIENT_ID=CLIENT;
  process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS=EMAIL;
- process.env.AI_GATEWAY_API_KEY='credencial-ficticia-de-testes';
- return ()=>{for(const [k,v] of Object.entries({VISTORIA_GOOGLE_CLIENT_ID:original.client,VISTORIA_GOOGLE_ALLOWED_EMAILS:original.emails,AI_GATEWAY_API_KEY:original.key}))if(v===undefined)delete process.env[k];else process.env[k]=v};
+ process.env.GROQ_API_KEY='credencial-ficticia-de-testes';
+ return ()=>{for(const [k,v] of Object.entries({VISTORIA_GOOGLE_CLIENT_ID:original.client,VISTORIA_GOOGLE_ALLOWED_EMAILS:original.emails,GROQ_API_KEY:original.key}))if(v===undefined)delete process.env[k];else process.env[k]=v};
 }
 test('API exige OAuth Google válido sem enviar o relato a usuário não autorizado',async()=>{
  const restore=withGoogleConfig(),orig=globalThis.fetch;
@@ -94,10 +94,10 @@ test('API revisa somente o campo solicitado após confirmar a conta Google',asyn
    assert.ok(String(url).startsWith('https://oauth2.googleapis.com/tokeninfo?access_token=token.mock'));
    return {ok:true,json:async()=>({aud:CLIENT,email:EMAIL,email_verified:'true',scope:SCOPES})};
   }
-  assert.equal(url,'https://ai-gateway.vercel.sh/v1/chat/completions');
+  assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
   assert.equal(options.headers.Authorization,'Bearer credencial-ficticia-de-testes');
   const body=JSON.parse(options.body);
-  assert.equal(body.model,'openai/gpt-5.5');
+  assert.equal(body.model,'openai/gpt-oss-120b');
   assert.ok(body.messages[1].content.includes('Não apresentou leitura no painel.'));
   assert.equal(body.messages[1].content.includes('foto'),false);
   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'O painel não apresentou leitura.'}}]})};
