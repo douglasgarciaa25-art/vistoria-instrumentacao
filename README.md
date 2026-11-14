@@ -72,3 +72,11 @@ npm run check
 npm test
 ```
 Há testes de validação do payload, autenticação, interface, tratamento de respostas incompletas e requisição simulada sem enviar dados reais.
+
+## Descritivo técnico guiado (14/11/2026)
+- Painel opcional **Montar descritivo técnico** no formulário de pontos. Separação explícita entre condição observada, testes realizados, resultados confirmados, hipóteses não confirmadas, serviços executados e pendências.
+- A prévia é composta **somente das informações digitadas** pelo profissional, no próprio aparelho, sem chamada de IA ou serviço externo.
+- O operador escolhe o campo de destino e confirma **Acrescentar descritivo ao campo**; o conteúdo anterior é mantido e há uma ação de desfazer enquanto o destino não for editado.
+- No campo de andamento, ainda é necessário tocar em **Acrescentar etapa ao andamento** e salvar a alteração do ponto.
+- O guia é limpo ao trocar de vistoria ou ponto, reduzindo o risco de misturar relatos.
+- Testes automatizados incluem 50 combinações de informações técnicas; isso **não substitui validação manual no Android**, PDFs reais ou sincronização entre aparelhos.
