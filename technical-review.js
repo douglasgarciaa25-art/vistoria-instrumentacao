@@ -141,6 +141,8 @@
   const review=document.createElement('button');
   review.type='button';review.className='secondary';
   review.textContent='Revisar redação técnica (offline)';
+  const ai=document.createElement('button');
+  ai.type='button';ai.className='secondary';ai.textContent='Reescrever com IA';
   const undo=document.createElement('button');
   undo.type='button';undo.className='secondary';undo.textContent='Desfazer revisão';undo.hidden=true;
   const status=document.createElement('p');
@@ -171,7 +173,7 @@
   originalPreview.setAttribute('aria-label','Relato original de '+title);
   panel.append(originalLabel,originalPreview,label,hint,commands);
 
-  const buttons=document.createElement('div');buttons.className='actions';buttons.append(review,undo);
+  const buttons=document.createElement('div');buttons.className='actions';buttons.append(ai,review,undo);
   container.append(buttons,status,panel);
   field.closest('label').after(container);
 
@@ -197,6 +199,24 @@
    accept.disabled=revised===original.trim();
   });
 
+  ai.addEventListener('click',async()=>{
+   const original=field.value;
+   if(!original.trim())return notify('Escreva primeiro o relato.');
+   if(original.trim().length>3500)return notify('Limite de 3.500 caracteres por revisão.');
+   const drive=window.VistoriaGoogleDrive;
+   if(!navigator.onLine||!drive?.getState().enabled)return notify('Conecte o Google Drive e a internet para usar IA. A revisão offline continua disponível.');
+   if(!confirm('Enviar somente este texto ao serviço de IA? Não envie dados sigilosos sem autorização. O serviço pode gerar custos.'))return;
+   ai.disabled=true;status.textContent='Reescrevendo com IA…';
+   try{
+    const result=await drive.reviewTechnical(id,original);
+    if(field.value!==original)return;
+    if(typeof result.suggested!=='string'||!result.suggested.trim())throw Error('Resposta inválida.');
+    pending={original};originalPreview.value=original;suggestion.value=result.suggested.trim();panel.hidden=false;
+    accept.disabled=suggestion.value===original.trim();
+    status.textContent='Sugestão da IA. Confira os fatos e medições antes de aceitar.';
+   }catch(e){status.textContent='IA indisponível: '+e.message+' A revisão offline permanece disponível.';}
+   finally{ai.disabled=false;}
+  });
   suggestion.addEventListener('input',()=>{accept.disabled=!pending||!suggestion.value.trim()||suggestion.value.trim()===pending.original.trim()});
   accept.addEventListener('click',()=>{
    if(!pending)return;
