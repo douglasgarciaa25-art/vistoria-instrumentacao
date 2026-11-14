@@ -10,7 +10,6 @@
   ['objective','Objetivo'],
   ['conclusion','Conclusão']
  ];
- let requesting=false;
  const resetPanels=[];
 
  for(const [id,title] of fields){
@@ -21,7 +20,7 @@
   container.className='technical-review';
   const review=document.createElement('button');
   review.type='button';review.className='secondary';
-  review.textContent='Revisar redação técnica com IA';
+  review.textContent='Revisar redação técnica (offline)';
   const undo=document.createElement('button');
   undo.type='button';undo.className='secondary';undo.textContent='Desfazer revisão';undo.hidden=true;
   const status=document.createElement('p');
@@ -58,35 +57,35 @@
    if(applied&&field.value!==applied.revised){applied=null;undo.hidden=true}
   });
 
-  review.addEventListener('click',async()=>{
-   if(requesting)return notify('Aguarde o término da revisão em andamento.');
+  review.addEventListener('click',()=>{
    const original=field.value;
-   if(!original.trim())return notify('Escreva primeiro a sua descrição de '+title.toLowerCase()+'.');
-   if(original.trim().length>3500)return notify('Revise um trecho com até 3.500 caracteres.');
-   if(!navigator.onLine)return notify('Sem internet. Seu texto permanece disponível para edição e salvamento offline.');
-   const drive=window.VistoriaGoogleDrive;
-   if(!drive?.getState().enabled)return notify('Conecte sua conta Google Drive para habilitar a revisão técnica por IA.');
-   if(!confirm('Enviar APENAS o texto deste campo ao modelo OpenAI para sugestão de redação técnica? Não inclua informações sigilosas sem autorização. O uso da IA pode gerar custos na Vercel.'))return;
-
-   requesting=true;review.disabled=true;review.textContent='Revisando...';
-   pending=null;panel.hidden=true;undo.hidden=true;applied=null;
-   status.textContent='Analisando a redação. O original não será alterado.';
-   try{
-    const result=await drive.reviewTechnical(id,original);
-    if(typeof result.suggested!=='string'||!result.suggested.trim())throw Error('A IA não retornou um texto válido.');
-    if(field.value!==original){
-     status.textContent='Você alterou o texto enquanto a IA revisava. Nada foi substituído; solicite nova revisão.';
-     return;
-    }
-    pending={original};
-    suggestion.value=result.suggested.trim();
-    panel.hidden=false;
-    status.textContent='Compare a sugestão com o que realmente foi observado. Você pode editar a sugestão ou manter o original.';
-   }catch(error){
-    status.textContent='Revisão não concluída: '+(error.name==='TimeoutError'?'tempo de resposta excedido.':error.message);
-   }finally{
-    requesting=false;review.disabled=false;review.textContent='Revisar redação técnica com IA';
-   }
+   if(!original.trim())return notify('Escreva primeiro a sua descrição.');
+   let revised=original.trim();
+   // Substituições conservadoras: não alteram números, TAGs, negações ou resultados.
+   const rules=[
+    [/\btava\b/gi,'estava'],[/\btavam\b/gi,'estavam'],
+    [/\bpra\b/gi,'para'],[/\bpro\b/gi,'para o'],
+    [/\ba gente fez\b/gi,'realizamos'],[/\ba gente verificou\b/gi,'verificamos'],
+    [/\bfoi feito a\b/gi,'foi realizada a'],[/\bfoi feito uma\b/gi,'foi realizada uma'],
+    [/\bfoi realizado os\b/gi,'foram realizados os'],
+    [/\bfoi realizada as\b/gi,'foram realizadas as'],
+    [/\bfoi feito os\b/gi,'foram realizados os'],
+    [/\bdeu problema\b/gi,'apresentou problema'],
+    [/\bdeu falha\b/gi,'apresentou falha'],
+    [/\bvoltou a funcionar\b/gi,'voltou a operar'],
+    [/\bfoi trocado a\b/gi,'foi substituída a'],
+    [/\bfoi trocado o\b/gi,'foi substituído o'],
+    [/\bposiciondor\b/gi,'posicionador'],[/\bcalibraçao\b/gi,'calibração'],
+    [/\bintrumentos\b/gi,'instrumentos'],[/\bcomunicaçao\b/gi,'comunicação'],
+    [/\bvalvula\b/gi,'válvula'],[/\bpressao\b/gi,'pressão'],
+    [/\bvazao\b/gi,'vazão'],[/\bnao\b/gi,'não']
+   ];
+   for(const [pattern,value] of rules)revised=revised.replace(pattern,value);
+   revised=revised.replace(/^[a-zà-ÿ]/u,c=>c.toUpperCase());
+   if(!/[.!?;:]$/.test(revised))revised+='.';
+   pending={original};applied=null;undo.hidden=true;
+   suggestion.value=revised;panel.hidden=false;
+   status.textContent=revised===original?'Nenhum ajuste automático identificado. Você pode editar a sugestão.':'Sugestão local pronta. Confira os dados antes de aceitar.';
   });
 
   accept.addEventListener('click',()=>{
@@ -128,6 +127,6 @@
 
  const note=document.createElement('p');
  note.className='muted technical-review-note';
- note.textContent='O texto é sempre escrito pela equipe. A IA apenas propõe uma redação; não confirma execução, testes, medições ou conformidade técnica. Confira e aprove antes de registrar.';
+ note.textContent='O texto é sempre escrito pela equipe. O assistente local apenas sugere ajustes de redação; não confirma execução, testes, medições ou conformidade técnica. Confira e aprove antes de registrar.';
  document.getElementById('analysisDraft')?.closest('label')?.parentElement?.append(note);
 })();
