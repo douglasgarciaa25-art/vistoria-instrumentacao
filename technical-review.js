@@ -11,55 +11,7 @@
   ['conclusion','Conclusão']
  ];
  const resetPanels=[];
-
- for(const [id,title] of fields){
-  const field=document.getElementById(id);
-  if(!field||!field.closest('label'))continue;
-
-  const container=document.createElement('div');
-  container.className='technical-review';
-  const review=document.createElement('button');
-  review.type='button';review.className='secondary';
-  review.textContent='Revisar redação técnica (offline)';
-  const undo=document.createElement('button');
-  undo.type='button';undo.className='secondary';undo.textContent='Desfazer revisão';undo.hidden=true;
-  const status=document.createElement('p');
-  status.className='muted technical-review-status';status.setAttribute('role','status');
-  status.setAttribute('aria-live','polite');
-
-  const panel=document.createElement('div');
-  panel.className='technical-review-preview';panel.hidden=true;
-  const label=document.createElement('label');
-  label.textContent='Sugestão de redação técnica — confira os dados antes de aceitar';
-  const suggestion=document.createElement('textarea');
-  suggestion.rows=5;suggestion.setAttribute('aria-label','Texto técnico sugerido para '+title);
-  label.append(suggestion);
-  const accept=document.createElement('button');
-  accept.type='button';accept.textContent='Usar texto revisado';
-  const dismiss=document.createElement('button');
-  dismiss.type='button';dismiss.className='secondary';dismiss.textContent='Manter meu texto';
-  const commands=document.createElement('div');commands.className='actions';
-  commands.append(accept,dismiss);
-  panel.append(label,commands);
-
-  const buttons=document.createElement('div');buttons.className='actions';buttons.append(review,undo);
-  container.append(buttons,status,panel);
-  field.closest('label').after(container);
-
-  let pending=null,applied=null;
-  function clear(){
-   pending=null;applied=null;panel.hidden=true;undo.hidden=true;
-   suggestion.value='';status.textContent='';
-  }
-  resetPanels.push(clear);
-  field.addEventListener('input',()=>{
-   if(pending&&field.value!==pending.original){pending=null;panel.hidden=true;status.textContent='O texto mudou. Solicite outra revisão, se desejar.'}
-   if(applied&&field.value!==applied.revised){applied=null;undo.hidden=true}
-  });
-
-  review.addEventListener('click',()=>{
-   const original=field.value;
-   if(!original.trim())return notify('Escreva primeiro a sua descrição.');
+ function reviseLocal(original){
    let revised=original.trim();
    // Substituições conservadoras: não alteram números, TAGs, negações ou resultados.
    const rules=[
@@ -115,6 +67,60 @@
    }).join('');
    // Não capitalizar automaticamente: a primeira palavra pode ser uma unidade ou TAG.
    if(!/[.!?;:]$/.test(revised)&&!/[0-9]$/.test(revised))revised+='.';
+   return revised;
+ }
+ if(typeof globalThis!=='undefined')globalThis.VistoriaReviseLocal=reviseLocal;
+ if(typeof document==='undefined')return;
+
+ for(const [id,title] of fields){
+  const field=document.getElementById(id);
+  if(!field||!field.closest('label'))continue;
+
+  const container=document.createElement('div');
+  container.className='technical-review';
+  const review=document.createElement('button');
+  review.type='button';review.className='secondary';
+  review.textContent='Revisar redação técnica (offline)';
+  const undo=document.createElement('button');
+  undo.type='button';undo.className='secondary';undo.textContent='Desfazer revisão';undo.hidden=true;
+  const status=document.createElement('p');
+  status.className='muted technical-review-status';status.setAttribute('role','status');
+  status.setAttribute('aria-live','polite');
+
+  const panel=document.createElement('div');
+  panel.className='technical-review-preview';panel.hidden=true;
+  const label=document.createElement('label');
+  label.textContent='Sugestão de redação técnica — confira os dados antes de aceitar';
+  const suggestion=document.createElement('textarea');
+  suggestion.rows=5;suggestion.setAttribute('aria-label','Texto técnico sugerido para '+title);
+  label.append(suggestion);
+  const accept=document.createElement('button');
+  accept.type='button';accept.textContent='Usar texto revisado';
+  const dismiss=document.createElement('button');
+  dismiss.type='button';dismiss.className='secondary';dismiss.textContent='Manter meu texto';
+  const commands=document.createElement('div');commands.className='actions';
+  commands.append(accept,dismiss);
+  panel.append(label,commands);
+
+  const buttons=document.createElement('div');buttons.className='actions';buttons.append(review,undo);
+  container.append(buttons,status,panel);
+  field.closest('label').after(container);
+
+  let pending=null,applied=null;
+  function clear(){
+   pending=null;applied=null;panel.hidden=true;undo.hidden=true;
+   suggestion.value='';status.textContent='';
+  }
+  resetPanels.push(clear);
+  field.addEventListener('input',()=>{
+   if(pending&&field.value!==pending.original){pending=null;panel.hidden=true;status.textContent='O texto mudou. Solicite outra revisão, se desejar.'}
+   if(applied&&field.value!==applied.revised){applied=null;undo.hidden=true}
+  });
+
+  review.addEventListener('click',()=>{
+   const original=field.value;
+   if(!original.trim())return notify('Escreva primeiro a sua descrição.');
+   const revised=reviseLocal(original);
    pending={original};applied=null;undo.hidden=true;
    suggestion.value=revised;panel.hidden=false;
    status.textContent=revised===original?'Nenhum ajuste automático identificado. Você pode editar a sugestão.':'Sugestão local pronta. Confira os dados antes de aceitar.';
