@@ -118,11 +118,11 @@ test('motor offline preserva fatos, identificadores e incerteza',async()=>{
  ['Não foi testado','Não foi testado.'],
  ['Possível falha no C215_TC01','Possível falha no C215_TC01'],
  ['pressao de 5,2 bar','pressão de 5,2 bar.'],
- ['foi realizado os testes','foram realizados os testes.'],
+ ['foi realizado os testes','Foram realizados os testes.'],
  ['perdeu a comunicação','apresentou perda de comunicação.'],
  ['TAG MC4530-LCV203','TAG MC4530-LCV203'],
  ['Não confirmado: 4-20 mA','Não confirmado: 4-20 mA.'],
  ['"valvula" tava travada','"valvula" estava travada.'],
- ['precisa verificar a celula de carga','é necessário verificar a célula de carga.']
+ ['precisa verificar a celula de carga','É necessário verificar a célula de carga.']
  ])assert.equal(revise(input),expected,input);
 });
