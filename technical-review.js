@@ -1,4 +1,4 @@
-/* Revisão técnica opcional: a equipe escreve; a IA só sugere; ninguém perde o original sem confirmar. */
+/* Revisão local gratuita, sem transmissão de texto. */
 (()=>{
  'use strict';
  const fields=[
@@ -80,9 +80,41 @@
     [/\bvalvula\b/gi,'válvula'],[/\bpressao\b/gi,'pressão'],
     [/\bvazao\b/gi,'vazão'],[/\bnao\b/gi,'não']
    ];
-   for(const [pattern,value] of rules)revised=revised.replace(pattern,value);
-   revised=revised.replace(/^[a-zà-ÿ]/u,c=>c.toUpperCase());
-   if(!/[.!?;:]$/.test(revised))revised+='.';
+   rules.push(
+    [/\bfoi realizado uma\b/gi,'foi realizada uma'],
+    [/\bfoi realizado a\b/gi,'foi realizada a'],
+    [/\bfoi verificado as\b/gi,'foram verificadas as'],
+    [/\bfoi verificado os\b/gi,'foram verificados os'],
+    [/\bfizemos os testes\b/gi,'realizamos os testes'],
+    [/\bfiz os testes\b/gi,'realizei os testes'],
+    [/\bfiz a limpeza\b/gi,'realizei a limpeza'],
+    [/\bfiz a troca\b/gi,'realizei a substituição'],
+    [/\bdeu erro\b/gi,'apresentou erro'],
+    [/\bperdeu a comunicação\b/gi,'apresentou perda de comunicação'],
+    [/\bsem sinal nenhum\b/gi,'sem sinal'],
+    [/\bde vez em quando\b/gi,'de forma intermitente'],
+    [/\bpor enquanto\b/gi,'até o momento'],
+    [/\bprecisa verificar\b/gi,'é necessário verificar'],
+    [/\btem que verificar\b/gi,'é necessário verificar'],
+    [/\bcelula de carga\b/gi,'célula de carga'],
+    [/\btransmissao\b/gi,'transmissão'],
+    [/\bautomacao\b/gi,'automação'],
+    [/\binspecao\b/gi,'inspeção'],
+    [/\bmanutencao\b/gi,'manutenção'],
+    [/\bconexao\b/gi,'conexão'],
+    [/\bsolenoide\b/gi,'solenoide']
+   );
+   // Preserva identificadores, valores, unidades e trechos entre aspas.
+   const protectedParts=/(["“][^"”\n]+["”]|\b[\w.-]*\d[\w.,:/%-]*|\b[A-Z]{2,}(?:[_-][A-Z0-9]+)*\b|\b(?:mA|mV|kPa|MPa|kgf|kWh|rpm|bar)\b)/g;
+   revised=revised.split(protectedParts).map((part,i)=>{
+    if(i%2)return part;
+    for(const [pattern,value] of rules){
+     part=part.replace(pattern,match=>/^[A-ZÀ-Ý]/.test(match)?value.charAt(0).toUpperCase()+value.slice(1):value);
+    }
+    return part;
+   }).join('');
+   // Não capitalizar automaticamente: a primeira palavra pode ser uma unidade ou TAG.
+   if(!/[.!?;:]$/.test(revised)&&!/[0-9]$/.test(revised))revised+='.';
    pending={original};applied=null;undo.hidden=true;
    suggestion.value=revised;panel.hidden=false;
    status.textContent=revised===original?'Nenhum ajuste automático identificado. Você pode editar a sugestão.':'Sugestão local pronta. Confira os dados antes de aceitar.';
