@@ -11,6 +11,15 @@
   ['conclusion','Conclusão']
  ];
  const resetPanels=[];
+ const fieldHints={
+  analysisDraft:'Informe o teste realizado, a condição observada e o resultado, quando disponíveis.',
+  problem:'Descreva o sintoma observado e a TAG. Separe suspeitas de causas confirmadas.',
+  impact:'Informe somente consequências observadas ou riscos identificados, distinguindo os dois.',
+  action:'Indique a ação proposta e as verificações ainda necessárias.',
+  completionWork:'Registre somente serviços executados e resultados efetivamente verificados.',
+  objective:'Indique o equipamento e a finalidade da vistoria.',
+  conclusion:'Informe a condição final conhecida e eventuais pendências.'
+ };
  function reviseLocal(original){
    let revised=original.trim();
    // Substituições conservadoras: não alteram números, TAGs, negações ou resultados.
@@ -66,7 +75,7 @@
     return part;
    }).join('');
    // Não capitalizar automaticamente: a primeira palavra pode ser uma unidade ou TAG.
-   if(!/[.!?;:]$/.test(revised)&&!/[0-9]$/.test(revised))revised+='.';
+   if(revised&&!/[.!?;:]$/.test(revised)&&!/[0-9]$/.test(revised))revised+='.';
    return revised;
  }
  if(typeof globalThis!=='undefined')globalThis.VistoriaReviseLocal=reviseLocal;
@@ -100,7 +109,16 @@
   dismiss.type='button';dismiss.className='secondary';dismiss.textContent='Manter meu texto';
   const commands=document.createElement('div');commands.className='actions';
   commands.append(accept,dismiss);
-  panel.append(label,commands);
+  const hint=document.createElement('p');
+  hint.className='muted';
+  hint.textContent=fieldHints[id];
+  const originalLabel=document.createElement('p');
+  originalLabel.className='muted';
+  originalLabel.textContent='Relato original (somente leitura)';
+  const originalPreview=document.createElement('textarea');
+  originalPreview.readOnly=true;originalPreview.rows=3;
+  originalPreview.setAttribute('aria-label','Relato original de '+title);
+  panel.append(originalLabel,originalPreview,label,hint,commands);
 
   const buttons=document.createElement('div');buttons.className='actions';buttons.append(review,undo);
   container.append(buttons,status,panel);
@@ -109,7 +127,7 @@
   let pending=null,applied=null;
   function clear(){
    pending=null;applied=null;panel.hidden=true;undo.hidden=true;
-   suggestion.value='';status.textContent='';
+   suggestion.value='';originalPreview.value='';status.textContent='';
   }
   resetPanels.push(clear);
   field.addEventListener('input',()=>{
@@ -121,7 +139,8 @@
    const original=field.value;
    if(!original.trim())return notify('Escreva primeiro a sua descrição.');
    const revised=reviseLocal(original);
-   pending={original};applied=null;undo.hidden=true;
+   pending={original};
+   originalPreview.value=original;
    suggestion.value=revised;panel.hidden=false;
    status.textContent=revised===original?'Nenhum ajuste automático identificado. Você pode editar a sugestão.':'Sugestão local pronta. Confira os dados antes de aceitar.';
   });
