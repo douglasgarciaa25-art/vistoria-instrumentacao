@@ -1,7 +1,7 @@
 import {FIELD_NAMES,reviewInput,verifiedGoogleIdentity,reviewMessages,extractReview} from './technical-review-core.mjs';
 
-const AI_URL='https://ai-gateway.vercel.sh/v1/chat/completions';
-const DEFAULT_MODEL='openai/gpt-5.5';
+const AI_URL='https://api.groq.com/openai/v1/chat/completions';
+const DEFAULT_MODEL='openai/gpt-oss-120b';
 
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
@@ -34,9 +34,9 @@ export default async function handler(req,res){
  const input=reviewInput(body);
  if(input.error)return reply(400,{error:input.error});
 
- const token=process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN;
- if(!token)return reply(503,{error:'A revisão por IA ainda não está habilitada no servidor. Configure a autenticação do Vercel AI Gateway.'});
- const model=process.env.VISTORIA_AI_MODEL||DEFAULT_MODEL;
+ const token=process.env.GROQ_API_KEY;
+ if(!token)return reply(503,{error:'A revisão por IA ainda não está habilitada no servidor. Configure GROQ_API_KEY no servidor.'});
+ const model=DEFAULT_MODEL;
  try{
   const upstream=await fetch(AI_URL,{
    method:'POST',
@@ -45,13 +45,14 @@ export default async function handler(req,res){
    body:JSON.stringify({
     model,
     messages:reviewMessages(input.field,input.text),
-    max_completion_tokens:1400,
+    max_completion_tokens:2048,
+    reasoning_effort:'low',
     stream:false
    })
   });
   if(!upstream.ok){
-   if(upstream.status===402)return reply(503,{error:'A conta Vercel AI Gateway está sem créditos disponíveis para revisão.'});
-   if(upstream.status===401||upstream.status===403)return reply(503,{error:'A credencial da IA precisa ser autorizada no projeto Vercel.'});
+   if(upstream.status===402)return reply(503,{error:'A conta Groq não está disponível para revisão gratuita.'});
+   if(upstream.status===401||upstream.status===403)return reply(503,{error:'A chave Groq precisa ser válida e autorizada.'});
    if(upstream.status===429)return reply(429,{error:'Limite temporário da IA atingido. Tente novamente mais tarde.'});
    console.error('Technical review provider error:',upstream.status);
    return reply(502,{error:'A IA não conseguiu revisar agora. Seu texto original continua salvo.'});
