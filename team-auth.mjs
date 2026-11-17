@@ -1,6 +1,6 @@
 const DB='https://qwfsvyqyxpraulmwkfdb.supabase.co/rest/v1/';
 export async function teamDb(path, options={}){
- const key=process.env.SUPABASE_SECRET_KEY;
+ const key=process.env.my_super_base_secrety_key133 || process.env.SUPABASE_SECRET_KEY;
  if(!key)throw new Error('Banco da equipe não configurado');
  const res=await fetch(DB+path,{...options,headers:{apikey:key,'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(10000)});
  if(!res.ok)throw new Error('Falha no banco da equipe: '+res.status);
