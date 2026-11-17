@@ -1,9 +1,17 @@
+import {createDecipheriv,createHash} from 'node:crypto';
+import {teamDb} from './team-auth.mjs';
+async function config(){const rows=await teamDb('vistoria_drive_config?id=eq.1&select=folder_id,credential');return rows[0];}
 const API='https://www.googleapis.com/drive/v3/files';
 let cached=null;
 async function token(){
  if(cached&&cached.expires>Date.now()+60000)return cached.value;
- const {VISTORIA_GOOGLE_CLIENT_ID:client_id,VISTORIA_DRIVE_REFRESH_TOKEN:refresh_token}=process.env;
+ const {VISTORIA_GOOGLE_CLIENT_ID:client_id,VISTORIA_DRIVE_REFRESH_TOKEN:envRefresh}=process.env;
  const client_secret=process.env.vistoria_drive_client_secret||process.env.VISTORIA_DRIVE_CLIENT_SECRET;
+ let refresh_token=envRefresh;
+ if(!refresh_token&&client_secret){
+ const c=await config();
+ if(c){const [iv,tag,data]=c.credential.split('.').map(x=>Buffer.from(x,'base64url'));const d=createDecipheriv('aes-256-gcm',createHash('sha256').update(client_secret).digest(),iv);d.setAuthTag(tag);refresh_token=Buffer.concat([d.update(data),d.final()]).toString('utf8');}
+ }
  if(!client_id||!client_secret||!refresh_token)throw Error('Drive central não autorizado');
  const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({client_id,client_secret,refresh_token,grant_type:'refresh_token'}),signal:AbortSignal.timeout(10000)});
  if(!r.ok)throw Error('Não foi possível renovar autorização Drive');
@@ -15,7 +23,7 @@ async function drive(url,options={}){
  if(!r.ok)throw Error('Drive central: '+r.status);return r;
 }
 export async function checkCentralDrive(){
- const id=process.env.VISTORIA_DRIVE_FOLDER_ID;
+ const id=process.env.VISTORIA_DRIVE_FOLDER_ID||(await config())?.folder_id;
  if(!id)throw Error('Pasta central não configurada');
  const r=await drive(API+'/'+encodeURIComponent(id)+'?fields=id,mimeType,trashed,capabilities(canAddChildren)');
  const d=await r.json();
