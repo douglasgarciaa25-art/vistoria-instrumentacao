@@ -433,7 +433,7 @@
       if(member.role==='admin')button(row,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
     }
     const select=document.createElement('select');section.append(select);
-    for(const item of local){const option=document.createElement('option');option.value=item.id;option.textContent=item.document?.meta?.title||item.id;select.append(option)}
+    for(const item of local){const option=document.createElement('option');option.value=item.id;const meta=item.document?.meta||{};const tags=[...new Set((item.document?.records||[]).map(p=>p.tag).filter(Boolean))];const date=new Date(item.updated);option.textContent=[meta.title||'Vistoria',tags.slice(0,3).join(', '),Number.isNaN(date.getTime())?'':date.toLocaleString('pt-BR'),String(item.id).slice(0,8)].filter(Boolean).join(' — ');select.append(option)}
     button(section,'Compartilhar vistoria local selecionada',async()=>{
       const item=(await reports()).find(x=>x.id===select.value);if(!item)throw Error('Selecione uma vistoria');
       const existing=remote.find(x=>x.report_id===item.id);
