@@ -28,7 +28,7 @@ export default async function handler(req,res){
  }
  if(req.method!=='POST')return reply(405,{error:'Método inválido'});
  const doc=req.body?.document;
- if(!doc||typeof doc!=='object'||Array.isArray(doc)||JSON.stringify(doc).length>3500000)return reply(400,{error:'Documento inválido ou grande demais'});
+ if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>3500000)return reply(400,{error:'Documento inválido ou grande demais'});
  if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
  const revision=(old?.revision||0)+1;
  const file=await createPrivateReport(id,doc);
