@@ -5,6 +5,22 @@
   ],
   "builds": [
     {
+      "src": "api/team-drive-callback.mjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/team-drive-authorize.mjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/team-reports.mjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/team.mjs",
+      "use": "@vercel/node"
+    },
+    {
       "src": "cloud-server.mjs",
       "use": "@vercel/node"
     },
@@ -45,6 +61,22 @@
         "Service-Worker-Allowed": "/"
       },
       "continue": true
+    },
+    {
+      "src": "/api/team-drive-callback",
+      "dest": "/api/team-drive-callback.mjs"
+    },
+    {
+      "src": "/api/team-drive-authorize",
+      "dest": "/api/team-drive-authorize.mjs"
+    },
+    {
+      "src": "/api/team-reports",
+      "dest": "/api/team-reports.mjs"
+    },
+    {
+      "src": "/api/team",
+      "dest": "/api/team.mjs"
     },
     {
       "src": "/api/cloud",
