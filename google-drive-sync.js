@@ -380,6 +380,46 @@
     const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const d=await r.json();if(!r.ok)throw Error(d.error||'Falha na vistoria compartilhada');return d;
   }
+  let teamRunning=false;
+  async function syncTeam(){
+    if(teamRunning||!validToken())return;
+    teamRunning=true;
+    try{
+      const {member}=await teamRequest();
+      if(member?.status!=='approved')return;
+      const {reports:remote}=await reportRequest();
+      const key='vistoria-team-baseline:'+member.google_subject;
+      const baseline=JSON.parse(localStorage.getItem(key)||'{}');
+      const local=await reports();
+      for(const item of remote){
+        const previous=baseline[item.report_id];
+        const row=local.find(x=>x.id===item.report_id);
+        if(previous?.revision===item.revision)continue;
+        if(row&&(!previous||await digest(row.document)!==previous.hash))continue;
+        if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
+        const d=await reportRequest('GET',item.report_id);
+        if(!d.document?.meta||!Array.isArray(d.document.records))continue;
+        const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
+        if(latest&&(!previous||await digest(latest.document)!==previous.hash))continue;
+        await putReport({id:item.report_id,updated:item.updated_at,document:d.document});
+        baseline[item.report_id]={revision:d.revision,hash:await digest(d.document)};
+        localStorage.setItem(key,JSON.stringify(baseline));
+      }
+      for(const item of remote){
+        if(item.owner_subject!==member.google_subject&&member.role!=='admin')continue;
+        const previous=baseline[item.report_id];
+        if(!previous||previous.revision!==item.revision)continue;
+        const row=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
+        if(!row)continue;
+        const hash=await digest(row.document);
+        if(hash===previous.hash)continue;
+        const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
+        baseline[item.report_id]={revision:d.revision,hash};
+        localStorage.setItem(key,JSON.stringify(baseline));
+      }
+    }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: '+e.message;}
+    finally{teamRunning=false;}
+  }
   async function showReports(member,box,status){
     const section=document.createElement('section');box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
@@ -399,7 +439,11 @@
       const existing=remote.find(x=>x.report_id===item.id);
       if(existing&&existing.owner_subject!==member.google_subject&&member.role!=='admin')throw Error('Sem permissão para editar');
       if(existing&&!confirm('Publicar nova revisão da vistoria selecionada?'))return;
-      await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});await showTeam();
+      const d=await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});
+      const key='vistoria-team-baseline:'+member.google_subject;
+      const baseline=JSON.parse(localStorage.getItem(key)||'{}');
+      baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
+      localStorage.setItem(key,JSON.stringify(baseline));await showTeam();
     });
   }
   async function showTeam(){
@@ -464,7 +508,8 @@
     addEventListener('online',resume);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
     resume();
-    setInterval(()=>{if(enabled && document.visibilityState==='visible')sync()},90000);
+    setInterval(()=>{if(enabled && document.visibilityState==='visible'){sync();syncTeam()}},90000);
+    document.addEventListener('vistoria-saved',()=>{if(validToken())setTimeout(syncTeam,3000)});
     if(typeof window.download==='function') {
       const original=window.download;
       window.download=function(blob,name){const result=original.apply(this,arguments);if(/\.pdf$/i.test(String(name)))void savePdf(blob,name);return result;};
