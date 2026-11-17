@@ -4,7 +4,7 @@ export async function teamDb(path, options={}){
  if(!key)throw new Error('Banco da equipe não configurado');
  const res=await fetch(DB+path,{...options,headers:{apikey:key,'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(10000)});
  if(!res.ok)throw new Error('Falha no banco da equipe: '+res.status);
- return res.status===204?null:res.json();
+ const body=await res.text();return body?JSON.parse(body):null;
 }
 export async function googleIdentity(req){
  const token=String(req.headers.authorization||'').match(/^Bearer ([A-Za-z0-9._~-]+)$/i)?.[1];
