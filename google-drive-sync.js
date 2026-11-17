@@ -382,6 +382,9 @@
       const {member}=await teamRequest('POST',{action:'request'});
       status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role:member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
       if(member?.status!=='approved'||member.role!=='admin')return;
+      const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
+      authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
+      box.append(authorize);
       const {members}=await teamRequest('GET',null,true);
       for(const m of members){
         const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' ';
