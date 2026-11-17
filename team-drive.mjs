@@ -2,7 +2,8 @@ const API='https://www.googleapis.com/drive/v3/files';
 let cached=null;
 async function token(){
  if(cached&&cached.expires>Date.now()+60000)return cached.value;
- const {VISTORIA_GOOGLE_CLIENT_ID:client_id,VISTORIA_DRIVE_CLIENT_SECRET:client_secret,VISTORIA_DRIVE_REFRESH_TOKEN:refresh_token}=process.env;
+ const {VISTORIA_GOOGLE_CLIENT_ID:client_id,VISTORIA_DRIVE_REFRESH_TOKEN:refresh_token}=process.env;
+ const client_secret=process.env.vistoria_drive_client_secret||process.env.VISTORIA_DRIVE_CLIENT_SECRET;
  if(!client_id||!client_secret||!refresh_token)throw Error('Drive central não autorizado');
  const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({client_id,client_secret,refresh_token,grant_type:'refresh_token'}),signal:AbortSignal.timeout(10000)});
  if(!r.ok)throw Error('Não foi possível renovar autorização Drive');
