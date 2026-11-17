@@ -375,13 +375,42 @@
     if(!response.ok)throw Error(data.error||'Falha no cadastro.');
     return data;
   }
+  async function reportRequest(method='GET',id='',body=null){
+    assertReady();
+    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const d=await r.json();if(!r.ok)throw Error(d.error||'Falha na vistoria compartilhada');return d;
+  }
+  async function showReports(member,box,status){
+    const section=document.createElement('section');box.append(section);
+    const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
+    const {reports:remote}=await reportRequest();
+    const local=await reports();
+    const button=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await fn()}catch(e){status.textContent=e.message}finally{b.disabled=false}};parent.append(b);};
+    for(const item of remote){
+      const row=document.createElement('div');section.append(row);
+      row.textContent=item.report_id+' — revisão '+item.revision+' ';
+      button(row,'Abrir cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);await putReport({id:crypto.randomUUID(),updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
+      if(member.role==='admin')button(row,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
+    }
+    const select=document.createElement('select');section.append(select);
+    for(const item of local){const option=document.createElement('option');option.value=item.id;option.textContent=item.document?.meta?.title||item.id;select.append(option)}
+    button(section,'Compartilhar vistoria local selecionada',async()=>{
+      const item=(await reports()).find(x=>x.id===select.value);if(!item)throw Error('Selecione uma vistoria');
+      const existing=remote.find(x=>x.report_id===item.id);
+      if(existing&&existing.owner_subject!==member.google_subject&&member.role!=='admin')throw Error('Sem permissão para editar');
+      if(existing&&!confirm('Publicar nova revisão da vistoria selecionada?'))return;
+      await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});await showTeam();
+    });
+  }
   async function showTeam(){
     const box=$('gdrive-team-users'),status=$('gdrive-team-status');
     box.replaceChildren();
     try{
       const {member}=await teamRequest('POST',{action:'request'});
       status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role:member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
-      if(member?.status!=='approved'||member.role!=='admin')return;
+      if(member?.status!=='approved')return;
+      try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
+      if(member.role!=='admin')return;
       const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
       authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
       box.append(authorize);
