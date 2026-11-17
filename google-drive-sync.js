@@ -368,6 +368,30 @@
     if(token&&window.google?.accounts?.oauth2)window.google.accounts.oauth2.revoke(token,()=>{});
     display('Desconectado. Arquivos já enviados continuam no Google Drive.');
   }
+  async function teamRequest(method='GET',body=null,list=false){
+    assertReady();
+    const response=await fetch('/api/team'+(list?'?list=1':''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const data=await response.json();
+    if(!response.ok)throw Error(data.error||'Falha no cadastro.');
+    return data;
+  }
+  async function showTeam(){
+    const box=$('gdrive-team-users'),status=$('gdrive-team-status');
+    box.replaceChildren();
+    try{
+      const {member}=await teamRequest('POST',{action:'request'});
+      status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role:member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
+      if(member?.status!=='approved'||member.role!=='admin')return;
+      const {members}=await teamRequest('GET',null,true);
+      for(const m of members){
+        const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' ';
+        if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']]){
+          const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);
+        }
+        box.append(row);
+      }
+    }catch(e){status.textContent=e.message;}
+  }
   function setup() {
     if (!document.body || $('gdrive-panel')) return;
     const panel=document.createElement('section');
@@ -386,6 +410,10 @@
       <p class="muted">O sincronismo funciona com o aplicativo aberto, internet e a autorização Google válida. A preferência de conexão é lembrada; o Google pode exigir nova autorização ao expirar a sessão ou fechar o aplicativo. Dados locais permanecem disponíveis offline.</p>`;
     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
+    const team=document.createElement('section');
+    team.innerHTML='<h3>Gerenciamento de usuários</h3><button type="button" id="gdrive-team-refresh">Solicitar acesso / Atualizar usuários</button><p id="gdrive-team-status" role="status"></p><div id="gdrive-team-users"></div>';
+    panel.append(team);
+    $('gdrive-team-refresh').onclick=showTeam;
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
