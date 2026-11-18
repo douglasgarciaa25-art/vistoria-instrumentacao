@@ -6,6 +6,7 @@ export function pointChanges(before,after){
  const previous=Array.isArray(before?.records)?before.records:[];
  const next=Array.isArray(after?.records)?after.records:[];
  const seen=new Set(),old=new Map(),events=[];
+ const deletedBefore=new Set((before?.deletedPoints||[]).map(x=>x?.point?.pointId).filter(validId));
  for(const p of previous)if(validId(p?.pointId)&&!old.has(p.pointId))old.set(p.pointId,p);
  for(const p of next){
   const id=p?.pointId;
@@ -15,7 +16,8 @@ export function pointChanges(before,after){
   const was=old.get(id);
   if(!was){
    // A primeira sincronização de uma vistoria antiga não prova autoria dos pontos
-   if(!before||!previous.some(oldPoint=>!validId(oldPoint?.pointId)))events.push({point_id:id,action:'created',tag:String(p.tag||'').slice(0,200),work_order:String(p.pointWorkOrder||after.meta?.workOrder||'').slice(0,100),current_status:String(p.status||'').slice(0,80)});
+   if(deletedBefore.has(id))events.push({point_id:id,action:'restored',tag:String(p.tag||'').slice(0,200),work_order:String(p.pointWorkOrder||after.meta?.workOrder||'').slice(0,100),current_status:String(p.status||'').slice(0,80)});
+   else if(!before||!previous.some(oldPoint=>!validId(oldPoint?.pointId)))events.push({point_id:id,action:'created',tag:String(p.tag||'').slice(0,200),work_order:String(p.pointWorkOrder||after.meta?.workOrder||'').slice(0,100),current_status:String(p.status||'').slice(0,80)});
    continue;
   }
   const oldStatus=String(was.status||''),newStatus=String(p.status||'');
