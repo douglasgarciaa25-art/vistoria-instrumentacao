@@ -388,9 +388,9 @@
     if(!response.ok||!data||typeof data!=='object'||data.error)throw Error(data.error||'Falha no cadastro.');
     return data;
   }
-  async function reportRequest(method='GET',id='',body=null,history=false){
+  async function reportRequest(method='GET',id='',body=null,history=false,trash=false){
     assertReady();
-    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':''):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':''):(trash?'?trash=1':'')),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Error(d.error||'Falha na vistoria compartilhada');return d;
   }
   let teamRunning=false;
@@ -478,6 +478,11 @@
       for(const b of row.querySelectorAll('button')){b.style.cssText='min-height:40px;padding:8px 12px;margin:4px 0;font-size:14px;width:100%';if(b.textContent==='Excluir da equipe'){b.className='danger';b.style.background='#fff0f0';b.style.color='#a12626';}}
     }
     filter();
+    if(member.role==='admin'){
+      const trash=document.createElement('details');const heading=document.createElement('summary');heading.textContent='Lixeira da equipe';trash.append(heading);section.append(trash);
+      const content=document.createElement('div');trash.append(content);
+      trash.addEventListener('toggle',async()=>{if(!trash.open)return;content.textContent='Carregando…';try{const d=await reportRequest('GET','',null,false,true);content.replaceChildren();if(!d.reports.length)content.textContent='Nenhuma vistoria excluída.';for(const item of d.reports){const row=document.createElement('div');const label=document.createElement('p');label.textContent=item.report_id+' · Excluída em '+new Date(item.deleted_at).toLocaleString('pt-BR');row.append(label);content.append(row);button(row,'Restaurar vistoria',async()=>{if(!confirm('Restaurar esta vistoria para a equipe?'))return;await reportRequest('POST',item.report_id,{action:'restore',revision:item.revision});await syncTeam();await showTeam();});}}catch(e){content.textContent=e.message;}});
+    }
     const select=document.createElement('select');section.append(select);
     for(const item of local){const option=document.createElement('option');option.value=item.id;const meta=item.document?.meta||{};const tags=[...new Set((item.document?.records||[]).map(p=>p.tag).filter(Boolean))];const date=new Date(item.updated);option.textContent=[meta.title||'Vistoria',tags.slice(0,3).join(', '),Number.isNaN(date.getTime())?'':date.toLocaleString('pt-BR'),String(item.id).slice(0,8)].filter(Boolean).join(' — ');select.append(option)}
     button(section,'Compartilhar vistoria local selecionada',async()=>{
