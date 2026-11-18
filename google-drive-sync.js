@@ -374,6 +374,7 @@
     const token=accessToken;
     queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
     localStorage.removeItem(CONNECTED_KEY);
+    void window.VistoriaBackground?.clear().catch(()=>{});
     void fetch('/api/personal-session',{method:'DELETE',cache:'no-store'}).catch(()=>{});
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
@@ -430,6 +431,9 @@
       rememberTeamIds(remote);
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
+      const background=window.VistoriaBackground?await window.VistoriaBackground.list():[];
+      for(const job of background)if(job.subject===member.google_subject&&job.state==='sent'&&baseline[job.id]?.revision===job.revision){baseline[job.id]={revision:job.newRevision,hash:job.hash};localStorage.setItem(key,JSON.stringify(baseline));}
+      const queued=new Set(background.filter(j=>j.subject===member.google_subject&&j.state==='pending').map(j=>j.id));
       const local=await reports();
       await showPendingQueue(member);
       for(const item of remote){
@@ -461,6 +465,7 @@
         }
       }
       for(const item of remote){
+        if(queued.has(item.report_id))continue;
         if(item.owner_subject!==member.google_subject&&member.role!=='admin')continue;
         if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
         if(queueMember?.google_subject!==member.google_subject||!validToken())break;
@@ -505,6 +510,20 @@
       entries.push({row,mine:item.owner_subject===member.google_subject,areas:(doc?.records||[]).map(p=>p.area),date:Date.parse(item.updated_at)||0,tag:title.textContent,text:label+' '+JSON.stringify(doc?.meta||{})+' '+(doc?.records||[]).map(p=>[p.os,p.order,p.area].filter(Boolean).join(' ')).join(' ')});
       const menu=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Mais ações';summary.style.cssText='cursor:pointer;font-weight:600;padding:8px 0';menu.append(summary);row.append(menu);
       button(menu,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR');details.append(p);if(event.available)button(details,'Copiar revisão '+event.revision,async()=>{const d=await reportRequest('GET',item.report_id,null,false,false,event.revision);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:structuredClone(d.document)});status.textContent='Revisão recuperada como cópia local, sem substituir o original.';});}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
+      if(item.owner_subject===member.google_subject)button(menu,'Enviar revisão em segundo plano',async()=>{
+        if(!window.VistoriaBackground||!navigator.serviceWorker)throw Error('Segundo plano indisponível neste navegador.');
+        const reg=await navigator.serviceWorker.ready;if(!reg.sync)throw Error('Este navegador não oferece sincronização em segundo plano.');
+        const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store'});if(!session.ok||(await session.json()).subject!==member.google_subject)throw Error('Ative Manter conta conectada primeiro.');
+        if(activeReportId===item.report_id)throw Error('Feche a edição antes de enfileirar.');
+        const localRow=(await reports()).find(x=>x.id===item.report_id);
+        const baseline=JSON.parse(localStorage.getItem('vistoria-team-baseline:'+member.google_subject)||'{}')[item.report_id];
+        if(!localRow||!validate(localRow)||baseline?.revision!==item.revision)throw Error('Sincronize a revisão atual primeiro.');
+        const hash=await digest(localRow.document);if(hash===baseline.hash)throw Error('Nenhuma alteração pendente.');
+        if(new TextEncoder().encode(JSON.stringify(localRow.document)).length>3000000)throw Error('Segundo plano disponível inicialmente até 3 MB.');
+        if(!confirm('Autoriza enviar esta revisão para a equipe após fechar o aplicativo?'))return;
+        await window.VistoriaBackground.put({id:item.report_id,subject:member.google_subject,document:localRow.document,revision:item.revision,hash,state:'pending'});
+        await reg.sync.register('vistoria-background');status.textContent='Revisão enfileirada. O navegador poderá enviar após fechar o aplicativo.';
+      });
       button(row,'Criar cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(menu,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
       for(const b of row.querySelectorAll('button')){b.style.cssText='min-height:40px;padding:8px 12px;margin:4px 0;font-size:14px;width:100%';if(b.textContent==='Excluir da equipe'){b.className='danger';b.style.background='#fff0f0';b.style.color='#a12626';}}
