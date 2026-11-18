@@ -43,8 +43,21 @@ export default async function handler(req,res){
  await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:'restore',revision,drive_file_id:old.drive_file_id})});
  return reply(200,{revision});
  }
- const doc=req.body?.document;
- if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>3500000)return reply(400,{error:'Documento inválido ou grande demais'});
+ let doc=req.body?.document;
+ if(['upload-part','upload-finish'].includes(req.body?.action)){
+ const upload=String(req.body.upload_id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(upload))return reply(400,{error:'Envio inválido'});
+ if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
+ const scope='vistoria_upload_parts?owner_subject=eq.'+encodeURIComponent(m.google_subject)+'&report_id=eq.'+encodeURIComponent(id)+'&upload_id=eq.'+upload;
+ if(req.body.action==='upload-part'){
+ const {part,payload}=req.body;if(!Number.isInteger(part)||part<0||part>15||typeof payload!=='string'||payload.length>1000000||! /^[A-Za-z0-9+/=]+$/.test(payload))return reply(400,{error:'Parte inválida'});
+ await teamDb('vistoria_upload_parts?on_conflict=owner_subject,report_id,upload_id,part',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({owner_subject:m.google_subject,report_id:id,upload_id:upload,part,payload})});return reply(200,{ok:true});
+ }
+ const total=req.body.total;if(!Number.isInteger(total)||total<1||total>16)return reply(400,{error:'Quantidade inválida'});
+ const parts=await teamDb(scope+'&select=part,payload&order=part.asc');if(parts.length!==total||parts.some((p,i)=>p.part!==i))return reply(409,{error:'Envio incompleto'});
+ try{doc=JSON.parse(Buffer.from(parts.map(p=>p.payload).join(''),'base64').toString('utf8'));}catch{return reply(400,{error:'Documento inválido'});}
+ }
+
+ if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>(req.body?.action==='upload-finish'?12000000:3500000))return reply(400,{error:'Documento inválido ou grande demais'});
  if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
  const revision=(old?.revision||0)+1;
  const file=await createPrivateReport(id,doc);
@@ -52,6 +65,7 @@ export default async function handler(req,res){
  const rows=old?await teamDb(filter+'&revision=eq.'+old.revision+'&deleted_at=is.null',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(row)}):await teamDb(base,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({...row,report_id:id,owner_subject:m.google_subject})});
  if(!rows.length)return reply(409,{error:'Revisão alterada'});
  await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:old?'update':'create',revision,drive_file_id:file})});
+ if(req.body?.action==='upload-finish'){try{await teamDb('vistoria_upload_parts?owner_subject=eq.'+encodeURIComponent(m.google_subject)+'&report_id=eq.'+encodeURIComponent(id)+'&upload_id=eq.'+encodeURIComponent(req.body.upload_id),{method:'DELETE'});}catch{}}
  return reply(200,{revision});
  }catch{return reply(503,{error:'Não foi possível concluir a operação da equipe'});}
 }
