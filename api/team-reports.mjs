@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {approvedMember,teamDb} from '../team-auth.mjs';
 import {createPrivateReport,readPrivateReport} from '../team-drive.mjs';
 export default async function handler(req,res){
@@ -62,7 +63,7 @@ export default async function handler(req,res){
  }
  const total=req.body.total;if(!Number.isInteger(total)||total<1||total>16)return reply(400,{error:'Quantidade inválida'});
  const parts=await teamDb(scope+'&select=part,payload&order=part.asc');if(parts.length!==total||parts.some((p,i)=>p.part!==i))return reply(409,{error:'Envio incompleto'});
- try{doc=JSON.parse(Buffer.from(parts.map(p=>p.payload).join(''),'base64').toString('utf8'));}catch{return reply(400,{error:'Documento inválido'});}
+ try{const bytes=Buffer.from(parts.map(p=>p.payload).join(''),'base64');if(req.body.sha256&&createHash('sha256').update(bytes).digest('hex')!==req.body.sha256)return reply(400,{error:'Integridade do envio inválida'});doc=JSON.parse(bytes.toString('utf8'));}catch{return reply(400,{error:'Documento inválido'});}
  }
 
  if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>(req.body?.action==='upload-finish'?12000000:3500000))return reply(400,{error:'Documento inválido ou grande demais'});
