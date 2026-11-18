@@ -46,7 +46,7 @@ async function exportReportDocuments(documents){
  need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
  grid([['Ordem de serviço (OS)',r.pointWorkOrder||m.workOrder||'Não informado'],['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
- detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
+ detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante informado (sem verificação)',r.completionBy)}
  if(r.photos?.length){for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j];let img;
  try{img=/^data:image\/png;base64,/i.test(p.src)?await doc.embedPng(p.src):await doc.embedJpg(p.src)}catch{detail('Foto '+(j+1),'Imagem não incorporada ao PDF. Confira o original.');continue}

@@ -15,9 +15,9 @@ test('Drive: relatório com fotos separadas e reconstrução integral',async()=>
  };
  try{
   const photo={src:'data:image/jpeg;base64,'+'A'.repeat(800000),caption:'Teste'};
-  const doc={meta:{title:'Simulado'},records:[{tag:'TEST',photos:[photo,photo]}],pending:{photos:[photo]}};
+  const doc={meta:{title:'Simulado'},records:[{tag:'TEST',photos:[photo,photo]}],deletedPoints:[{point:{tag:'EXCLUIDO',pointId:'uuid_11111111',photos:[photo]},deletedAt:'2026-11-18T00:00:00Z'}],pending:{photos:[photo]}};
   const snapshot=structuredClone(doc);const id=await createPrivateReport('test',doc);
-  assert.equal(files.size,4);assert.equal(files.get(id).photos.length,3);assert.equal(files.get(id).document.records[0].photos[0].src,undefined);
-  assert.deepEqual(await readPrivateReport(id),snapshot);assert.deepEqual(doc,snapshot);
+  assert.equal(files.size,5);assert.equal(files.get(id).photos.length,4);assert.equal(files.get(id).document.records[0].photos[0].src,undefined);
+  assert.deepEqual(await readPrivateReport(id),snapshot);const withoutPhotos=await readPrivateReport(id,{withPhotos:false});assert.equal(withoutPhotos.deletedPoints[0].point.photos[0].src,undefined);assert.equal(withoutPhotos.deletedPoints[0].point.photos[0].teamPhotoIndex,2);assert.deepEqual(doc,snapshot);
  }finally{globalThis.fetch=original;for(const k of keys){if(old[k]===undefined)delete process.env[k];else process.env[k]=old[k];}}
 });
