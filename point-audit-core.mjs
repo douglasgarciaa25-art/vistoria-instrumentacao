@@ -15,7 +15,7 @@ export function pointChanges(before,after){
   const was=old.get(id);
   if(!was){
    // A primeira sincronização de uma vistoria antiga não prova autoria dos pontos
-   if(!before)events.push({point_id:id,action:'created',tag:String(p.tag||'').slice(0,200),work_order:String(p.pointWorkOrder||after.meta?.workOrder||'').slice(0,100),current_status:String(p.status||'').slice(0,80)});
+   if(!before||!previous.some(oldPoint=>!validId(oldPoint?.pointId)))events.push({point_id:id,action:'created',tag:String(p.tag||'').slice(0,200),work_order:String(p.pointWorkOrder||after.meta?.workOrder||'').slice(0,100),current_status:String(p.status||'').slice(0,80)});
    continue;
   }
   const oldStatus=String(was.status||''),newStatus=String(p.status||'');
