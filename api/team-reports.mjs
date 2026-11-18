@@ -19,7 +19,8 @@ export default async function handler(req,res){
  const old=(await teamDb(filter))[0];
  if(req.method==='GET'){
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
- if(req.query?.history==='1')return reply(200,{history:await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject&order=occurred_at.desc')});
+ if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,drive_file_id&order=occurred_at.desc');return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,available:!!drive_file_id}))});}
+ if(req.query?.version){const version=String(req.query.version);if(!/^\d{1,12}$/.test(version))return reply(400,{error:'Revisão inválida'});const events=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&revision=eq.'+version+'&select=drive_file_id');const file=events.find(e=>e.drive_file_id)?.drive_file_id;if(!file)return reply(404,{error:'Conteúdo desta revisão não está indexado'});return reply(200,{document:await readPrivateReport(file),revision:Number(version)});}
  return reply(200,{document:await readPrivateReport(old.drive_file_id),revision:old.revision,owner:old.owner_subject});
  }
  if(old&&old.owner_subject!==m.google_subject&&m.role!=='admin')return reply(403,{error:'Somente o autor ou administrador pode editar'});
@@ -39,7 +40,7 @@ export default async function handler(req,res){
  const revision=old.revision+1;
  const rows=await teamDb(filter+'&revision=eq.'+old.revision+'&deleted_at=not.is.null',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:null,revision,updated_at:new Date().toISOString()})});
  if(!rows.length)return reply(409,{error:'Revisão alterada'});
- await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:'restore',revision})});
+ await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:'restore',revision,drive_file_id:old.drive_file_id})});
  return reply(200,{revision});
  }
  const doc=req.body?.document;
@@ -50,7 +51,7 @@ export default async function handler(req,res){
  const row={drive_file_id:file,revision,updated_at:new Date().toISOString()};
  const rows=old?await teamDb(filter+'&revision=eq.'+old.revision+'&deleted_at=is.null',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(row)}):await teamDb(base,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({...row,report_id:id,owner_subject:m.google_subject})});
  if(!rows.length)return reply(409,{error:'Revisão alterada'});
- await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:old?'update':'create',revision})});
+ await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:old?'update':'create',revision,drive_file_id:file})});
  return reply(200,{revision});
  }catch{return reply(503,{error:'Não foi possível concluir a operação da equipe'});}
 }
