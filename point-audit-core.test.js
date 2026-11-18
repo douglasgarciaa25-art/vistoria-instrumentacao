@@ -25,3 +25,11 @@ test('não registra edição só por mudar fotos, impede ID duplicado',()=>{
 test('apenas registros novos têm evento de criação',()=>{
  assert.equal(pointChanges(null,{meta:{workOrder:'000045'},records:[point('uuid_11111111')]} )[0].work_order,'000045');
 });
+
+test('inclusão em vistoria já identificada registra autoria sem confundir a TAG',()=>{
+ const old={records:[point('uuid_11111111')]};
+ const now={records:[point('uuid_11111111'),point('uuid_22222222')]};
+ const events=pointChanges(old,now);
+ assert.deepEqual(events.map(x=>x.action),['created']);
+ assert.equal(events[0].point_id,'uuid_22222222');
+});
