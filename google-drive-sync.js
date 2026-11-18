@@ -404,7 +404,7 @@
         if(row&&(!previous||await digest(row.document)!==previous.hash)){const status=$('gdrive-team-status');if(status)status.textContent='Divergência preservada na vistoria '+item.report_id+'. Compare as versões antes de publicar.';continue;}
         if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
         const d=await reportRequest('GET',item.report_id);
-        if(!d.document?.meta||!Array.isArray(d.document.records))continue;
+        if(!d.document?.meta||!Array.isArray(d.document.records)||!validate({id:item.report_id,document:d.document}))continue;
         const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
         if(latest&&(!previous||await digest(latest.document)!==previous.hash))continue;
         await putReport({id:item.report_id,updated:item.updated_at,document:d.document});
@@ -442,7 +442,7 @@
       row.textContent=label+' — revisão '+item.revision+' ';
       entries.push({row,text:label});
       button(row,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const details=document.createElement('div');for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR');details.append(p)}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
-      button(row,'Abrir cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);await putReport({id:crypto.randomUUID(),updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
+      button(row,'Abrir cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(row,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
     }
     const select=document.createElement('select');section.append(select);
