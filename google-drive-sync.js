@@ -446,9 +446,10 @@
       const existing=remote.find(x=>x.report_id===item.id);
       if(existing&&existing.owner_subject!==member.google_subject&&member.role!=='admin')throw Error('Sem permissão para editar');
       if(existing&&!confirm('Publicar nova revisão da vistoria selecionada?'))return;
-      const d=await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
+      if(existing&&baseline[item.id]?.revision!==existing.revision)throw Error('Existe uma revisão remota diferente. Abra uma cópia e compare antes de publicar.');
+      const d=await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});
       baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
       localStorage.setItem(key,JSON.stringify(baseline));await showTeam();
     });
