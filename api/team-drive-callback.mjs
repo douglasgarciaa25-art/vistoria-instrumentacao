@@ -14,13 +14,20 @@ export default async function handler(req,res){
  const nonce=String(req.headers.cookie||'').match(/(?:^|;\s*)vistoria_drive_nonce=([^;]+)/)?.[1];
  if(!nonce||nonce!==state.nonce||state.exp<Date.now())throw Error();
  const member=await memberFor({subject:state.sub});
- if(member?.role!=='admin'||member.status!=='approved')throw Error();
+ if(!member||member.status!=='approved'||(!state.personal&&member.role!=='admin'))throw Error();
  const t=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({client_id:client,client_secret:secret,code:String(req.query.code||''),grant_type:'authorization_code',redirect_uri:'https://vistoria-instrumentacao.vercel.app/api/team-drive-callback'}),signal:AbortSignal.timeout(10000)});
  if(!t.ok)throw Error();
  const tokens=await t.json();if(!tokens.refresh_token)throw Error();
  const headers={Authorization:'Bearer '+tokens.access_token};
  const u=await fetch('https://openidconnect.googleapis.com/v1/userinfo',{headers});
  if(!u.ok||(await u.json()).sub!==state.sub)throw Error();
+ if(state.personal){
+ const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',createHash('sha256').update('personal:'+secret).digest(),iv);
+ const encrypted=Buffer.concat([cipher.update(JSON.stringify({sub:state.sub,refresh:tokens.refresh_token}),'utf8'),cipher.final()]);
+ const credential=[iv,cipher.getAuthTag(),encrypted].map(b=>b.toString('base64url')).join('.');
+ res.setHeader('Set-Cookie',['vistoria_drive_nonce=; Path=/api; HttpOnly; Secure; SameSite=Lax; Max-Age=0','vistoria_personal='+credential+'; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000']);
+ return res.redirect(303,'/?drivePersonal=authorized');
+ }
  const existing=(await teamDb('vistoria_drive_config?id=eq.1&select=folder_id,owner_subject'))[0];
  if(existing&&existing.owner_subject!==state.sub)throw Error();
  let folder=existing?{id:existing.folder_id}:null;
