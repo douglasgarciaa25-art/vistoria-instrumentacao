@@ -390,6 +390,7 @@
   }
   async function reportRequest(method='GET',id='',body=null,history=false,trash=false,version=null){
     assertReady();
+    if(method==='POST'&&body?.document){const bytes=new TextEncoder().encode(JSON.stringify(body.document));if(bytes.length>3000000){if(bytes.length>12000000)throw Error('Relatório acima de 12 MB. Reduza as fotos.');const upload_id=crypto.randomUUID();const size=750000;const total=Math.ceil(bytes.length/size);for(let part=0;part<total;part++){const chunk=bytes.subarray(part*size,(part+1)*size);let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));await reportRequest('POST',id,{action:'upload-part',upload_id,part,payload:btoa(binary),revision:body.revision});const status=$('gdrive-team-status');if(status)status.textContent='Enviando relatório: '+(part+1)+'/'+total;}return reportRequest('POST',id,{action:'upload-finish',upload_id,total,revision:body.revision});}}
     const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':version!==null?'&version='+encodeURIComponent(version):''):(trash?'?trash=1':'')),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Error(d.error||'Falha na vistoria compartilhada');return d;
   }
