@@ -49,10 +49,11 @@ export default async function handler(req,res){
  return reply(200,{revision});
  }
  let doc=req.body?.document;
- if(['upload-part','upload-finish'].includes(req.body?.action)){
+ if(['upload-part','upload-finish','upload-status'].includes(req.body?.action)){
  const upload=String(req.body.upload_id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(upload))return reply(400,{error:'Envio inválido'});
  if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
  const scope='vistoria_upload_parts?owner_subject=eq.'+encodeURIComponent(m.google_subject)+'&report_id=eq.'+encodeURIComponent(id)+'&upload_id=eq.'+upload;
+ if(req.body.action==='upload-status'){const parts=await teamDb(scope+'&select=part&order=part.asc');return reply(200,{parts:parts.map(p=>p.part)});}
  if(req.body.action==='upload-part'){
  const {part,payload}=req.body;if(!Number.isInteger(part)||part<0||part>15||typeof payload!=='string'||payload.length>1000000||! /^[A-Za-z0-9+/=]+$/.test(payload))return reply(400,{error:'Parte inválida'});
  await teamDb('vistoria_upload_parts?on_conflict=owner_subject,report_id,upload_id,part',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({owner_subject:m.google_subject,report_id:id,upload_id:upload,part,payload})});return reply(200,{ok:true});
