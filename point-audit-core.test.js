@@ -33,3 +33,21 @@ test('inclusão em vistoria já identificada registra autoria sem confundir a TA
  assert.deepEqual(events.map(x=>x.action),['created']);
  assert.equal(events[0].point_id,'uuid_22222222');
 });
+
+test('lixeira com mesmo ID registra restauração e preserva foto sintética',()=>{
+ const p=point('uuid_11111111','Pendente');p.photos=[{src:'data:image/jpeg;base64,AA==',caption:'Antes'}];
+ const previous={records:[],deletedPoints:[{point:p,deletedAt:'2026-11-18T18:00:00Z'}]};
+ const next={records:[p],deletedPoints:[]};
+ const events=pointChanges(previous,next);
+ assert.equal(events.length,1);
+ assert.equal(events[0].action,'restored');
+ assert.equal(events[0].point_id,p.pointId);
+ const drive=readFileSync('team-drive.mjs','utf8');
+ assert.match(drive,/deletedPoints/);
+});
+test('ponto recuperável carregado na interface e cache offline',()=>{
+ const html=readFileSync('index.html','utf8');
+ const sw=readFileSync('sw.js','utf8');
+ assert.match(html,/<script src="point-trash\.js"><\/script>/);
+ assert.match(sw,/'\/point-trash\.js'/);
+});
