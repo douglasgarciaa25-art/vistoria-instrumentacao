@@ -398,7 +398,7 @@
   function rememberTeamIds(remote){const ids=new Set(JSON.parse(localStorage.getItem(TEAM_IDS)||'[]'));for(const item of remote)ids.add(item.report_id);localStorage.setItem(TEAM_IDS,JSON.stringify([...ids]));}
   function isTeamReport(id){return JSON.parse(localStorage.getItem(TEAM_IDS)||'[]').includes(id);}
   async function syncTeam(){
-    if(teamRunning||!validToken())return;
+    if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
     try{
       const {member}=await teamRequest();
@@ -443,13 +443,17 @@
         if(!row)continue;
         const hash=await digest(row.document);
         if(hash===previous.hash)continue;
-        const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
-        baseline[item.report_id]={revision:d.revision,hash};
-        localStorage.setItem(key,JSON.stringify(baseline));
+        try{
+          const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
+          baseline[item.report_id]={revision:d.revision,hash};
+          localStorage.setItem(key,JSON.stringify(baseline));
+        }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
+
       }
     }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: '+e.message;}
     finally{teamRunning=false;}
   }
+  window.addEventListener('online',()=>{if(validToken())void syncTeam();else void restoreSession();});
   async function showReports(member,box,status){
     const section=document.createElement('section');section.style.cssText='display:grid;gap:12px;margin:16px 0';box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
