@@ -519,7 +519,7 @@
         const baseline=JSON.parse(localStorage.getItem('vistoria-team-baseline:'+member.google_subject)||'{}')[item.report_id];
         if(!localRow||!validate(localRow)||baseline?.revision!==item.revision)throw Error('Sincronize a revisão atual primeiro.');
         const hash=await digest(localRow.document);if(hash===baseline.hash)throw Error('Nenhuma alteração pendente.');
-        if(new TextEncoder().encode(JSON.stringify(localRow.document)).length>3000000)throw Error('Segundo plano disponível inicialmente até 3 MB.');
+        if(new TextEncoder().encode(JSON.stringify(localRow.document)).length>12000000)throw Error('Segundo plano disponível até 12 MB.');
         if(!confirm('Autoriza enviar esta revisão para a equipe após fechar o aplicativo?'))return;
         await window.VistoriaBackground.put({id:item.report_id,subject:member.google_subject,document:localRow.document,revision:item.revision,hash,state:'pending'});
         await reg.sync.register('vistoria-background');status.textContent='Revisão enfileirada. O navegador poderá enviar após fechar o aplicativo.';
