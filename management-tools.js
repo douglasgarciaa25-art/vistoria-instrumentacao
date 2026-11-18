@@ -1,0 +1,17 @@
+(()=>{'use strict';
+const el=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e};
+const home=document.getElementById('view-home');if(!home)return;
+const panel=el('section');panel.className='card';panel.append(el('h2','Indicadores de manutenção'));
+panel.append(el('p','Dados das vistorias salvas neste aparelho, incluindo cópias recebidas.'));
+const filter=el('select');filter.setAttribute('aria-label','Área dos indicadores');panel.append(filter);
+const summary=el('div');panel.append(summary);
+const csv=el('button','Exportar indicadores para Excel (CSV)');csv.type='button';panel.append(csv);
+home.querySelector('.metrics').after(panel);
+function rows(){return historyItems.flatMap(x=>x.document.records.map(p=>({p,m:x.document.meta}))).filter(x=>!filter.value||x.p.area===filter.value)}
+function update(){const old=filter.value;filter.replaceChildren(new Option('Todas as áreas',''));for(const area of [...new Set(historyItems.flatMap(x=>x.document.records.map(p=>p.area)).filter(Boolean))].sort())filter.add(new Option(area,area));filter.value=[...filter.options].some(o=>o.value===old)?old:'';const data=rows();summary.replaceChildren();for(const [label,count] of [['Total de pontos',data.length],['Pendentes',data.filter(x=>x.p.status==='Pendente').length],['Em acompanhamento',data.filter(x=>x.p.status==='Em acompanhamento').length],['Corrigidos',data.filter(x=>x.p.status==='Corrigido').length],['Prioridade alta ou crítica',data.filter(x=>/alta|crítica/i.test(x.p.priority)).length]]){const line=el('p',label+': '+count);const meter=el('progress');meter.max=Math.max(1,data.length);meter.value=count;meter.style.width='100%';line.append(meter);summary.append(line)}}
+filter.onchange=update;document.addEventListener('vistoria-saved',update);new MutationObserver(update).observe(document.getElementById('historyList'),{childList:true});update();
+const cell=v=>{let s=String(v??'');if(/^[\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};
+csv.onclick=()=>{const table=[['OS / referência','Data','TAG','Área','Equipamento','Prioridade','Situação','Responsável','Prazo','Condição','Ação'],...rows().map(({p,m})=>[m.number,m.date,p.tag,p.area,p.equipment,p.priority,p.status,p.owner,p.deadline,p.problem,p.action])];download(new Blob(['\ufeff'+table.map(row=>row.map(cell).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'Indicadores-vistoria-'+today()+'.csv')};
+const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(Speech)for(const id of ['problem','analysisDraft','action','completionWork','conclusion']){const field=document.getElementById(id);if(!field)continue;const b=el('button','Ditar relato');b.type='button';b.className='secondary';field.closest('label').after(b);b.onclick=()=>{if(!confirm('O reconhecimento de voz do navegador pode enviar áudio ao serviço do navegador. Continuar?'))return;const recognition=new Speech();recognition.lang='pt-BR';const original=field.value,report=activeReportId,point=editing;recognition.onresult=e=>{if(activeReportId!==report||editing!==point||field.value!==original)return notify('O ponto mudou; ditado descartado.');field.value=[original,e.results[0][0].transcript].filter(Boolean).join(' ');field.dispatchEvent(new Event('input',{bubbles:true}));save()};recognition.onerror=()=>notify('Não foi possível reconhecer a voz.');recognition.onend=()=>{b.disabled=false};try{b.disabled=true;recognition.start()}catch{b.disabled=false;notify('Ditado indisponível.')}}}
+})();
