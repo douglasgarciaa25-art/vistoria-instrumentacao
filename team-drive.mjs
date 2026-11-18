@@ -54,13 +54,13 @@ export async function createPrivateReport(reportId,document){
  }
  return createJsonFile(reportId,{format:'vistoria-team-v2',document:copy,photos:refs},folder);
 }
-export async function readPrivateReport(fileId){
+export async function readPrivateReport(fileId,{withPhotos=true}={}){
  const packet=await readJsonFile(fileId);
  if(packet.format!=='vistoria-team-v2')return packet;
  const doc=packet.document;
  const groups=[...doc.records.map(r=>r.photos),doc.pending?.photos].filter(Array.isArray);
  for(const group of groups)for(const photo of group){
-  if(!Number.isInteger(photo.teamPhotoIndex))continue;
+  if(!Number.isInteger(photo.teamPhotoIndex)||!withPhotos)continue;
   const id=packet.photos[photo.teamPhotoIndex];
   if(!id)throw Error('Referência de foto ausente');
   const data=await readJsonFile(id);
