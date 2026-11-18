@@ -30,8 +30,8 @@ export async function checkCentralDrive(){
  if(d.trashed||d.mimeType!=='application/vnd.google-apps.folder'||!d.capabilities?.canAddChildren)throw Error('Pasta central inválida ou sem permissão');
  return d.id;
 }
-async function createJsonFile(reportId,document){
- const folder=await checkCentralDrive();
+async function createJsonFile(reportId,document,folder){
+ folder=folder||await checkCentralDrive();
  const boundary='vistoria_'+crypto.randomUUID();
  const metadata={name:'vistoria_'+reportId+'.json',mimeType:'application/json',parents:[folder]};
  const body='--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(document)+'\r\n--'+boundary+'--\r\n';
@@ -43,15 +43,16 @@ async function readJsonFile(fileId){
 }
 
 export async function createPrivateReport(reportId,document){
+ const folder=await checkCentralDrive();
  const copy=structuredClone(document);
  const groups=[...copy.records.map(r=>r.photos),copy.pending?.photos].filter(Array.isArray);
  const refs=[];
  for(const group of groups)for(const photo of group){
   if(typeof photo?.src!=='string'||!/^data:image\/(jpeg|png|webp);base64,/i.test(photo.src))continue;
-  const file=await createJsonFile(reportId+'_foto',{src:photo.src});
+  const file=await createJsonFile(reportId+'_foto',{src:photo.src},folder);
   refs.push(file);delete photo.src;photo.teamPhotoIndex=refs.length-1;
  }
- return createJsonFile(reportId,{format:'vistoria-team-v2',document:copy,photos:refs});
+ return createJsonFile(reportId,{format:'vistoria-team-v2',document:copy,photos:refs},folder);
 }
 export async function readPrivateReport(fileId){
  const packet=await readJsonFile(fileId);
