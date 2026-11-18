@@ -362,9 +362,18 @@
       authClient.requestAccessToken({prompt:localStorage.getItem(CONNECTED_KEY)==='1'?'':'consent'});
     }catch(e){connecting=false;logError(e)}
   }
+  async function restoreSession(){
+    if(connecting||validToken()||localStorage.getItem(CONNECTED_KEY)!=='1')return;
+    connecting=true;
+    try{const r=await fetch('/api/personal-session',{method:'POST',cache:'no-store'});if(!r.ok)return;const t=await r.json();if(!t.access_token||localStorage.getItem(CONNECTED_KEY)!=='1')return;accessToken=t.access_token;expiresAt=Date.now()+Number(t.expires_in||3600)*1000;enabled=true;$('gdrive-disconnect').hidden=false;display('Conta conectada: '+t.email);await sync();await showTeam();await syncTeam();}catch(e){display('Sessão indisponível. Reconecte sua conta Google.');}finally{connecting=false;}
+  }
+  async function enablePersistent(){
+    try{assertReady();const r=await fetch('/api/team-drive-authorize?personal=1',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok||!d.url)throw Error(d.error||'Autorização indisponível');location.assign(d.url);}catch(e){display(e.message,true);}
+  }
   function disconnect() {
     const token=accessToken;
     localStorage.removeItem(CONNECTED_KEY);
+    void fetch('/api/personal-session',{method:'DELETE',cache:'no-store'}).catch(()=>{});
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
     googleAccount='';folderId='';photosId='';pdfsId='';syncScope='';syncMap={};photoSynced={};remoteItems=[];
@@ -519,6 +528,7 @@
       <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com" style="width:100%;max-width:560px"></details>
       <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
         <button id="gdrive-connect" type="button">Conectar Google Drive</button>
+        <button id="gdrive-persistent" type="button" class="secondary">Manter conta conectada</button>
         <button id="gdrive-now" type="button" class="secondary">Sincronizar agora</button>
         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
       </div>
@@ -533,12 +543,14 @@
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
+    $('gdrive-persistent').addEventListener('click',enablePersistent);
     $('gdrive-now').addEventListener('click',async()=>{if(!validToken())return startConnection();await sync();await syncTeam();await showTeam();});
     $('gdrive-disconnect').addEventListener('click',disconnect);
     document.addEventListener('vistoria-saved',()=>{if(!running)schedule()});
     function resume(){
       if(validToken()){enabled=true;schedule(1000);void syncTeam();return;}
       if(localStorage.getItem(CONNECTED_KEY)==='1'){
+        void restoreSession();
         enabled=false;
         $('gdrive-connect').textContent='Reconectar Google Drive';
         $('gdrive-disconnect').hidden=false;
@@ -548,7 +560,7 @@
     addEventListener('online',resume);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
     resume();
-    setInterval(()=>{if(enabled && document.visibilityState==='visible'){sync();syncTeam()}},90000);
+    setInterval(()=>{if(document.visibilityState==='visible'){if(validToken()){sync();syncTeam()}else void restoreSession();}},90000);
     document.addEventListener('vistoria-saved',()=>{if(validToken())setTimeout(syncTeam,3000)});
     if(typeof window.download==='function') {
       const original=window.download;
