@@ -374,7 +374,7 @@
     assertReady();
     const response=await fetch('/api/team'+(list?'?list=1':''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+response.status+').'}));
-    if(!response.ok||!data||typeof data!=='object')throw Error(data.error||'Falha no cadastro.');
+    if(!response.ok||!data||typeof data!=='object'||data.error)throw Error(data.error||'Falha no cadastro.');
     return data;
   }
   async function reportRequest(method='GET',id='',body=null){
@@ -397,7 +397,7 @@
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
         if(previous?.revision===item.revision)continue;
-        if(row&&(!previous||await digest(row.document)!==previous.hash))continue;
+        if(row&&(!previous||await digest(row.document)!==previous.hash)){const status=$('gdrive-team-status');if(status)status.textContent='Divergência preservada na vistoria '+item.report_id+'. Compare as versões antes de publicar.';continue;}
         if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
         const d=await reportRequest('GET',item.report_id);
         if(!d.document?.meta||!Array.isArray(d.document.records))continue;
@@ -427,10 +427,15 @@
     const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
     const {reports:remote}=await reportRequest();
     const local=await reports();
+    const search=document.createElement('input');search.type='search';search.placeholder='Buscar vistoria por TAG, OS, título ou ID';search.setAttribute('aria-label','Buscar vistoria compartilhada');section.append(search);
+    const entries=[];search.oninput=()=>{const q=search.value.trim().toLocaleLowerCase('pt-BR');for(const e of entries)e.row.hidden=!e.text.toLocaleLowerCase('pt-BR').includes(q);};
     const button=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await fn()}catch(e){status.textContent=e.message}finally{b.disabled=false}};parent.append(b);};
     for(const item of remote){
       const row=document.createElement('div');section.append(row);
-      row.textContent=item.report_id+' — revisão '+item.revision+' ';
+      const doc=local.find(x=>x.id===item.report_id)?.document;
+      const label=[doc?.meta?.title,doc?.meta?.number,...(doc?.records||[]).map(p=>p.tag),item.report_id].filter(Boolean).join(' — ');
+      row.textContent=label+' — revisão '+item.revision+' ';
+      entries.push({row,text:label});
       button(row,'Abrir cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);await putReport({id:crypto.randomUUID(),updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(row,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
     }
