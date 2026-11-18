@@ -356,6 +356,8 @@
         $('gdrive-disconnect').hidden=false;
         display('Conectado ao Google Drive. Preparando pasta na raiz…');
         await sync();
+        await showTeam();
+        await syncTeam();
       },error_callback:()=>{connecting=false;display('A janela do Google foi fechada ou bloqueada. Toque em Reconectar para tentar novamente.',true)}});
       authClient.requestAccessToken({prompt:localStorage.getItem(CONNECTED_KEY)==='1'?'':'consent'});
     }catch(e){connecting=false;logError(e)}
@@ -371,14 +373,14 @@
   async function teamRequest(method='GET',body=null,list=false){
     assertReady();
     const response=await fetch('/api/team'+(list?'?list=1':''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
-    const data=await response.json();
-    if(!response.ok)throw Error(data.error||'Falha no cadastro.');
+    const data=await response.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+response.status+').'}));
+    if(!response.ok||!data||typeof data!=='object')throw Error(data.error||'Falha no cadastro.');
     return data;
   }
   async function reportRequest(method='GET',id='',body=null){
     assertReady();
     const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
-    const d=await r.json();if(!r.ok)throw Error(d.error||'Falha na vistoria compartilhada');return d;
+    const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Error(d.error||'Falha na vistoria compartilhada');return d;
   }
   let teamRunning=false;
   async function syncTeam(){
@@ -490,14 +492,14 @@
     team.innerHTML='<h3>Gerenciamento de usuários</h3><button type="button" id="gdrive-team-refresh">Solicitar acesso / Atualizar usuários</button><p id="gdrive-team-status" role="status"></p><div id="gdrive-team-users"></div>';
     panel.append(team);
     $('gdrive-team-refresh').onclick=showTeam;
-    $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'';
+    $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
     $('gdrive-now').addEventListener('click',()=>validToken()?sync():startConnection());
     $('gdrive-disconnect').addEventListener('click',disconnect);
     document.addEventListener('vistoria-saved',()=>{if(!running)schedule()});
     function resume(){
-      if(validToken()){enabled=true;schedule(1000);return;}
+      if(validToken()){enabled=true;schedule(1000);void syncTeam();return;}
       if(localStorage.getItem(CONNECTED_KEY)==='1'){
         enabled=false;
         $('gdrive-connect').textContent='Reconectar Google Drive';
