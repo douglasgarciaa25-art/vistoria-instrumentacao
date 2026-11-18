@@ -496,6 +496,10 @@
     auto.onchange=()=>{if(auto.checked&&!confirm('Compartilhar automaticamente com a equipe aprovada as vistorias locais ainda não compartilhadas?')){auto.checked=false;return;}localStorage.setItem(autoKey,auto.checked?'1':'0');if(auto.checked)void syncTeam();};
     autoLabel.append(auto,document.createTextNode('Compartilhar novas vistorias automaticamente'));section.append(autoLabel);
 
+    const queuePanel=document.createElement('div');queuePanel.setAttribute('role','status');section.append(queuePanel);
+    const refreshBackground=async()=>{if(!window.VistoriaBackground)return;const jobs=(await window.VistoriaBackground.list()).filter(j=>j.subject===member.google_subject);queuePanel.replaceChildren();for(const job of jobs){const line=document.createElement('p');line.textContent='Vistoria '+job.id.slice(0,8)+' — '+(job.state==='sent'?'Enviada':job.state==='conflict'?'Conflito: revisar antes de reenviar':'Pendente'+(job.total?' ('+(job.progress||0)+'/'+job.total+' partes)':''));queuePanel.append(line);}};
+    await refreshBackground();
+    const refreshButton=document.createElement('button');refreshButton.type='button';refreshButton.textContent='Atualizar situação dos envios';refreshButton.onclick=()=>refreshBackground().catch(e=>{status.textContent=e.message});section.append(refreshButton);
     const {reports:remote}=await reportRequest();
     rememberTeamIds(remote);
     const local=await reports();
