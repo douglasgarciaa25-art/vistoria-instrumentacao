@@ -372,6 +372,7 @@
   }
   function disconnect() {
     const token=accessToken;
+    queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
     localStorage.removeItem(CONNECTED_KEY);
     void fetch('/api/personal-session',{method:'DELETE',cache:'no-store'}).catch(()=>{});
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
@@ -398,9 +399,10 @@
   const TEAM_IDS='vistoria-team-known-ids';
   function rememberTeamIds(remote){const ids=new Set(JSON.parse(localStorage.getItem(TEAM_IDS)||'[]'));for(const item of remote)ids.add(item.report_id);localStorage.setItem(TEAM_IDS,JSON.stringify([...ids]));}
   function isTeamReport(id){return JSON.parse(localStorage.getItem(TEAM_IDS)||'[]').includes(id);}
-  let queueRunning=false;
+  let queueRunning=false,queueMember=null,queueGeneration=0;
   async function showPendingQueue(member){
-    const host=$('gdrive-queue');if(!host||queueRunning)return;
+    const host=$('gdrive-queue');if(!host||queueRunning||!member)return;
+    const generation=queueGeneration;
     queueRunning=true;
     try{
       const baseline=JSON.parse(localStorage.getItem('vistoria-team-baseline:'+member.google_subject)||'{}');
@@ -410,17 +412,20 @@
         if(prev&&await digest(item.document)!==prev.hash)pending.push(item);
         else if(!prev&&!isTeamReport(item.id)&&localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'&&validate(item)&&item.document.records?.length)pending.push(item);
       }
+      if(generation!==queueGeneration)return;
       host.replaceChildren();
       const title=document.createElement('p');title.textContent=pending.length+' vistoria(s) com alterações locais a verificar na sincronização.';host.append(title);
       for(const item of pending){const row=document.createElement('p');row.textContent=(item.document.meta?.title||item.document.meta?.number||item.id)+' — '+(navigator.onLine?'Aguardando verificação':'Sem internet');host.append(row);}
-    }catch{host.textContent='Não foi possível consultar as alterações locais.';}finally{queueRunning=false;}
+    }catch{if(generation===queueGeneration)host.textContent='Não foi possível consultar as alterações locais.';}finally{queueRunning=false;if(generation!==queueGeneration&&queueMember)void showPendingQueue(queueMember);}
   }
   async function syncTeam(){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
     try{
       const {member}=await teamRequest();
-      if(member?.status!=='approved')return;
+      if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();return;}
+      if(queueMember?.google_subject!==member.google_subject)++queueGeneration;
+      queueMember=member;
       const {reports:remote}=await reportRequest();
       rememberTeamIds(remote);
       const key='vistoria-team-baseline:'+member.google_subject;
@@ -590,6 +595,8 @@
       }
     }
     addEventListener('online',resume);
+    addEventListener('offline',()=>{if(queueMember)void showPendingQueue(queueMember);});
+    document.addEventListener('vistoria-saved',()=>{if(queueMember)void showPendingQueue(queueMember);});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
     resume();
     setInterval(()=>{if(document.visibilityState==='visible'){if(validToken()){sync();syncTeam()}else void restoreSession();}},90000);
