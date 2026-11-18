@@ -9,7 +9,11 @@ export default async function handler(req,res){
  const id=String(req.query?.id||req.body?.id||'');
  const valid=/^[a-zA-Z0-9_-]{1,100}$/.test(id);
  const base='vistoria_report_index';
- if(req.method==='GET'&&!id)return reply(200,{reports:await teamDb(base+'?deleted_at=is.null&select=report_id,owner_subject,revision,updated_at&order=updated_at.desc')});
+ if(req.method==='GET'&&!id){
+ const trash=req.query?.trash==='1';
+ if(trash&&m.role!=='admin')return reply(403,{error:'Somente administrador pode consultar a lixeira'});
+ return reply(200,{reports:await teamDb(base+'?deleted_at='+ (trash?'not.is.null':'is.null')+'&select=report_id,owner_subject,revision,updated_at,deleted_at&order=updated_at.desc')});
+ }
  if(!valid)return reply(400,{error:'Identificador inválido'});
  const filter=base+'?report_id=eq.'+encodeURIComponent(id);
  const old=(await teamDb(filter))[0];
@@ -28,6 +32,16 @@ export default async function handler(req,res){
  return reply(200,{ok:true});
  }
  if(req.method!=='POST')return reply(405,{error:'Método inválido'});
+ if(req.body?.action==='restore'){
+ if(m.role!=='admin')return reply(403,{error:'Somente administrador pode restaurar'});
+ if(!old?.deleted_at)return reply(404,{error:'Vistoria não está na lixeira'});
+ if(Number(req.body.revision)!==old.revision)return reply(409,{error:'Revisão alterada'});
+ const revision=old.revision+1;
+ const rows=await teamDb(filter+'&revision=eq.'+old.revision+'&deleted_at=not.is.null',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:null,revision,updated_at:new Date().toISOString()})});
+ if(!rows.length)return reply(409,{error:'Revisão alterada'});
+ await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,report_id:id,action:'restore',revision})});
+ return reply(200,{revision});
+ }
  const doc=req.body?.document;
  if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>3500000)return reply(400,{error:'Documento inválido ou grande demais'});
  if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
