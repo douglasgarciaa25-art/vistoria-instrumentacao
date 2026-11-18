@@ -461,6 +461,8 @@
       }
       for(const item of remote){
         if(item.owner_subject!==member.google_subject&&member.role!=='admin')continue;
+        if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
+        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         const previous=baseline[item.report_id];
         if(!previous||previous.revision!==item.revision)continue;
         const row=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
