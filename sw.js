@@ -1,5 +1,6 @@
-const CACHE='vistoria-shell-v44-consentimento';
-const FILES=['/management-tools.js','/trash-actions.js','/export-current.js','/point-actions.js','/pdf-import.js','/analysis-progress.js','/descritivo-core.js','/descritivo-guiado.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/enhancements.js','/layout.css','/layout.js','/google-drive-sync.js','/','/index.html','/history.js','/pdf-export.js','/improvements.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
+const CACHE='vistoria-shell-v45-background';
+importScripts('/background-sync.js');
+const FILES=['/background-sync.js','/management-tools.js','/trash-actions.js','/export-current.js','/point-actions.js','/pdf-import.js','/analysis-progress.js','/descritivo-core.js','/descritivo-guiado.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/enhancements.js','/layout.css','/layout.js','/google-drive-sync.js','/','/index.html','/history.js','/pdf-export.js','/improvements.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const name of await caches.keys())if(name.startsWith('vistoria-shell-')&&name!==CACHE)await caches.delete(name);await self.clients.claim()})()));
 self.addEventListener('fetch',event=>{
@@ -30,3 +31,5 @@ self.addEventListener('fetch',event=>{
 self.addEventListener('message',event=>{if(event.data?.type==='ACTIVATE_UPDATE')self.skipWaiting()});
 
 self.addEventListener('sync',event=>{if(event.tag==='vistoria-resume')event.waitUntil((async()=>{const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)client.postMessage({type:'VISTORIA_RESUME'});})());});
+
+self.addEventListener('sync',event=>{if(event.tag==='vistoria-background')event.waitUntil((async()=>{const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});if(windows.length)throw Error('Aguardar fechamento das janelas');await self.VistoriaBackground.run();})());});
