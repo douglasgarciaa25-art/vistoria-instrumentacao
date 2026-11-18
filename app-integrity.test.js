@@ -28,3 +28,20 @@ test('dependências batem com lockfile e servidor',()=>{
  assert.equal(pkg.dependencies['@vercel/blob'],lock.packages[''].dependencies['@vercel/blob']);
  assert.ok(readFileSync('cloud-server.mjs','utf8').includes("req.method==='DELETE'&&action==='delete'"));
 });
+
+
+test('OS textual opcional e seletores de fotos independentes',()=>{
+ const html=readFileSync('index.html','utf8');
+ const history=readFileSync('history.js','utf8');
+ const pdf=readFileSync('pdf-export.js','utf8');
+ assert.match(html, /id="workOrder" inputmode="numeric"/);
+ assert.match(html, /id="pointWorkOrder" inputmode="numeric"/);
+ assert.match(html, /id="photos" multiple accept=/);
+ assert.match(html, /id="camera" accept="image\/\*" capture="environment"/);
+ assert.ok(history.includes('v.pointWorkOrder'));
+ assert.ok(pdf.includes('r.pointWorkOrder||m.workOrder'));
+ const keys=['workOrder','pointWorkOrder'];
+ const fixture={workOrder:'00010505291',pointWorkOrder:'00002'};
+ assert.deepEqual(JSON.parse(JSON.stringify(fixture)),fixture);
+ for(const key of keys) assert.equal(typeof fixture[key],'string');
+});
