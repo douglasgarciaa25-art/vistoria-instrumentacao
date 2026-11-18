@@ -3,6 +3,7 @@
  const open=()=>new Promise((resolve,reject)=>{const q=indexedDB.open('vistoria-background-v1',1);q.onupgradeneeded=()=>q.result.createObjectStore('jobs',{keyPath:'id'});q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});
  async function store(mode,fn){const db=await open();try{return await new Promise((resolve,reject)=>{const t=db.transaction('jobs',mode),q=fn(t.objectStore('jobs'));t.oncomplete=()=>resolve(q.result);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);});}finally{db.close();}}
  const list=()=>store('readonly',s=>s.getAll()),put=j=>store('readwrite',s=>s.put(j)),clear=()=>store('readwrite',s=>s.clear());
+ const remove=id=>store('readwrite',s=>s.delete(id));
  async function run(){
  const jobs=(await list()).filter(j=>j.state==='pending');if(!jobs.length)return;
  const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store'});if(!session.ok)return;
@@ -27,6 +28,7 @@
  const chunk=bytes.subarray(part*size,(part+1)*size);let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));
  const result=await request({...base,action:'upload-part',part,payload:btoa(binary)});
  if(!result.ok)throw Error('Parte não enviada');
+ job.progress=part+1;job.total=total;await put(job);
  }
  r=await request({...base,action:'upload-finish',total,sha256:job.hash});
  }
@@ -36,5 +38,5 @@
  else throw Error('Envio temporariamente indisponível');
  }
  }
- root.VistoriaBackground={list,put,clear,run};
+ root.VistoriaBackground={list,put,clear,remove,run};
 })(globalThis);
