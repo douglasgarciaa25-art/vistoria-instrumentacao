@@ -23,7 +23,7 @@ export default async function handler(req,res){
  if(!u.ok||(await u.json()).sub!==state.sub)throw Error();
  if(state.personal){
  const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',createHash('sha256').update('personal:'+secret).digest(),iv);
- const encrypted=Buffer.concat([cipher.update(JSON.stringify({sub:state.sub,refresh:tokens.refresh_token}),'utf8'),cipher.final()]);
+ const encrypted=Buffer.concat([cipher.update(JSON.stringify({sub:state.sub,refresh:tokens.refresh_token,exp:Date.now()+2592000000}),'utf8'),cipher.final()]);
  const credential=[iv,cipher.getAuthTag(),encrypted].map(b=>b.toString('base64url')).join('.');
  res.setHeader('Set-Cookie',['vistoria_drive_nonce=; Path=/api; HttpOnly; Secure; SameSite=Lax; Max-Age=0','vistoria_personal='+credential+'; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000']);
  return res.redirect(303,'/?drivePersonal=authorized');
