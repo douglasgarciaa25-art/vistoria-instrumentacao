@@ -1,4 +1,4 @@
-const CACHE='vistoria-shell-v46-background-parts';
+const CACHE='vistoria-shell-v47-background-status';
 importScripts('/background-sync.js');
 const FILES=['/background-sync.js','/management-tools.js','/trash-actions.js','/export-current.js','/point-actions.js','/pdf-import.js','/analysis-progress.js','/descritivo-core.js','/descritivo-guiado.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/enhancements.js','/layout.css','/layout.js','/google-drive-sync.js','/','/index.html','/history.js','/pdf-export.js','/improvements.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
