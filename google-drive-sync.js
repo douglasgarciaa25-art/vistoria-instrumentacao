@@ -257,7 +257,7 @@
       }
       local=await reports();
       for (const row of local) {
-        if (!validate(row)) continue;
+        if (!validate(row)||isTeamReport(row.id)) continue;
         const docHash=await digest(row.document);
         const remote=remotes.get(String(row.id));
         if (!remote) {
@@ -383,6 +383,9 @@
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Error(d.error||'Falha na vistoria compartilhada');return d;
   }
   let teamRunning=false;
+  const TEAM_IDS='vistoria-team-known-ids';
+  function rememberTeamIds(remote){const ids=new Set(JSON.parse(localStorage.getItem(TEAM_IDS)||'[]'));for(const item of remote)ids.add(item.report_id);localStorage.setItem(TEAM_IDS,JSON.stringify([...ids]));}
+  function isTeamReport(id){return JSON.parse(localStorage.getItem(TEAM_IDS)||'[]').includes(id);}
   async function syncTeam(){
     if(teamRunning||!validToken())return;
     teamRunning=true;
@@ -390,6 +393,7 @@
       const {member}=await teamRequest();
       if(member?.status!=='approved')return;
       const {reports:remote}=await reportRequest();
+      rememberTeamIds(remote);
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
       const local=await reports();
@@ -426,6 +430,7 @@
     const section=document.createElement('section');box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
     const {reports:remote}=await reportRequest();
+    rememberTeamIds(remote);
     const local=await reports();
     const search=document.createElement('input');search.type='search';search.placeholder='Buscar vistoria por TAG, OS, título ou ID';search.setAttribute('aria-label','Buscar vistoria compartilhada');section.append(search);
     const entries=[];search.oninput=()=>{const q=search.value.trim().toLocaleLowerCase('pt-BR');for(const e of entries)e.row.hidden=!e.text.toLocaleLowerCase('pt-BR').includes(q);};
@@ -451,6 +456,7 @@
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
       if(existing&&baseline[item.id]?.revision!==existing.revision)throw Error('Existe uma revisão remota diferente. Abra uma cópia e compare antes de publicar.');
       const d=await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});
+      rememberTeamIds([{report_id:item.id}]);
       baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
       localStorage.setItem(key,JSON.stringify(baseline));await showTeam();
     });
