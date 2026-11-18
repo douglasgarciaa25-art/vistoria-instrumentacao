@@ -5,6 +5,10 @@
   ],
   "builds": [
     {
+      "src": "api/personal-session.mjs",
+      "use": "@vercel/node"
+    },
+    {
       "src": "api/team-drive-callback.mjs",
       "use": "@vercel/node"
     },
@@ -54,6 +58,10 @@
     }
   ],
   "routes": [
+    {
+      "src": "/api/personal-session",
+      "dest": "/api/personal-session.mjs"
+    },
     {
       "src": "/sw.js",
       "headers": {
