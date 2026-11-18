@@ -574,7 +574,8 @@
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
     resume();
     setInterval(()=>{if(document.visibilityState==='visible'){if(validToken()){sync();syncTeam()}else void restoreSession();}},90000);
-    document.addEventListener('vistoria-saved',()=>{if(validToken())setTimeout(syncTeam,3000)});
+    document.addEventListener('vistoria-saved',()=>{if(validToken())setTimeout(syncTeam,3000);if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(reg=>reg.sync?.register('vistoria-resume')).catch(()=>{});});
+    navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='VISTORIA_RESUME')resume();});
     if(typeof window.download==='function') {
       const original=window.download;
       window.download=function(blob,name){const result=original.apply(this,arguments);if(/\.pdf$/i.test(String(name)))void savePdf(blob,name);return result;};
