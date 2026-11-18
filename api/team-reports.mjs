@@ -20,12 +20,13 @@ export default async function handler(req,res){
  if(req.method==='GET'){
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
  if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,drive_file_id&order=occurred_at.desc');return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,available:!!drive_file_id}))});}
- if(req.query?.version){const version=String(req.query.version);if(!/^\d{1,12}$/.test(version))return reply(400,{error:'Revisão inválida'});const events=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&revision=eq.'+version+'&select=drive_file_id');const file=events.find(e=>e.drive_file_id)?.drive_file_id;if(!file)return reply(404,{error:'Conteúdo desta revisão não está indexado'});return reply(200,{document:await readPrivateReport(file),revision:Number(version)});}
- const document=await readPrivateReport(old.drive_file_id);
+ let fileId=old.drive_file_id;let selectedRevision=old.revision;
+ if(req.query?.version){const version=String(req.query.version);if(!/^\d{1,12}$/.test(version))return reply(400,{error:'Revisão inválida'});const events=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&revision=eq.'+version+'&select=drive_file_id');const file=events.find(e=>e.drive_file_id)?.drive_file_id;if(!file)return reply(404,{error:'Conteúdo desta revisão não está indexado'});fileId=file;selectedRevision=Number(version);}
+ const document=await readPrivateReport(fileId);
  const bytes=Buffer.from(JSON.stringify(document),'utf8');
- if(req.query?.part!==undefined){const part=Number(req.query.part);const total=Math.ceil(bytes.length/750000);if(String(req.query.revision)!==String(old.revision))return reply(409,{error:'Revisão alterada durante download'});if(!Number.isInteger(part)||part<0||part>=total)return reply(400,{error:'Parte inválida'});return reply(200,{payload:bytes.subarray(part*750000,(part+1)*750000).toString('base64'),part,total,revision:old.revision});}
- if(bytes.length>3000000)return reply(200,{segmented:true,total:Math.ceil(bytes.length/750000),revision:old.revision,owner:old.owner_subject});
- return reply(200,{document,revision:old.revision,owner:old.owner_subject});
+ if(req.query?.part!==undefined){const part=Number(req.query.part);const total=Math.ceil(bytes.length/750000);if(String(req.query.revision)!==String(selectedRevision))return reply(409,{error:'Revisão alterada durante download'});if(!Number.isInteger(part)||part<0||part>=total)return reply(400,{error:'Parte inválida'});return reply(200,{payload:bytes.subarray(part*750000,(part+1)*750000).toString('base64'),part,total,revision:selectedRevision});}
+ if(bytes.length>3000000)return reply(200,{segmented:true,total:Math.ceil(bytes.length/750000),revision:selectedRevision,owner:old.owner_subject});
+ return reply(200,{document,revision:selectedRevision,owner:old.owner_subject});
  }
  if(old&&old.owner_subject!==m.google_subject&&m.role!=='admin')return reply(403,{error:'Somente o autor ou administrador pode editar'});
  if(req.method==='DELETE'){
