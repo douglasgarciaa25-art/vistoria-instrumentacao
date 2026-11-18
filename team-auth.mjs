@@ -16,7 +16,7 @@ export async function googleIdentity(req){
  return {subject:String(i.sub),email:String(i.email).trim().toLowerCase()};
 }
 export async function memberFor(identity){
- const rows=await teamDb('vistoria_members?google_subject=eq.'+encodeURIComponent(identity.subject)+'&select=google_subject,email,role,status');
+ const rows=await teamDb('vistoria_members?google_subject=eq.'+encodeURIComponent(identity.subject)+'&select=google_subject,email,role,status,technician_name');
  return rows[0]||null;
 }
 export async function approvedMember(req){
