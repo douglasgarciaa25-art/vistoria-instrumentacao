@@ -398,6 +398,23 @@
   const TEAM_IDS='vistoria-team-known-ids';
   function rememberTeamIds(remote){const ids=new Set(JSON.parse(localStorage.getItem(TEAM_IDS)||'[]'));for(const item of remote)ids.add(item.report_id);localStorage.setItem(TEAM_IDS,JSON.stringify([...ids]));}
   function isTeamReport(id){return JSON.parse(localStorage.getItem(TEAM_IDS)||'[]').includes(id);}
+  let queueRunning=false;
+  async function showPendingQueue(member){
+    const host=$('gdrive-queue');if(!host||queueRunning)return;
+    queueRunning=true;
+    try{
+      const baseline=JSON.parse(localStorage.getItem('vistoria-team-baseline:'+member.google_subject)||'{}');
+      const local=await reports();const pending=[];
+      for(const item of local){
+        const prev=baseline[item.id];
+        if(prev&&await digest(item.document)!==prev.hash)pending.push(item);
+        else if(!prev&&!isTeamReport(item.id)&&localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'&&validate(item)&&item.document.records?.length)pending.push(item);
+      }
+      host.replaceChildren();
+      const title=document.createElement('p');title.textContent=pending.length+' vistoria(s) com alterações locais a verificar na sincronização.';host.append(title);
+      for(const item of pending){const row=document.createElement('p');row.textContent=(item.document.meta?.title||item.document.meta?.number||item.id)+' — '+(navigator.onLine?'Aguardando verificação':'Sem internet');host.append(row);}
+    }catch{host.textContent='Não foi possível consultar as alterações locais.';}finally{queueRunning=false;}
+  }
   async function syncTeam(){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
@@ -409,6 +426,7 @@
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
       const local=await reports();
+      await showPendingQueue(member);
       for(const item of remote){
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
@@ -451,6 +469,7 @@
         }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
 
       }
+      await showPendingQueue(member);
     }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: '+e.message;}
     finally{teamRunning=false;}
   }
@@ -550,7 +569,7 @@
     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
     const team=document.createElement('section');
-    team.innerHTML='<h3>Gerenciamento de usuários</h3><button type="button" id="gdrive-team-refresh">Solicitar acesso / Atualizar usuários</button><p id="gdrive-team-status" role="status"></p><div id="gdrive-team-users"></div>';
+    team.innerHTML='<h3>Gerenciamento de usuários</h3><button type="button" id="gdrive-team-refresh">Solicitar acesso / Atualizar usuários</button><p id="gdrive-team-status" role="status"></p><div id="gdrive-queue" role="status" aria-live="polite"></div><div id="gdrive-team-users"></div>';
     panel.append(team);
     $('gdrive-team-refresh').onclick=showTeam;
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
