@@ -177,13 +177,15 @@
   container.append(buttons,status,panel);
   field.closest('label').after(container);
 
-  let pending=null,applied=null;
+  let pending=null,applied=null,generation=0;
   function clear(){
+   generation++;
    pending=null;applied=null;panel.hidden=true;undo.hidden=true;
    suggestion.value='';originalPreview.value='';status.textContent='';
   }
   resetPanels.push(clear);
   field.addEventListener('input',()=>{
+   generation++;
    if(pending&&field.value!==pending.original){pending=null;panel.hidden=true;status.textContent='O texto mudou. Solicite outra revisão, se desejar.'}
    if(applied&&field.value!==applied.revised){applied=null;undo.hidden=true}
   });
@@ -191,6 +193,7 @@
   review.addEventListener('click',()=>{
    const original=field.value;
    if(!original.trim())return notify('Escreva primeiro a sua descrição.');
+   generation++;
    const revised=reviseLocal(original,id);
    pending={original};
    originalPreview.value=original;
@@ -206,15 +209,16 @@
    const drive=window.VistoriaGoogleDrive;
    if(!navigator.onLine||!drive?.getState().enabled)return notify('Conecte o Google Drive e a internet para usar IA. A revisão offline continua disponível.');
    if(!confirm('Enviar somente este texto ao serviço de IA? Não envie dados sigilosos sem autorização. O serviço pode gerar custos.'))return;
+   const requestGeneration=++generation;
    ai.disabled=true;status.textContent='Reescrevendo com IA…';
    try{
     const result=await drive.reviewTechnical(id,original);
-    if(field.value!==original)return;
+    if(generation!==requestGeneration||field.value!==original)return;
     if(typeof result.suggested!=='string'||!result.suggested.trim())throw Error('Resposta inválida.');
     pending={original};originalPreview.value=original;suggestion.value=result.suggested.trim();panel.hidden=false;
     accept.disabled=suggestion.value===original.trim();
     status.textContent='Sugestão da IA. Confira os fatos e medições antes de aceitar.';
-   }catch(e){status.textContent='IA indisponível: '+e.message+' A revisão offline permanece disponível.';}
+   }catch(e){if(generation===requestGeneration)status.textContent='IA indisponível: '+e.message+' A revisão offline permanece disponível.';}
    finally{ai.disabled=false;}
   });
   suggestion.addEventListener('input',()=>{accept.disabled=!pending||!suggestion.value.trim()||suggestion.value.trim()===pending.original.trim()});
@@ -232,6 +236,7 @@
    notify('Texto revisado aplicado. Confira dados, TAGs, medições e serviços antes de salvar.');
   });
   dismiss.addEventListener('click',()=>{
+   generation++;
    pending=null;panel.hidden=true;suggestion.value='';
    status.textContent='Texto original mantido, sem alterações.';
   });
@@ -255,6 +260,46 @@
   for(const clear of resetPanels)clear();
  });
 
+ const batch=document.createElement('button');batch.type='button';batch.className='secondary';batch.textContent='Revisar todos os textos preenchidos com IA';
+ const batchPanel=document.createElement('div');batchPanel.className='technical-review-preview';batchPanel.hidden=true;
+ let batchGeneration=0;
+ batch.onclick=async()=>{
+  const drive=window.VistoriaGoogleDrive;
+  const snapshot=fields.map(([id,title])=>({id,title,field:document.getElementById(id)})).filter(x=>x.field?.value.trim()).map(x=>({...x,original:x.field.value}));
+  if(!snapshot.length)return notify('Preencha os textos primeiro.');
+  if(!navigator.onLine||!drive?.getState().enabled)return notify('Conecte o Google Drive e a internet.');
+  if(!confirm('Enviar os textos à IA? Não envie dados sigilosos sem autorização. O serviço pode gerar custos.'))return;
+  const generation=++batchGeneration;
+  batch.disabled=true;batchPanel.hidden=false;batchPanel.replaceChildren();
+  const context=typeof activeReportId!=='undefined'?activeReportId:null;
+  const current=()=>generation===batchGeneration&&(typeof activeReportId!=='undefined'?activeReportId:null)===context;
+  try{
+   for(const item of snapshot){
+    if(!current())break;
+    const label=document.createElement('p');label.textContent=item.title;batchPanel.append(label);
+    if(item.original.length>3500||item.field.value!==item.original){label.textContent+=' — ignorado: texto alterado ou acima do limite.';continue;}
+    let result;try{result=await drive.reviewTechnical(item.id,item.original);}catch(e){if(current())label.textContent+=' — '+e.message;continue;}
+    if(!current())break;
+    if(item.field.value!==item.original){label.textContent+=' — texto alterado.';continue;}
+    if(typeof result.suggested!=='string'||!result.suggested.trim()){label.textContent+=' — resposta inválida.';continue;}
+    const original=document.createElement('textarea');original.readOnly=true;original.rows=3;original.value=item.original;original.setAttribute('aria-label','Texto original');
+    const preview=document.createElement('textarea');preview.value=result.suggested;preview.rows=4;preview.setAttribute('aria-label','Sugestão da IA');
+    const apply=document.createElement('button');apply.type='button';apply.textContent='Aplicar sugestão';
+    const undo=document.createElement('button');undo.type='button';undo.textContent='Desfazer';undo.hidden=true;let applied='';
+    apply.onclick=()=>{if(!current()||item.field.value!==item.original)return notify('O texto mudou. Revise novamente.');if(!preview.value.trim())return;applied=preview.value.trim();item.field.value=applied;item.field.dispatchEvent(new Event('input',{bubbles:true}));apply.disabled=true;undo.hidden=false;};
+    undo.onclick=()=>{if(!current()||item.field.value!==applied)return notify('O texto mudou. Não foi possível desfazer.');item.field.value=item.original;item.field.dispatchEvent(new Event('input',{bubbles:true}));apply.disabled=false;undo.hidden=true;};
+    batchPanel.append(original,preview,apply,undo);
+   }
+  }finally{if(current())batch.disabled=false;}
+ };
+ resetPanels.push(()=>{batchGeneration++;batch.disabled=false;batchPanel.replaceChildren();batchPanel.hidden=true;});
+ document.getElementById('analysisDraft')?.closest('label')?.parentElement?.append(batch,batchPanel);
+ const full=document.createElement('button');full.type='button';full.className='secondary';full.textContent='Revisar relatório completo com IA';
+ const fullPanel=document.createElement('div');fullPanel.hidden=true;fullPanel.className='technical-review-preview';
+ let fullGeneration=0;
+ resetPanels.push(()=>{fullGeneration++;fullPanel.hidden=true;fullPanel.replaceChildren();});
+ full.onclick=async()=>{const drive=window.VistoriaGoogleDrive;if(!navigator.onLine||!drive?.getState().enabled)return notify('Conecte o Google Drive e a internet.');const snapshot=structuredClone(data());const items=[];for(const key of ['objective','conclusion'])if(snapshot.meta[key]?.trim())items.push({label:key,field:key,text:snapshot.meta[key]});for(const point of snapshot.records){for(const key of ['problem','impact','action','completionWork'])if(point[key]?.trim())items.push({label:(point.tag||'Ponto')+' — '+key,field:key,text:point[key]});}if(!items.length)return notify('Nenhum texto registrado.');if(!confirm('Revisar '+items.length+' textos registrados? Os textos serão enviados à IA, em grupos de até 12. Nenhum original será alterado. Não envie dados sigilosos sem autorização. O serviço pode gerar custos.'))return;const generation=++fullGeneration;fullPanel.hidden=false;fullPanel.replaceChildren();let cursor=0;const next=document.createElement('button');next.type='button';const progress=document.createElement('p');progress.setAttribute('role','status');fullPanel.append(progress,next);const run=async()=>{next.disabled=true;try{const end=Math.min(cursor+12,items.length);while(cursor<end&&generation===fullGeneration){const item=items[cursor];progress.textContent='Revisando '+(cursor+1)+' de '+items.length;let suggestion;try{suggestion=item.text.length>3500?'Texto acima do limite; revise individualmente.':(await drive.reviewTechnical(item.field,item.text)).suggested;}catch(e){progress.textContent='Interrompido: '+e.message;return;}if(generation!==fullGeneration)return;const heading=document.createElement('p');heading.textContent=item.label;const original=document.createElement('textarea');original.readOnly=true;original.rows=3;original.value=item.text;const revised=document.createElement('textarea');revised.rows=4;revised.value=String(suggestion||'');revised.setAttribute('aria-label','Sugestão para '+item.label);fullPanel.insertBefore(heading,next);fullPanel.insertBefore(original,next);fullPanel.insertBefore(revised,next);cursor++;}progress.textContent=cursor+' de '+items.length+' textos revisados. Copie as sugestões desejadas; os registros originais permanecem intactos.';}finally{next.disabled=cursor>=items.length;next.textContent=cursor>=items.length?'Revisão concluída':'Continuar revisão';}};next.onclick=run;await run();};
+ document.getElementById('pdf')?.closest('.actions')?.after(full,fullPanel);
  const note=document.createElement('p');
  note.className='muted technical-review-note';
  note.textContent='O texto é sempre escrito pela equipe. O assistente local apenas sugere ajustes de redação; não confirma execução, testes, medições ou conformidade técnica. Confira e aprove antes de registrar.';

@@ -29,7 +29,7 @@ async function exportReportDocuments(documents){
   }catch(e){sourcePdfFailed=true;sourcePdfWarnings++}
  }
  newPage();if(sourcePdfFailed)detail('Aviso de anexação','O PDF de origem não pôde ser incorporado. Confira o arquivo original antes de enviar este relatório.');for(const t of wrap(m.title||'Relatório de levantamento técnico',16,CW,bold)){need(27);draw(t,M,y,16,bold);y-=22}y-=12;
- grid([['Data da vistoria',datefmt(m.date)],['Código / referência',m.number||'Não informado'],['Responsável pelo levantamento',m.author],['Empresa / unidade',m.company],['Setor',m.sector],['Pontos inspecionados',String(records.length)]]);
+ grid([['Data da vistoria',datefmt(m.date)],['Código / referência',m.number||'Não informado'],['Ordem de serviço (OS)',m.workOrder||'Não informado'],['Responsável pelo levantamento',m.author],['Empresa / unidade',m.company],['Setor',m.sector],['Pontos inspecionados',String(records.length)]]);
  heading('1. Objetivo');detail('Objetivo do levantamento',m.objective);
  
  heading('Resumo do levantamento');
@@ -44,7 +44,7 @@ async function exportReportDocuments(documents){
  for(const t of wrap(r.tag+' | '+r.area,14,CW,bold)){need(21);draw(t,M,y,14,bold);y-=20}y-=5;
  const pc={Crítica:rgb(.67,.15,.15),Alta:rgb(.72,.30,.08),'Média':rgb(.47,.35,.08),Baixa:green}[r.priority]||muted;
  need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
- grid([['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
+ grid([['Ordem de serviço (OS)',r.pointWorkOrder||m.workOrder||'Não informado'],['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
  detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante',r.completionBy)}
  if(r.photos?.length){for(let j=0;j<r.photos.length;j++){
@@ -63,7 +63,7 @@ async function exportReportDocuments(documents){
  }}
  }
  if(m.conclusion){heading('3. Conclusão / observações finais');paragraph(m.conclusion)}
- heading('Controle do documento');grid([['Elaboração',m.author],['Data',datefmt(m.date)]]);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
+ heading('Controle do documento');grid([['Elaboração',m.author],['Data',datefmt(m.date)]]);need(85);y-=28;page.drawLine({start:{x:M,y},end:{x:M+CW*.65,y},thickness:.7,color:line});y-=15;draw('Assinatura do responsável técnico',M,y,9,bold);y-=15;paragraph(m.author||'Nome a preencher',9,muted);paragraph('Campo para assinatura manual. Não constitui assinatura digital.',8,muted);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
  }
  const pages=doc.getPages();pages.forEach((p,i)=>{if(originalPages.has(p))return;p.drawLine({start:{x:M,y:39},end:{x:W-M,y:39},thickness:.5,color:line});p.drawText('CMOC Brasil | Levantamento de instrumentação e automação',{x:M,y:25,size:8,font:regular,color:muted});const s=(i+1)+' / '+pages.length;p.drawText(s,{x:W-M-regular.widthOfTextAtSize(s,8),y:25,size:8,font:regular,color:muted})});
  const first=documents[0].meta;

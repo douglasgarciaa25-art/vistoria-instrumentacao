@@ -64,11 +64,12 @@ function response(){
  };
 }
 function withGoogleConfig(){
- const original={client:process.env.VISTORIA_GOOGLE_CLIENT_ID,emails:process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS,key:process.env.GROQ_API_KEY};
+ const original={client:process.env.VISTORIA_GOOGLE_CLIENT_ID,emails:process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS,key:process.env.GROQ_API_KEY,db:process.env.my_super_base_secrety_key133};
  process.env.VISTORIA_GOOGLE_CLIENT_ID=CLIENT;
  process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS=EMAIL;
+ process.env.my_super_base_secrety_key133='db-test';
  process.env.GROQ_API_KEY='credencial-ficticia-de-testes';
- return ()=>{for(const [k,v] of Object.entries({VISTORIA_GOOGLE_CLIENT_ID:original.client,VISTORIA_GOOGLE_ALLOWED_EMAILS:original.emails,GROQ_API_KEY:original.key}))if(v===undefined)delete process.env[k];else process.env[k]=v};
+ return ()=>{for(const [k,v] of Object.entries({VISTORIA_GOOGLE_CLIENT_ID:original.client,VISTORIA_GOOGLE_ALLOWED_EMAILS:original.emails,GROQ_API_KEY:original.key,my_super_base_secrety_key133:original.db}))if(v===undefined)delete process.env[k];else process.env[k]=v};
 }
 test('API exige OAuth Google válido sem enviar o relato a usuário não autorizado',async()=>{
  const restore=withGoogleConfig(),orig=globalThis.fetch;
@@ -92,8 +93,9 @@ test('API revisa somente o campo solicitado após confirmar a conta Google',asyn
   calls++;
   if(calls===1){
    assert.ok(String(url).startsWith('https://oauth2.googleapis.com/tokeninfo?access_token=token.mock'));
-   return {ok:true,json:async()=>({aud:CLIENT,email:EMAIL,email_verified:'true',scope:SCOPES})};
+   return {ok:true,json:async()=>({aud:CLIENT,email:EMAIL,sub:'subject-test',email_verified:'true',scope:SCOPES})};
   }
+  if(calls===2){assert.ok(String(url).includes('vistoria_members?google_subject=eq.subject-test'));return {ok:true,text:async()=>JSON.stringify([{google_subject:'subject-test',email:EMAIL,role:'technician',status:'approved'}])};}
   assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
   assert.equal(options.headers.Authorization,'Bearer credencial-ficticia-de-testes');
   const body=JSON.parse(options.body);
@@ -107,7 +109,7 @@ test('API revisa somente o campo solicitado após confirmar a conta Google',asyn
   await handler({method:'POST',headers:{authorization:'Bearer token.mock'},body:{field:'analysisDraft',text:'Não apresentou leitura no painel.'}},res);
   assert.equal(res.statusCode,200);
   assert.deepEqual(res.body,{suggested:'O painel não apresentou leitura.',field:'analysisDraft',fieldLabel:FIELD_NAMES.analysisDraft});
-  assert.equal(calls,2);
+  assert.equal(calls,3);
  }finally{globalThis.fetch=orig;restore()}
 });
 
