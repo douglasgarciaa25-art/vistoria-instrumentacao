@@ -45,7 +45,7 @@ async function readJsonFile(fileId){
 export async function createPrivateReport(reportId,document){
  const folder=await checkCentralDrive();
  const copy=JSON.parse(JSON.stringify(document));
- const groups=[...copy.records.map(r=>r.photos),copy.pending?.photos].filter(Array.isArray);
+ const groups=[...copy.records.map(r=>r.photos),...(copy.deletedPoints||[]).map(x=>x.point?.photos),copy.pending?.photos].filter(Array.isArray);
  const refs=[];
  for(const group of groups)for(const photo of group){
   if(typeof photo?.src!=='string'||!/^data:image\/(jpeg|png|webp);base64,/i.test(photo.src))continue;
@@ -58,7 +58,7 @@ export async function readPrivateReport(fileId,{withPhotos=true}={}){
  const packet=await readJsonFile(fileId);
  if(packet.format!=='vistoria-team-v2')return packet;
  const doc=packet.document;
- const groups=[...doc.records.map(r=>r.photos),doc.pending?.photos].filter(Array.isArray);
+ const groups=[...doc.records.map(r=>r.photos),...(doc.deletedPoints||[]).map(x=>x.point?.photos),doc.pending?.photos].filter(Array.isArray);
  for(const group of groups)for(const photo of group){
   if(!Number.isInteger(photo.teamPhotoIndex)||!withPhotos)continue;
   const id=packet.photos[photo.teamPhotoIndex];
