@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {pointChanges} from './point-audit-core.mjs';
 const point=(id,status='Pendente',tag='MC01')=>({pointId:id,tag,status,photos:[]});
 test('finalização e reabertura rastreadas pelo mesmo ID após reordenação',()=>{
