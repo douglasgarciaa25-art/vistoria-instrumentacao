@@ -30,7 +30,7 @@ export async function checkCentralDrive(){
  if(d.trashed||d.mimeType!=='application/vnd.google-apps.folder'||!d.capabilities?.canAddChildren)throw Error('Pasta central inválida ou sem permissão');
  return d.id;
 }
-export async function createPrivateReport(reportId,document){
+async function createJsonFile(reportId,document){
  const folder=await checkCentralDrive();
  const boundary='vistoria_'+crypto.randomUUID();
  const metadata={name:'vistoria_'+reportId+'.json',mimeType:'application/json',parents:[folder]};
@@ -38,6 +38,33 @@ export async function createPrivateReport(reportId,document){
  const r=await drive('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body});
  return (await r.json()).id;
 }
-export async function readPrivateReport(fileId){
+async function readJsonFile(fileId){
  const r=await drive(API+'/'+encodeURIComponent(fileId)+'?alt=media');return r.json();
+}
+
+export async function createPrivateReport(reportId,document){
+ const copy=structuredClone(document);
+ const groups=[...copy.records.map(r=>r.photos),copy.pending?.photos].filter(Array.isArray);
+ const refs=[];
+ for(const group of groups)for(const photo of group){
+  if(typeof photo?.src!=='string'||!/^data:image\/(jpeg|png|webp);base64,/i.test(photo.src))continue;
+  const file=await createJsonFile(reportId+'_foto',{src:photo.src});
+  refs.push(file);delete photo.src;photo.teamPhotoIndex=refs.length-1;
+ }
+ return createJsonFile(reportId,{format:'vistoria-team-v2',document:copy,photos:refs});
+}
+export async function readPrivateReport(fileId){
+ const packet=await readJsonFile(fileId);
+ if(packet.format!=='vistoria-team-v2')return packet;
+ const doc=packet.document;
+ const groups=[...doc.records.map(r=>r.photos),doc.pending?.photos].filter(Array.isArray);
+ for(const group of groups)for(const photo of group){
+  if(!Number.isInteger(photo.teamPhotoIndex))continue;
+  const id=packet.photos[photo.teamPhotoIndex];
+  if(!id)throw Error('Referência de foto ausente');
+  const data=await readJsonFile(id);
+  if(typeof data.src!=='string')throw Error('Foto inválida');
+  photo.src=data.src;delete photo.teamPhotoIndex;
+ }
+ return doc;
 }
