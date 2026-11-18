@@ -177,8 +177,9 @@
   container.append(buttons,status,panel);
   field.closest('label').after(container);
 
-  let pending=null,applied=null;
+  let pending=null,applied=null,generation=0;
   function clear(){
+   generation++;
    pending=null;applied=null;panel.hidden=true;undo.hidden=true;
    suggestion.value='';originalPreview.value='';status.textContent='';
   }
@@ -191,6 +192,7 @@
   review.addEventListener('click',()=>{
    const original=field.value;
    if(!original.trim())return notify('Escreva primeiro a sua descrição.');
+   generation++;
    const revised=reviseLocal(original,id);
    pending={original};
    originalPreview.value=original;
@@ -206,15 +208,16 @@
    const drive=window.VistoriaGoogleDrive;
    if(!navigator.onLine||!drive?.getState().enabled)return notify('Conecte o Google Drive e a internet para usar IA. A revisão offline continua disponível.');
    if(!confirm('Enviar somente este texto ao serviço de IA? Não envie dados sigilosos sem autorização. O serviço pode gerar custos.'))return;
+   const requestGeneration=++generation;
    ai.disabled=true;status.textContent='Reescrevendo com IA…';
    try{
     const result=await drive.reviewTechnical(id,original);
-    if(field.value!==original)return;
+    if(generation!==requestGeneration||field.value!==original)return;
     if(typeof result.suggested!=='string'||!result.suggested.trim())throw Error('Resposta inválida.');
     pending={original};originalPreview.value=original;suggestion.value=result.suggested.trim();panel.hidden=false;
     accept.disabled=suggestion.value===original.trim();
     status.textContent='Sugestão da IA. Confira os fatos e medições antes de aceitar.';
-   }catch(e){status.textContent='IA indisponível: '+e.message+' A revisão offline permanece disponível.';}
+   }catch(e){if(generation===requestGeneration)status.textContent='IA indisponível: '+e.message+' A revisão offline permanece disponível.';}
    finally{ai.disabled=false;}
   });
   suggestion.addEventListener('input',()=>{accept.disabled=!pending||!suggestion.value.trim()||suggestion.value.trim()===pending.original.trim()});
