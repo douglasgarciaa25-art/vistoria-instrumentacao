@@ -427,7 +427,7 @@
     finally{teamRunning=false;}
   }
   async function showReports(member,box,status){
-    const section=document.createElement('section');box.append(section);
+    const section=document.createElement('section');section.style.cssText='display:grid;gap:12px;margin:16px 0';box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
     const {reports:remote}=await reportRequest();
     rememberTeamIds(remote);
@@ -436,12 +436,12 @@
     const entries=[];search.oninput=()=>{const q=search.value.trim().toLocaleLowerCase('pt-BR');for(const e of entries)e.row.hidden=!e.text.toLocaleLowerCase('pt-BR').includes(q);};
     const button=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await fn()}catch(e){status.textContent=e.message}finally{b.disabled=false}};parent.append(b);};
     for(const item of remote){
-      const row=document.createElement('div');section.append(row);
+      const row=document.createElement('div');row.style.cssText='border:1px solid #dce5e2;border-radius:12px;padding:12px;display:grid;gap:8px;overflow-wrap:anywhere';section.append(row);
       const doc=local.find(x=>x.id===item.report_id)?.document;
       const label=[doc?.meta?.title,doc?.meta?.number,...(doc?.records||[]).map(p=>p.tag),item.report_id].filter(Boolean).join(' — ');
-      row.textContent=label+' — revisão '+item.revision+' ';
+      const title=document.createElement('strong');title.textContent=[doc?.meta?.title||'Vistoria compartilhada',doc?.meta?.number,...new Set((doc?.records||[]).map(p=>p.tag).filter(Boolean))].filter(Boolean).join(' — ');row.append(title);const meta=document.createElement('small');meta.textContent='Revisão '+item.revision+' · '+item.report_id.slice(0,8);row.append(meta);
       entries.push({row,text:label});
-      button(row,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const details=document.createElement('div');for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR');details.append(p)}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
+      button(row,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR');details.append(p)}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
       button(row,'Abrir cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(row,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
     }
@@ -461,11 +461,15 @@
       localStorage.setItem(key,JSON.stringify(baseline));await showTeam();
     });
   }
+  let teamViewGeneration=0;
   async function showTeam(){
-    const box=$('gdrive-team-users'),status=$('gdrive-team-status');
-    box.replaceChildren();
+    const generation=++teamViewGeneration;
+    const target=$('gdrive-team-users'),status=$('gdrive-team-status');
+    if(!target||!status)return;
+    const box=document.createElement('div');target.replaceChildren(box);
     try{
       const {member}=await teamRequest('POST',{action:'request'});
+      if(generation!==teamViewGeneration)return;
       status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role:member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
       if(member?.status!=='approved')return;
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
