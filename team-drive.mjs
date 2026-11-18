@@ -44,7 +44,7 @@ async function readJsonFile(fileId){
 
 export async function createPrivateReport(reportId,document){
  const folder=await checkCentralDrive();
- const copy=structuredClone(document);
+ const copy=JSON.parse(JSON.stringify(document));
  const groups=[...copy.records.map(r=>r.photos),copy.pending?.photos].filter(Array.isArray);
  const refs=[];
  for(const group of groups)for(const photo of group){
