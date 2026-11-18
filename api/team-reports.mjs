@@ -12,6 +12,12 @@ export default async function handler(req,res){
  const valid=/^[a-zA-Z0-9_-]{1,100}$/.test(id);
  const base='vistoria_report_index';
  if(req.method==='GET'&&!id){
+ if(req.query?.technician!==undefined){
+ const term=String(req.query.technician||'').normalize('NFC').trim();
+ if(term.length<3||term.length>80||/[\x00-\x1f*(),]/.test(term))return reply(400,{error:'Informe ao menos 3 letras do nome cadastrado'});
+ const query='vistoria_point_audit?actor_name=ilike.'+encodeURIComponent('*'+term+'*')+'&action=eq.completed&select=report_id,point_id,tag_snapshot,work_order_snapshot,actor_name,occurred_at&order=occurred_at.desc&limit=100';
+ return reply(200,{matches:await teamDb(query)});
+ }
  const trash=req.query?.trash==='1';
  if(trash&&m.role!=='admin')return reply(403,{error:'Somente administrador pode consultar a lixeira'});
  return reply(200,{reports:await teamDb(base+'?deleted_at='+ (trash?'not.is.null':'is.null')+'&select=report_id,owner_subject,revision,updated_at,deleted_at&order=updated_at.desc')});
