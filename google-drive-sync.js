@@ -332,7 +332,7 @@
   }
   async function startConnection() {
     if (running || connecting) return;
-    if (validToken()) { enabled=true; return sync(); }
+    if (validToken()) { enabled=true; await sync(); await syncTeam(); return; }
     const clientId=$('gdrive-client-id')?.value.trim();
     if (!/^\d+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId||'')) {
       display('Informe um ID do cliente OAuth do Google válido.',true);return;
@@ -367,6 +367,8 @@
     localStorage.removeItem(CONNECTED_KEY);
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
+    googleAccount='';folderId='';photosId='';pdfsId='';syncScope='';syncMap={};photoSynced={};remoteItems=[];
+    ++teamViewGeneration;$('gdrive-team-users')?.replaceChildren();if($('gdrive-team-status'))$('gdrive-team-status').textContent='Conta desconectada';
     if(token&&window.google?.accounts?.oauth2)window.google.accounts.oauth2.revoke(token,()=>{});
     display('Desconectado. Arquivos já enviados continuam no Google Drive.');
   }
@@ -489,7 +491,7 @@
     try{
       const {member}=await teamRequest('POST',{action:'request'});
       if(generation!==teamViewGeneration)return;
-      status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role:member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
+      status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role+' — '+(member.email||'Conta Google'):member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
       if(member?.status!=='approved')return;
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
       if(member.role!=='admin')return;
@@ -513,14 +515,14 @@
     panel.style.cssText='border:1px solid #b4c5cf;max-width:100%;margin:16px 0;padding:18px;background:#fff';
     panel.innerHTML=`<h3 style="margin-top:0">Google Drive pessoal — sincronização</h3>
       <p class="muted">Vistorias, fotos e PDFs na pasta <b>Meu Drive / Vistoria Técnica</b>. As fotos ficam também dentro do backup JSON. </p>
-      <label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
-      <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com" style="width:100%;max-width:560px">
+      <details><summary>Configuração avançada</summary><label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
+      <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com" style="width:100%;max-width:560px"></details>
       <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
         <button id="gdrive-connect" type="button">Conectar Google Drive</button>
         <button id="gdrive-now" type="button" class="secondary">Sincronizar agora</button>
         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
       </div>
-      <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Informe o ID OAuth e autorize sua conta Google.</p>
+      <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Conecte sua conta Google para sincronizar.</p>
       <p class="muted">O sincronismo funciona com o aplicativo aberto, internet e a autorização Google válida. A preferência de conexão é lembrada; o Google pode exigir nova autorização ao expirar a sessão ou fechar o aplicativo. Dados locais permanecem disponíveis offline.</p>`;
     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
@@ -531,7 +533,7 @@
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
-    $('gdrive-now').addEventListener('click',()=>validToken()?sync():startConnection());
+    $('gdrive-now').addEventListener('click',async()=>{if(!validToken())return startConnection();await sync();await syncTeam();await showTeam();});
     $('gdrive-disconnect').addEventListener('click',disconnect);
     document.addEventListener('vistoria-saved',()=>{if(!running)schedule()});
     function resume(){
