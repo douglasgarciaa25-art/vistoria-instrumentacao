@@ -15,6 +15,7 @@ export default async function handler(req,res){
  const old=(await teamDb(filter))[0];
  if(req.method==='GET'){
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
+ if(req.query?.history==='1')return reply(200,{history:await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject&order=occurred_at.desc')});
  return reply(200,{document:await readPrivateReport(old.drive_file_id),revision:old.revision,owner:old.owner_subject});
  }
  if(old&&old.owner_subject!==m.google_subject&&m.role!=='admin')return reply(403,{error:'Somente o autor ou administrador pode editar'});
