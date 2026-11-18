@@ -377,9 +377,9 @@
     if(!response.ok||!data||typeof data!=='object'||data.error)throw Error(data.error||'Falha no cadastro.');
     return data;
   }
-  async function reportRequest(method='GET',id='',body=null){
+  async function reportRequest(method='GET',id='',body=null,history=false){
     assertReady();
-    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':''):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Error(d.error||'Falha na vistoria compartilhada');return d;
   }
   let teamRunning=false;
@@ -436,6 +436,7 @@
       const label=[doc?.meta?.title,doc?.meta?.number,...(doc?.records||[]).map(p=>p.tag),item.report_id].filter(Boolean).join(' — ');
       row.textContent=label+' — revisão '+item.revision+' ';
       entries.push({row,text:label});
+      button(row,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const details=document.createElement('div');for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR');details.append(p)}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
       button(row,'Abrir cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);await putReport({id:crypto.randomUUID(),updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(row,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
     }
