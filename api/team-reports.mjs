@@ -19,8 +19,8 @@ export default async function handler(req,res){
  const filter=base+'?report_id=eq.'+encodeURIComponent(id);
  const old=(await teamDb(filter))[0];
  if(req.method==='GET'){
- if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
- if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,drive_file_id&order=occurred_at.desc');return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,available:!!drive_file_id}))});}
+ if(!old||(old.deleted_at&&!(m.role==='admin'&&req.query?.history==='1')))return reply(404,{error:'Vistoria não encontrada'});
+ if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,drive_file_id&order=occurred_at.desc');const members=await teamDb('vistoria_members?select=google_subject,email');const names=new Map(members.map(v=>[v.google_subject,v.email]));return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,actor_email:names.get(event.actor_subject)||null,available:!!drive_file_id}))});}
  let fileId=old.drive_file_id;let selectedRevision=old.revision;
  if(req.query?.version){const version=String(req.query.version);if(!/^\d{1,12}$/.test(version))return reply(400,{error:'Revisão inválida'});const events=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&revision=eq.'+version+'&select=drive_file_id');const file=events.find(e=>e.drive_file_id)?.drive_file_id;if(!file)return reply(404,{error:'Conteúdo desta revisão não está indexado'});fileId=file;selectedRevision=Number(version);}
  const document=await readPrivateReport(fileId);
