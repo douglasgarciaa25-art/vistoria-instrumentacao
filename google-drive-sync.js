@@ -19,6 +19,7 @@
   let folderId = '', photosId = '', pdfsId = '', scheduled = null, authClient = null;
   let connecting = false;
   let enabled = false, lastStatus = '', hadErrors = false;
+  let sessionCheck = null;
   const PHOTOS_KEY=STORE+':photoSynced';
   let photoSynced={}, syncScope=''; // Estado de envio vinculado à pasta/conta do Drive.
   let syncMap = {}, remoteItems = [];
@@ -31,6 +32,7 @@
     document.dispatchEvent(new CustomEvent('vistoria-google-status'));
   };
   const logError = e => { console.warn('[Vistoria / Google Drive]', e); display(`Falha no Google Drive: ${e.message}`, true); hadErrors = true; };
+  const sessionMessage = message => { const target = $('gdrive-session-status'); if(target) target.textContent = message; };
   const validToken = () => Boolean(accessToken && Date.now() < expiresAt - 120000);
   function loadScope(id) {
     if (syncScope===id) return;
@@ -355,6 +357,7 @@
         syncScope='';syncMap={};photoSynced={};
         $('gdrive-disconnect').hidden=false;
         display('Conectado ao Google Drive. Preparando pasta na raiz…');
+        sessionMessage('Drive conectado nesta sessão. Para continuar conectado depois de fechar o aplicativo, toque em “Manter conta conectada” e autorize o acesso offline uma vez.');
         await sync();
         await showTeam();
         await syncTeam();
@@ -363,25 +366,67 @@
     }catch(e){connecting=false;logError(e)}
   }
   async function restoreSession(){
-    if(connecting||validToken()||localStorage.getItem(CONNECTED_KEY)!=='1')return;
-    connecting=true;
-    try{const r=await fetch('/api/personal-session',{method:'POST',cache:'no-store'});if(!r.ok)return;const t=await r.json();if(!t.access_token||localStorage.getItem(CONNECTED_KEY)!=='1')return;accessToken=t.access_token;expiresAt=Date.now()+Number(t.expires_in||3600)*1000;enabled=true;$('gdrive-disconnect').hidden=false;display('Conta conectada: '+t.email);await sync();await showTeam();await syncTeam();}catch(e){display('Sessão indisponível. Reconecte sua conta Google.');}finally{connecting=false;}
+    if(validToken()||localStorage.getItem(CONNECTED_KEY)!=='1'||connecting||!navigator.onLine)return;
+    if(sessionCheck)return sessionCheck;
+    sessionMessage('Verificando a autorização de conexão automática…');
+    sessionCheck=(async()=>{
+      try{
+        const response=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok||!result.access_token){
+          enabled=false;
+          const detail=response.status===403
+            ? 'Sua conta precisa estar aprovada para a conexão automática.'
+            : response.status===401
+              ? 'A conexão automática ainda não está autorizada ou expirou.'
+              : 'Não foi possível renovar a conexão agora.';
+          sessionMessage(detail+' Reconecte o Google Drive e toque em “Manter conta conectada”.'+(result.error?' ('+result.error+')':''));
+          display('Drive desconectado. Vistorias locais preservadas.',true);
+          return false;
+        }
+        if(localStorage.getItem(CONNECTED_KEY)!=='1')return false;
+        accessToken=result.access_token;
+        expiresAt=Date.now()+Number(result.expires_in||3600)*1000;
+        enabled=true;
+        $('gdrive-connect').textContent='Google Drive conectado';
+        $('gdrive-disconnect').hidden=false;
+        sessionMessage('Conexão automática ativa: a autorização é renovada enquanto a sessão persistente for válida (até 30 dias).');
+        display('Conta Google reconectada automaticamente: '+(result.email||'conta autorizada'));
+        await sync();
+        await showTeam();
+        await syncTeam();
+        return true;
+      }catch(e){
+        sessionMessage('Não foi possível verificar a sessão agora. O aplicativo tentará novamente quando houver conexão.');
+        display('Falha na renovação automática. Vistorias locais preservadas.',true);
+        return false;
+      }finally{sessionCheck=null;}
+    })();
+    return sessionCheck;
   }
   async function enablePersistent(){
-    try{assertReady();const r=await fetch('/api/team-drive-authorize?personal=1',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok||!d.url)throw Error(d.error||'Autorização indisponível');location.assign(d.url);}catch(e){display(e.message,true);}
+    try{
+      assertReady();
+      sessionMessage('Abrindo autorização do Google para manter a conta conectada entre acessos…');
+      const r=await fetch('/api/team-drive-authorize?personal=1',{method:'POST',cache:'no-store',credentials:'same-origin',headers:{Authorization:'Bearer '+accessToken}});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok||!d.url)throw Error(d.error||'Autorização indisponível');
+      location.assign(d.url);
+    }catch(e){display(e.message,true);sessionMessage('Falha ao ativar conexão automática: '+e.message);}
   }
   function disconnect() {
     const token=accessToken;
     queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
     localStorage.removeItem(CONNECTED_KEY);
     void window.VistoriaBackground?.clear().catch(()=>{});
-    void fetch('/api/personal-session',{method:'DELETE',cache:'no-store'}).catch(()=>{});
+    void fetch('/api/personal-session',{method:'DELETE',cache:'no-store',credentials:'same-origin'}).catch(()=>{});
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
     googleAccount='';folderId='';photosId='';pdfsId='';syncScope='';syncMap={};photoSynced={};remoteItems=[];
     ++teamViewGeneration;$('gdrive-team-users')?.replaceChildren();if($('gdrive-team-status'))$('gdrive-team-status').textContent='Conta desconectada';
     if(token&&window.google?.accounts?.oauth2)window.google.accounts.oauth2.revoke(token,()=>{});
     display('Desconectado. Arquivos já enviados continuam no Google Drive.');
+    sessionMessage('Conexão automática desativada neste aparelho.');
   }
   async function teamRequest(method='GET',body=null,list=false){
     assertReady();
@@ -596,7 +641,8 @@
         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
       </div>
       <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Conecte sua conta Google para sincronizar.</p>
-      <p class="muted">O sincronismo funciona com o aplicativo aberto, internet e a autorização Google válida. A preferência de conexão é lembrada; o Google pode exigir nova autorização ao expirar a sessão ou fechar o aplicativo. Dados locais permanecem disponíveis offline.</p>`;
+      <p id="gdrive-session-status" class="muted" role="status" aria-live="polite">Para permanecer conectado, autorize a opção “Manter conta conectada” após conectar.</p>
+      <p class="muted">O sincronismo ocorre com o aplicativo aberto e internet. A opção “Manter conta conectada” permite renovar automaticamente a autorização ao reabrir, enquanto a sessão de até 30 dias for válida. O Google pode solicitar nova autorização. Vistorias locais permanecem disponíveis offline.</p>`;
     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
     const team=document.createElement('section');
@@ -612,12 +658,16 @@
     document.addEventListener('vistoria-saved',()=>{if(!running)schedule()});
     function resume(){
       if(validToken()){enabled=true;schedule(1000);void syncTeam();return;}
+      enabled=false;
       if(localStorage.getItem(CONNECTED_KEY)==='1'){
-        void restoreSession();
-        enabled=false;
         $('gdrive-connect').textContent='Reconectar Google Drive';
         $('gdrive-disconnect').hidden=false;
-        display('Conexão lembrada. Toque em Reconectar para renovar a autorização Google. Vistorias locais preservadas.');
+        if(!navigator.onLine){
+          sessionMessage('Offline. A conta será verificada quando a internet voltar.');
+          display('Offline: vistorias locais disponíveis.');
+          return;
+        }
+        void restoreSession();
       }
     }
     addEventListener('online',resume);
