@@ -185,6 +185,7 @@
   }
   resetPanels.push(clear);
   field.addEventListener('input',()=>{
+   generation++;
    if(pending&&field.value!==pending.original){pending=null;panel.hidden=true;status.textContent='O texto mudou. Solicite outra revisão, se desejar.'}
    if(applied&&field.value!==applied.revised){applied=null;undo.hidden=true}
   });
@@ -235,6 +236,7 @@
    notify('Texto revisado aplicado. Confira dados, TAGs, medições e serviços antes de salvar.');
   });
   dismiss.addEventListener('click',()=>{
+   generation++;
    pending=null;panel.hidden=true;suggestion.value='';
    status.textContent='Texto original mantido, sem alterações.';
   });
@@ -258,6 +260,11 @@
   for(const clear of resetPanels)clear();
  });
 
+ const batch=document.createElement('button');batch.type='button';batch.className='secondary';batch.textContent='Revisar todos os textos preenchidos com IA';
+ const batchPanel=document.createElement('div');batchPanel.className='technical-review-preview';batchPanel.hidden=true;
+ batch.onclick=async()=>{const drive=window.VistoriaGoogleDrive;const snapshot=fields.map(([id,title])=>({id,title,field:document.getElementById(id)})).filter(x=>x.field?.value.trim()).map(x=>({...x,original:x.field.value}));if(!snapshot.length)return notify('Preencha os textos primeiro.');if(!navigator.onLine||!drive?.getState().enabled)return notify('Conecte o Google Drive e a internet.');if(!confirm('Enviar os textos preenchidos desta tela à IA? Confira a autorização para dados internos.'))return;batch.disabled=true;batchPanel.hidden=false;batchPanel.replaceChildren();const context=typeof activeReportId!=='undefined'?activeReportId:null;try{for(const item of snapshot){if(item.original.length>3500)continue;if((typeof activeReportId!=='undefined'?activeReportId:null)!==context||snapshot.some(x=>x.field.value!==x.original))break;const result=await drive.reviewTechnical(item.id,item.original);if((typeof activeReportId!=='undefined'?activeReportId:null)!==context||snapshot.some(x=>x.field.value!==x.original))break;const label=document.createElement('p');label.textContent=item.title;const preview=document.createElement('textarea');preview.value=String(result.suggested||'');preview.rows=4;const apply=document.createElement('button');apply.type='button';apply.textContent='Aplicar sugestão';apply.onclick=()=>{if((typeof activeReportId!=='undefined'?activeReportId:null)!==context||item.field.value!==item.original)return notify('O texto mudou. Revise novamente.');if(!preview.value.trim())return;item.field.value=preview.value.trim();item.field.dispatchEvent(new Event('input',{bubbles:true}));apply.disabled=true;};batchPanel.append(label,preview,apply);}}catch(e){notify('Revisão interrompida: '+e.message);}finally{batch.disabled=false;}};
+ resetPanels.push(()=>{batchPanel.replaceChildren();batchPanel.hidden=true;});
+ document.getElementById('analysisDraft')?.closest('label')?.parentElement?.append(batch,batchPanel);
  const note=document.createElement('p');
  note.className='muted technical-review-note';
  note.textContent='O texto é sempre escrito pela equipe. O assistente local apenas sugere ajustes de redação; não confirma execução, testes, medições ou conformidade técnica. Confira e aprove antes de registrar.';
