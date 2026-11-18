@@ -40,20 +40,17 @@ export default async function handler(req,res){
  if(req.method==='DELETE'){
  if(m.role!=='admin')return reply(403,{error:'Somente administrador pode excluir'});
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
- const rows=await teamDb(filter+'&revision=eq.'+old.revision,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:new Date().toISOString(),revision:old.revision+1})});
- if(!rows.length)return reply(409,{error:'Revisão alterada'});
- await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,actor_name:m.technician_name||null,report_id:id,action:'delete',revision:old.revision+1})});
- return reply(200,{ok:true});
+ const revision=await teamDb('rpc/vistoria_change_report_state',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_expected_revision:old.revision,p_action:'delete'})});
+ if(!Number.isSafeInteger(revision)||revision<1)return reply(409,{error:'Revisão alterada'});
+ return reply(200,{ok:true,revision});
  }
  if(req.method!=='POST')return reply(405,{error:'Método inválido'});
  if(req.body?.action==='restore'){
  if(m.role!=='admin')return reply(403,{error:'Somente administrador pode restaurar'});
  if(!old?.deleted_at)return reply(404,{error:'Vistoria não está na lixeira'});
  if(Number(req.body.revision)!==old.revision)return reply(409,{error:'Revisão alterada'});
- const revision=old.revision+1;
- const rows=await teamDb(filter+'&revision=eq.'+old.revision+'&deleted_at=not.is.null',{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({deleted_at:null,revision,updated_at:new Date().toISOString()})});
- if(!rows.length)return reply(409,{error:'Revisão alterada'});
- await teamDb('vistoria_audit',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_subject:m.google_subject,actor_name:m.technician_name||null,report_id:id,action:'restore',revision,drive_file_id:old.drive_file_id})});
+ const revision=await teamDb('rpc/vistoria_change_report_state',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_expected_revision:old.revision,p_action:'restore'})});
+ if(!Number.isSafeInteger(revision)||revision<1)return reply(409,{error:'Revisão alterada'});
  return reply(200,{revision});
  }
  let doc=req.body?.document;
