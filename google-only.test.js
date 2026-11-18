@@ -42,7 +42,7 @@ test('indicadores e revisão técnica não exigem chave da Vercel',()=>{
  assert.ok(enhancements.includes('Google Drive: conecte na aba Nuvem'));
  assert.ok(review.includes('window.VistoriaGoogleDrive'));
  assert.ok(!review.includes('cloudKey'));
- assert.ok(server.includes('VISTORIA_GOOGLE_CLIENT_ID'));
- assert.ok(server.includes('VISTORIA_GOOGLE_ALLOWED_EMAILS'));
+ assert.ok(read('team-auth.mjs').includes('VISTORIA_GOOGLE_CLIENT_ID'));
+ assert.ok(server.includes('approvedMember'));
  assert.ok(!server.includes('VISTORIA_ACCESS_HASH'));
 });
