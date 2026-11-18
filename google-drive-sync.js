@@ -449,6 +449,7 @@
       if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
         const remoteIds=new Set(remote.map(x=>x.report_id));
         for(const item of local){
+          if(queueMember?.google_subject!==member.google_subject||!validToken()||localStorage.getItem('vistoria-team-auto:'+member.google_subject)!=='1')break;
           if(remoteIds.has(item.id)||isTeamReport(item.id)||baseline[item.id]||!validate(item)||!item.document.records?.length)continue;
           if(typeof activeReportId!=='undefined'&&activeReportId===item.id)continue;
           try{
