@@ -411,6 +411,19 @@
         baseline[item.report_id]={revision:d.revision,hash:await digest(d.document)};
         localStorage.setItem(key,JSON.stringify(baseline));
       }
+      if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
+        const remoteIds=new Set(remote.map(x=>x.report_id));
+        for(const item of local){
+          if(remoteIds.has(item.id)||isTeamReport(item.id)||baseline[item.id]||!validate(item)||!item.document.records?.length)continue;
+          if(typeof activeReportId!=='undefined'&&activeReportId===item.id)continue;
+          try{
+            const d=await reportRequest('POST',item.id,{document:item.document,revision:0});
+            rememberTeamIds([{report_id:item.id}]);
+            baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
+            localStorage.setItem(key,JSON.stringify(baseline));
+          }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
+        }
+      }
       for(const item of remote){
         if(item.owner_subject!==member.google_subject&&member.role!=='admin')continue;
         const previous=baseline[item.report_id];
@@ -429,6 +442,12 @@
   async function showReports(member,box,status){
     const section=document.createElement('section');section.style.cssText='display:grid;gap:12px;margin:16px 0';box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
+    const autoKey='vistoria-team-auto:'+member.google_subject;
+    const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
+    const auto=document.createElement('input');auto.type='checkbox';auto.style.width='auto';auto.checked=localStorage.getItem(autoKey)==='1';
+    auto.onchange=()=>{if(auto.checked&&!confirm('Compartilhar automaticamente com a equipe aprovada as vistorias locais ainda não compartilhadas?')){auto.checked=false;return;}localStorage.setItem(autoKey,auto.checked?'1':'0');if(auto.checked)void syncTeam();};
+    autoLabel.append(auto,document.createTextNode('Compartilhar novas vistorias automaticamente'));section.append(autoLabel);
+
     const {reports:remote}=await reportRequest();
     rememberTeamIds(remote);
     const local=await reports();
