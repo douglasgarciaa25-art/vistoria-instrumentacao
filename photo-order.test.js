@@ -8,7 +8,7 @@ test('reordena fotos com legenda, marcação e original preservados',()=>{
   {src:'data:image/jpeg;base64,BB==',caption:'Depois',originalSrc:'foto-original-2'},
   {src:'data:image/jpeg;base64,CC==',caption:'Detalhe'}
  ];
- const snapshots=structuredClone(photos);
+ const snapshots=structuredClone(photos),references=[...photos];
  let listener,saveCount=0,callCount=0;const buttons=[];
  const host={
   querySelectorAll:()=>photos.map((photo,i)=>({after:(...b)=>buttons.push(...b)})),
@@ -25,8 +25,8 @@ test('reordena fotos com legenda, marcação e original preservados',()=>{
  assert.equal(buttons[0].disabled,true);
  assert.equal(buttons[5].disabled,true);
  listener({target:{dataset:{photoIndex:'1',photoMove:'-1'}}});
- assert.equal(photos[0],snapshots[1]);
- assert.equal(photos[1],snapshots[0]);
+ assert.equal(photos[0],references[1]);
+ assert.equal(photos[1],references[0]);
  assert.deepEqual(photos[0],snapshots[1]);
  assert.deepEqual(photos[1],snapshots[0]);
  assert.deepEqual(photos[2],snapshots[2]);
