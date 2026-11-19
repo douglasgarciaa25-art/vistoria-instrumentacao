@@ -12,7 +12,7 @@ function setup({supported=true,permission=true}={}){
    matches:selector=>guide&&selector==='textarea[data-guide-part]',
    closest:selector=>selector==='label'?{firstChild:{textContent:'Relato técnico'}}:null,
    getAttribute:()=>null,after(node){this.toolbar=node;},
-   dispatchEvent:event=>calls.inputs.push({id,type:event.type,value:this.value}),
+   dispatchEvent(event){calls.inputs.push({id,type:event.type,value:this.value});},
    focus:()=>{calls.focuses++}
   };
   fields.push(field);return field;
