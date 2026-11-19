@@ -688,13 +688,13 @@
     try{
       const {member}=await teamRequest('POST',{action:'request'});
       if(generation!==teamViewGeneration)return;
-      status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role+' — '+(member.technician_name||'Nome não registrado')+' — '+(member.email||'Conta Google'):member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
+      status.textContent=member?.status==='approved'?'Equipe conectada · '+(member.technician_name||member.email||'Conta Google aprovada'):member?.status==='blocked'?'Acesso à equipe bloqueado.':'Solicitação enviada. Aguarde aprovação.';
       if(member?.status!=='approved')return;
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
       if(member.role!=='admin')return;
-      const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
+      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
       authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
-      box.append(authorize);
+      adminPanel.append(authorize);
       const {members}=await teamRequest('GET',null,true);
       for(const m of members){
         const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' — '+(m.technician_name||'Nome não registrado')+' ';
@@ -702,7 +702,7 @@
         if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']]){
           const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);
         }
-        box.append(row);
+        row.className='cloud-member-row';adminPanel.append(row);
       }
     }catch(e){status.textContent=e.message;}
   }
@@ -710,24 +710,35 @@
     if (!document.body || $('gdrive-panel')) return;
     const panel=document.createElement('section');
     panel.id='gdrive-panel';panel.className='card';
-    panel.style.cssText='border:1px solid #b4c5cf;max-width:100%;margin:16px 0;padding:18px;background:#fff';
-    panel.innerHTML=`<h3 style="margin-top:0">Google Drive pessoal — sincronização</h3>
-      <p class="muted">Vistorias, fotos e PDFs na pasta <b>Meu Drive / Vistoria Técnica</b>. As fotos ficam também dentro do backup JSON. </p>
-      <details><summary>Configuração avançada</summary><label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
-      <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com" style="width:100%;max-width:560px"></details>
-      <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
-        <button id="gdrive-connect" type="button">Conectar Google Drive</button>
-        <button id="gdrive-persistent" type="button" class="secondary">Manter conta conectada</button>
-        <button id="gdrive-now" type="button" class="secondary">Sincronizar agora</button>
-        <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
-      </div>
-      <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Conecte sua conta Google para sincronizar.</p>
-      <p id="gdrive-session-status" class="muted" role="status" aria-live="polite">Para permanecer conectado, autorize a opção “Manter conta conectada” após conectar.</p>
-      <p class="muted">O sincronismo ocorre com o aplicativo aberto e internet. A opção “Manter conta conectada” permite renovar automaticamente a autorização ao reabrir, enquanto a sessão de até 30 dias for válida. O Google pode solicitar nova autorização. Vistorias locais permanecem disponíveis offline.</p>`;
-    const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
+    panel.className='card cloud-dashboard';
+     panel.innerHTML=`<div class="cloud-intro">
+         <div class="cloud-mark" aria-hidden="true">☁</div>
+         <div><span class="cloud-overline">ARMAZENAMENTO E SINCRONIZAÇÃO</span>
+           <h3>Seu Google Drive</h3>
+           <p>Relatórios e fotos organizados em um só lugar.</p>
+         </div>
+       </div>
+       <div class="cloud-primary-actions">
+         <button id="gdrive-connect" type="button">Conectar Google</button>
+         <button id="gdrive-now" type="button" class="secondary">Sincronizar agora</button>
+         <button id="gdrive-persistent" type="button" class="secondary">Manter conectado</button>
+       </div>
+       <p id="gdrive-status" class="cloud-connection-status" role="status" aria-live="polite">Desconectado. Conecte sua conta Google para sincronizar.</p>
+       <details class="cloud-disclosure cloud-account-settings">
+         <summary>Detalhes e configurações da conexão</summary>
+         <p id="gdrive-session-status" class="muted" role="status" aria-live="polite">Para permanecer conectado, autorize “Manter conectado” uma vez.</p>
+         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar conta</button>
+         <details class="cloud-disclosure cloud-oauth-settings"><summary>Configuração avançada do Google</summary>
+           <label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
+           <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com">
+         </details>
+         <p class="muted">Os relatórios locais permanecem disponíveis offline. O Google pode solicitar nova autorização quando necessário.</p>
+       </details>`;
+     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
     const team=document.createElement('section');
-    team.innerHTML='<h3>Gerenciamento de usuários</h3><button type="button" id="gdrive-team-refresh">Solicitar acesso / Atualizar usuários</button><p id="gdrive-team-status" role="status"></p><div id="gdrive-queue" role="status" aria-live="polite"></div><div id="gdrive-team-users"></div>';
+    team.className='cloud-team-panel';
+     team.innerHTML='<div class="cloud-section-head"><div><span class="cloud-overline">TRABALHO COMPARTILHADO</span><h3>Minha equipe</h3><p>Compartilhe e acompanhe vistorias com segurança.</p></div><button type="button" class="secondary" id="gdrive-team-refresh">Atualizar</button></div><p id="gdrive-team-status" class="cloud-team-status" role="status" aria-live="polite"></p><details class="cloud-disclosure cloud-local-queue"><summary>Alterações locais aguardando sincronização</summary><div id="gdrive-queue" role="status" aria-live="polite"></div></details><div id="gdrive-team-users"></div>';
     panel.append(team);
     $('gdrive-team-refresh').onclick=showTeam;
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
