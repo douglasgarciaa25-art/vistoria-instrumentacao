@@ -34,7 +34,7 @@ test('Configurações e administração estão disponíveis em painéis recolhí
  assert.match(cloud,/if\(member\.role==='admin'\)/);
  assert.match(cloud,/className='cloud-report-card'/);
  assert.match(cloud,/className='cloud-team-reports'/);
- assert.match(cloud,/const filter=()=>/);
+ assert.match(cloud,/const filter=\(\)=>/);
  assert.match(cloud,/const queueDetails=document\.createElement\('details'\)/);
 });
 
