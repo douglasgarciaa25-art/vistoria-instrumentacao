@@ -1,0 +1,86 @@
+/* Nuvem — interface enxuta e legível, sem esconder funcionalidades ou dados. */
+#view-cloud{max-width:940px;margin-inline:auto}
+#view-cloud>.view-heading{margin:4px 0 18px}
+#view-cloud>.view-heading h2{font-size:clamp(25px,3.3vw,32px)}
+#view-cloud>.view-heading p:not(.eyebrow){max-width:640px}
+#gdrive-panel.cloud-dashboard{padding:0;overflow:hidden;background:#fff;border:1px solid #e6e2ee;border-radius:20px;box-shadow:0 12px 32px #24133e0a;margin:8px 0 24px}
+.cloud-dashboard .cloud-intro{padding:27px 30px 24px;background:linear-gradient(114deg,#f4effa 0%,#fdfcff 72%);display:flex;gap:19px;align-items:center;border-bottom:1px solid #eee9f5}
+.cloud-dashboard .cloud-mark{display:flex;align-items:center;justify-content:center;width:64px;height:64px;flex:0 0 64px;background:#351463;color:white;border-radius:19px;font-size:35px;line-height:1;box-shadow:0 6px 16px #35146324}
+.cloud-dashboard .cloud-overline{display:block;font-size:10px;letter-spacing:1.5px;font-weight:750;color:#775a95;margin-bottom:8px}
+.cloud-dashboard h3{font-size:20px;letter-spacing:-.45px;line-height:1.2;color:#27143d;margin:0 0 8px}
+.cloud-dashboard .cloud-intro p,.cloud-dashboard .cloud-section-head p{color:#70677f;font-size:13px;line-height:1.55;margin:0}
+.cloud-primary-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:24px 30px 12px}
+.cloud-primary-actions button{font-size:13px;min-height:48px;padding:10px 12px;white-space:normal}
+.cloud-primary-actions #gdrive-connect{background:#351463;color:white}
+.cloud-primary-actions #gdrive-now{background:#e9f0e1;color:#345a29}
+.cloud-primary-actions #gdrive-persistent{background:#f2eef8;color:#4e3468}
+.cloud-primary-actions button[hidden]{display:none}
+.cloud-connection-status{display:flex;align-items:flex-start;gap:9px;margin:3px 30px 22px!important;padding:13px 15px;background:#f5f8f1;border:1px solid #e0e9d7;border-radius:12px;color:#395a35;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.cloud-connection-status::before{content:"";width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:#8ba86a;margin-top:5px}
+.cloud-dashboard .cloud-disclosure{border:1px solid #e8e3ef;border-radius:12px;background:#fff;margin:10px 0;overflow:hidden}
+.cloud-dashboard .cloud-disclosure>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 15px;cursor:pointer;list-style:none;font-size:12px;line-height:1.5;color:#51436a;font-weight:700;min-height:46px}
+.cloud-dashboard .cloud-disclosure>summary::-webkit-details-marker{display:none}
+.cloud-dashboard .cloud-disclosure>summary::after{content:"+";font-size:21px;font-weight:450;color:#82699d;line-height:1}
+.cloud-dashboard .cloud-disclosure[open]>summary::after{content:"−"}
+.cloud-dashboard .cloud-disclosure[open]>summary{border-bottom:1px solid #f0ebf5;background:#fbf9fd}
+.cloud-dashboard .cloud-disclosure>p,.cloud-dashboard .cloud-disclosure>label,.cloud-dashboard .cloud-disclosure>input,.cloud-dashboard .cloud-disclosure>select,.cloud-dashboard .cloud-disclosure>button,.cloud-dashboard .cloud-disclosure>div:not(.cloud-filter-grid){margin:12px 15px}
+.cloud-dashboard .cloud-disclosure>button{max-width:calc(100% - 30px)}
+.cloud-dashboard .cloud-disclosure input:not([type=checkbox]),.cloud-dashboard .cloud-disclosure select{width:calc(100% - 30px);max-width:100%;min-height:44px}
+.cloud-dashboard .cloud-disclosure>label{display:block}
+.cloud-account-settings{margin:0 30px 26px!important}
+.cloud-account-settings p{font-size:12px;line-height:1.7}
+.cloud-oauth-settings{margin:12px 14px!important}
+.cloud-oauth-settings input{font-size:14px}
+.cloud-dashboard .cloud-team-panel{border-top:1px solid #e9e6f0;padding:27px 30px 30px}
+.cloud-section-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:12px}
+.cloud-section-head h3{margin-bottom:6px}
+.cloud-section-head button{min-height:39px;font-size:12px}
+.cloud-team-status{display:inline-block;max-width:100%;overflow-wrap:anywhere;border-radius:100px;background:#f0f5e8;color:#4d673c;padding:9px 13px;font-size:12px;line-height:1.5;margin:8px 0}
+.cloud-team-status:empty{display:none}
+.cloud-local-queue{margin:15px 0!important}
+.cloud-team-reports{display:grid;gap:11px;margin-top:20px}
+.cloud-team-reports>h4{font-size:17px;line-height:1.3;color:#302044;margin:2px 0 0;letter-spacing:-.2px}
+.cloud-subtitle{font-size:12px;color:#746b7f;line-height:1.6;margin:0 0 2px}
+.cloud-search-label{font-size:12px;font-weight:700;color:#4d4260;margin:5px 0 0;display:block}
+.cloud-search-label input{display:block;width:100%;min-height:48px;font-size:16px;margin:7px 0 0;background:#fcfbfe}
+.cloud-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:12px 15px}
+.cloud-filter-grid select{width:100%!important;min-width:0;font-size:13px}
+.cloud-result-count{font-size:12px;color:#766b83;font-weight:650;padding:4px 2px 0}
+.cloud-report-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.cloud-report-card{background:#fefeff;border:1px solid #e9e4ef;border-radius:15px;padding:17px;display:flex;flex-direction:column;gap:8px;min-width:0;overflow-wrap:anywhere;box-shadow:0 3px 12px #23103905;transition:border-color .18s,box-shadow .18s}
+.cloud-report-card:focus-within{border-color:#b8a4d1;box-shadow:0 4px 18px #3514630d}
+.cloud-report-title{font-size:14px;color:#302044;line-height:1.5;overflow-wrap:anywhere}
+.cloud-report-meta{font-size:11px;color:#82768e;line-height:1.55;overflow-wrap:anywhere;margin-bottom:4px}
+.cloud-report-card>.cloud-report-action{margin-top:auto;background:#ece6f6;color:#3d245d;font-size:12px;min-height:42px;width:100%;font-weight:700}
+.cloud-report-menu{margin-top:2px;border-top:1px solid #eeeaf3;padding-top:4px}
+.cloud-report-menu>summary{cursor:pointer;list-style:none;color:#665576;padding:10px 2px;font-size:12px;font-weight:700;line-height:1.5}
+.cloud-report-menu>summary::-webkit-details-marker{display:none}
+.cloud-report-menu>summary::after{content:"⌄";float:right;font-size:18px;line-height:.9}
+.cloud-report-menu[open]>summary::after{content:"⌃"}
+.cloud-report-menu>button,.cloud-report-menu .cloud-report-action{width:100%;margin:5px 0;min-height:40px;font-size:12px;white-space:normal}
+.cloud-report-menu>div{font-size:12px;color:#625770;line-height:1.6;overflow-wrap:anywhere}
+.cloud-member-row{padding:13px 0;border-top:1px solid #eee9f3;overflow-wrap:anywhere;font-size:12px;color:#5c5366}
+.cloud-member-row button{margin:8px 6px 3px 0;font-size:12px;min-height:39px}
+.cloud-dashboard .cloud-admin-panel{margin-top:20px}
+.cloud-dashboard button:focus-visible,.cloud-dashboard summary:focus-visible,.cloud-dashboard input:focus-visible,.cloud-dashboard select:focus-visible{outline:3px solid #92b766;outline-offset:3px}
+@media(max-width:760px){
+ #view-cloud{max-width:100%}
+ #gdrive-panel.cloud-dashboard{border-radius:17px}
+ .cloud-dashboard .cloud-intro{padding:22px 18px;gap:13px}
+ .cloud-dashboard .cloud-mark{width:48px;height:48px;flex-basis:48px;font-size:29px;border-radius:14px}
+ .cloud-dashboard .cloud-overline{font-size:9px;letter-spacing:1.1px}
+ .cloud-dashboard h3{font-size:18px}
+ .cloud-dashboard .cloud-intro p{font-size:12px}
+ .cloud-primary-actions{grid-template-columns:1fr 1fr;padding:19px 17px 11px;gap:8px}
+ .cloud-primary-actions button{min-height:46px;font-size:11px;padding:10px 8px}
+ .cloud-primary-actions #gdrive-persistent{grid-column:1/-1}
+ .cloud-connection-status{margin:2px 17px 16px!important}
+ .cloud-account-settings{margin:0 17px 19px!important}
+ .cloud-dashboard .cloud-team-panel{padding:22px 17px}
+ .cloud-section-head h3{font-size:18px}
+ .cloud-section-head button{min-width:85px}
+ .cloud-report-list{grid-template-columns:1fr}
+ .cloud-filter-grid{grid-template-columns:1fr}
+ .cloud-report-card{padding:16px}
+}
+@media(prefers-reduced-motion:reduce){.cloud-report-card{transition:none}}
