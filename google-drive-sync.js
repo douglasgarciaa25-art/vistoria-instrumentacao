@@ -547,27 +547,27 @@
     const bytes=await pdf.save();download(new Blob([bytes],{type:'application/pdf'}),'Comprovante-baixas-'+reportId.slice(0,45)+'.pdf');
   }
   async function showReports(member,box,status){
-    const section=document.createElement('section');section.style.cssText='display:grid;gap:12px;margin:16px 0';box.append(section);
-    const heading=document.createElement('h4');heading.textContent='Vistorias da equipe';section.append(heading);
+    const section=document.createElement('section');section.className='cloud-team-reports';box.append(section);
+    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='Encontre vistorias da equipe sem perder tempo.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
     const autoKey='vistoria-team-auto:'+member.google_subject;
     const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
     const auto=document.createElement('input');auto.type='checkbox';auto.style.width='auto';auto.checked=localStorage.getItem(autoKey)==='1';
     auto.onchange=()=>{if(auto.checked&&!confirm('Compartilhar automaticamente com a equipe aprovada as vistorias locais ainda não compartilhadas?')){auto.checked=false;return;}localStorage.setItem(autoKey,auto.checked?'1':'0');if(auto.checked)void syncTeam();};
-    autoLabel.append(auto,document.createTextNode('Compartilhar novas vistorias automaticamente'));section.append(autoLabel);
+    autoLabel.append(auto,document.createTextNode('Compartilhar novas vistorias automaticamente'));queueDetails.append(autoLabel);
 
-    const queuePanel=document.createElement('div');queuePanel.setAttribute('role','status');section.append(queuePanel);
+    const queuePanel=document.createElement('div');queuePanel.setAttribute('role','status');queueDetails.append(queuePanel);
     const refreshBackground=async()=>{if(!window.VistoriaBackground)return;const jobs=(await window.VistoriaBackground.list()).filter(j=>j.subject===member.google_subject);queuePanel.replaceChildren();for(const job of jobs){const line=document.createElement('p');line.textContent='Vistoria '+job.id.slice(0,8)+' — '+(job.state==='sent'?'Enviada':job.state==='conflict'?'Conflito: revisar antes de reenviar':'Pendente'+(job.total?' ('+(job.progress||0)+'/'+job.total+' partes)':''));queuePanel.append(line);if(job.state==='pending'){const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar envio pendente';cancel.onclick=async()=>{try{if(!confirm('Cancelar somente o envio? O relatório local será preservado. Um envio já iniciado pode ter sido concluído.'))return;const current=await teamRequest();if(current.member?.google_subject!==job.subject)throw Error('Conta alterada');const removed=await window.VistoriaBackground.cancel(job);status.textContent=removed?'Envio retirado da fila. Confira a revisão remota se já estava em andamento.':'Fila alterada; atualize a situação.';await refreshBackground();}catch(e){status.textContent=e.message;}};queuePanel.append(cancel);}}};
     await refreshBackground();
-    const refreshButton=document.createElement('button');refreshButton.type='button';refreshButton.textContent='Atualizar situação dos envios';refreshButton.onclick=()=>refreshBackground().catch(e=>{status.textContent=e.message});section.append(refreshButton);
+    const refreshButton=document.createElement('button');refreshButton.type='button';refreshButton.textContent='Atualizar situação dos envios';refreshButton.onclick=()=>refreshBackground().catch(e=>{status.textContent=e.message});queueDetails.append(refreshButton);
     const {reports:remote}=await reportRequest();
     rememberTeamIds(remote);
     const local=await reports();
-    const search=document.createElement('input');search.type='search';search.placeholder='Buscar TAG, OS ou título';search.setAttribute('aria-label','Buscar vistoria compartilhada');section.append(search);
+    const searchLabel=document.createElement('label');searchLabel.className='cloud-search-label';searchLabel.textContent='Buscar vistoria';section.append(searchLabel);const search=document.createElement('input');search.type='search';search.placeholder='Pesquisar TAG, OS, título ou referência';search.setAttribute('aria-label','Buscar vistoria compartilhada');searchLabel.append(search);
 
     // Consulta autenticada, sob demanda, também nos relatórios que só existem no Drive central.
     const osPanel=document.createElement('details');const osTitle=document.createElement('summary');
     osTitle.textContent='Pesquisar OS em todas as vistorias da equipe (incluindo as não salvas neste aparelho)';
-    osPanel.append(osTitle);section.append(osPanel);
+    osPanel.append(osTitle);osPanel.className='cloud-disclosure';section.append(osPanel);
     const osInput=document.createElement('input');osInput.type='search';osInput.placeholder='Ex.: 00010505291';
     osInput.setAttribute('aria-label','Número da OS na nuvem');osPanel.append(osInput);
     const osMode=document.createElement('select');osMode.setAttribute('aria-label','Tipo da pesquisa por OS');
@@ -622,22 +622,22 @@
     osStart.onclick=()=>searchRemoteOs(true);
     osMore.onclick=()=>searchRemoteOs(false);
 
-     let verifiedReports=null;
-     const tech=document.createElement('input');tech.type='search';tech.placeholder='Pesquisar baixas pelo nome cadastrado do técnico';tech.setAttribute('aria-label','Pesquisar técnico autenticado');section.append(tech);
-     const verifyButton=document.createElement('button');verifyButton.type='button';verifyButton.textContent='Pesquisar baixa autenticada';section.append(verifyButton);
-     const clearTech=document.createElement('button');clearTech.type='button';clearTech.className='secondary';clearTech.textContent='Limpar filtro do técnico';section.append(clearTech);
-     const techResults=document.createElement('div');techResults.setAttribute('aria-live','polite');section.append(techResults);
+     const techDetails=document.createElement('details');techDetails.className='cloud-disclosure';const techTitle=document.createElement('summary');techTitle.textContent='Pesquisar por técnico que finalizou';techDetails.append(techTitle);section.append(techDetails);let verifiedReports=null;
+     const tech=document.createElement('input');tech.type='search';tech.placeholder='Pesquisar baixas pelo nome cadastrado do técnico';tech.setAttribute('aria-label','Pesquisar técnico autenticado');techDetails.append(tech);
+     const verifyButton=document.createElement('button');verifyButton.type='button';verifyButton.textContent='Pesquisar baixa autenticada';techDetails.append(verifyButton);
+     const clearTech=document.createElement('button');clearTech.type='button';clearTech.className='secondary';clearTech.textContent='Limpar filtro do técnico';techDetails.append(clearTech);
+     const techResults=document.createElement('div');techResults.setAttribute('aria-live','polite');techDetails.append(techResults);
      verifyButton.onclick=async()=>{if(tech.value.trim().length<3){techResults.textContent='Informe pelo menos três letras.';return;}verifyButton.disabled=true;try{const r=await fetch('/api/team-reports?technician='+encodeURIComponent(tech.value.trim()),{headers:{Authorization:'Bearer '+accessToken},cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Falha na consulta');verifiedReports=new Set(d.matches.map(x=>x.report_id));techResults.replaceChildren();for(const match of d.matches){const p=document.createElement('p');p.textContent=(match.actor_name||'Não registrado')+' — '+(match.tag_snapshot||'TAG não informada')+' — OS '+(match.work_order_snapshot||'Não informada')+' — '+new Date(match.occurred_at).toLocaleString('pt-BR');techResults.append(p);}if(!d.matches.length)techResults.textContent='Nenhuma baixa autenticada encontrada.';filter();}catch(e){techResults.textContent=e.message;}finally{verifyButton.disabled=false}};
      clearTech.onclick=()=>{verifiedReports=null;tech.value='';techResults.replaceChildren();filter()};
-    const controls=document.createElement('div');controls.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px';section.append(controls);const makeFilter=(label,opts)=>{const el=document.createElement('select');el.setAttribute('aria-label',label);for(const [value,text] of opts){const o=document.createElement('option');o.value=value;o.textContent=text;el.append(o)}controls.append(el);return el;};const ownership=makeFilter('Responsável',[['all','Todas'],['mine','Minhas'],['team','Da equipe']]);const area=makeFilter('Área',[['','Todas as áreas'],...[...new Set(local.flatMap(x=>(x.document?.records||[]).map(p=>p.area).filter(Boolean)))].sort().map(a=>[a,a])]);const sort=makeFilter('Ordenação',[['recent','Mais recentes'],['old','Mais antigas'],['tag','TAG A–Z']]);const count=document.createElement('small');count.setAttribute('aria-live','polite');section.append(count);const entries=[];const filter=()=>{const q=search.value.trim().toLocaleLowerCase('pt-BR');let visible=0;for(const e of entries){const match=(!verifiedReports||verifiedReports.has(e.row.dataset.reportId))&&e.text.toLocaleLowerCase('pt-BR').includes(q)&&(ownership.value==='all'||ownership.value===(e.mine?'mine':'team'))&&(!area.value||e.areas.includes(area.value));e.row.style.display=match?'grid':'none';if(match)visible++;}const ordered=[...entries].sort((a,b)=>sort.value==='tag'?a.tag.localeCompare(b.tag,'pt-BR'):sort.value==='old'?a.date-b.date:b.date-a.date);for(const e of ordered)list.append(e.row);count.textContent=visible+' de '+remote.length+' vistorias'+(visible===0?' — nenhuma encontrada':'');};search.oninput=filter;ownership.onchange=area.onchange=sort.onchange=filter;const list=document.createElement('div');list.style.cssText='display:grid;gap:8px';section.append(list);
+    const filterDetails=document.createElement('details');filterDetails.className='cloud-disclosure';const filterTitle=document.createElement('summary');filterTitle.textContent='Filtros e ordenação';filterDetails.append(filterTitle);section.append(filterDetails);const controls=document.createElement('div');controls.className='cloud-filter-grid';filterDetails.append(controls);const makeFilter=(label,opts)=>{const el=document.createElement('select');el.setAttribute('aria-label',label);for(const [value,text] of opts){const o=document.createElement('option');o.value=value;o.textContent=text;el.append(o)}controls.append(el);return el;};const ownership=makeFilter('Responsável',[['all','Todas'],['mine','Minhas'],['team','Da equipe']]);const area=makeFilter('Área',[['','Todas as áreas'],...[...new Set(local.flatMap(x=>(x.document?.records||[]).map(p=>p.area).filter(Boolean)))].sort().map(a=>[a,a])]);const sort=makeFilter('Ordenação',[['recent','Mais recentes'],['old','Mais antigas'],['tag','TAG A–Z']]);const count=document.createElement('small');count.className='cloud-result-count';count.setAttribute('aria-live','polite');section.append(count);const entries=[];const filter=()=>{const q=search.value.trim().toLocaleLowerCase('pt-BR');let visible=0;for(const e of entries){const match=(!verifiedReports||verifiedReports.has(e.row.dataset.reportId))&&e.text.toLocaleLowerCase('pt-BR').includes(q)&&(ownership.value==='all'||ownership.value===(e.mine?'mine':'team'))&&(!area.value||e.areas.includes(area.value));e.row.style.display=match?'grid':'none';if(match)visible++;}const ordered=[...entries].sort((a,b)=>sort.value==='tag'?a.tag.localeCompare(b.tag,'pt-BR'):sort.value==='old'?a.date-b.date:b.date-a.date);for(const e of ordered)list.append(e.row);count.textContent=visible+' de '+remote.length+' vistorias'+(visible===0?' — nenhuma encontrada':'');};search.oninput=filter;ownership.onchange=area.onchange=sort.onchange=filter;const list=document.createElement('div');list.className='cloud-report-list';section.append(list);
     const button=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await fn()}catch(e){status.textContent=e.message}finally{b.disabled=false}};parent.append(b);};
     for(const item of remote){
-      const row=document.createElement('div');row.dataset.reportId=item.report_id;row.style.cssText='border:1px solid #dce5e2;border-radius:12px;padding:12px;display:grid;gap:6px;overflow-wrap:anywhere';list.append(row);
+      const row=document.createElement('article');row.className='cloud-report-card';row.dataset.reportId=item.report_id;list.append(row);
       const doc=local.find(x=>x.id===item.report_id)?.document;
       const label=[doc?.meta?.title,doc?.meta?.number,...(doc?.records||[]).map(p=>p.tag),item.report_id].filter(Boolean).join(' — ');
-      const title=document.createElement('strong');const tags=[...new Set((doc?.records||[]).map(p=>p.tag).filter(Boolean))];title.textContent=tags.join(' · ')||doc?.meta?.title||'Vistoria compartilhada';row.append(title);const meta=document.createElement('small');meta.textContent=[doc?.meta?.number||item.report_id.slice(0,8),'Rev. '+item.revision,item.updated_at?new Date(item.updated_at).toLocaleString('pt-BR'):'',item.owner_subject===member.google_subject?'Minha vistoria':'Equipe'].filter(Boolean).join(' · ');row.append(meta);
+      const title=document.createElement('strong');title.className='cloud-report-title';const tags=[...new Set((doc?.records||[]).map(p=>p.tag).filter(Boolean))];title.textContent=tags.join(' · ')||doc?.meta?.title||'Vistoria compartilhada';row.append(title);const meta=document.createElement('small');meta.className='cloud-report-meta';meta.textContent=[doc?.meta?.number||item.report_id.slice(0,8),'Rev. '+item.revision,item.updated_at?new Date(item.updated_at).toLocaleString('pt-BR'):'',item.owner_subject===member.google_subject?'Minha vistoria':'Equipe'].filter(Boolean).join(' · ');row.append(meta);
       entries.push({row,mine:item.owner_subject===member.google_subject,areas:(doc?.records||[]).map(p=>p.area),date:Date.parse(item.updated_at)||0,tag:title.textContent,text:label+' '+JSON.stringify(doc?.meta||{})+' '+(doc?.records||[]).map(p=>[p.pointWorkOrder,p.tag,p.area,p.os,p.order].filter(Boolean).join(' ')).join(' ')});
-      const menu=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Mais ações';summary.style.cssText='cursor:pointer;font-weight:600;padding:8px 0';menu.append(summary);row.append(menu);
+      const menu=document.createElement('details');menu.className='cloud-report-menu';const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
       button(menu,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico cadastrado: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);if(event.available)button(details,'Copiar revisão '+event.revision,async()=>{const d=await reportRequest('GET',item.report_id,null,false,false,event.revision);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:structuredClone(d.document)});status.textContent='Revisão recuperada como cópia local, sem substituir o original.';});}for(const event of d.pointHistory||[]){const p=document.createElement('p');const action={created:'Inclusão',edited:'Edição',completed:'Finalização',reopened:'Reabertura',deleted:'Exclusão',restored:'Restauração'}[event.action]||event.action;p.textContent='Equipamento '+(event.tag_snapshot||event.point_id)+' — OS '+(event.work_order_snapshot||'Não informada')+' — '+action+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);}if((d.pointHistory||[]).some(e=>e.action==='completed'))button(details,'Baixar PDF de baixas autenticadas',()=>downloadVerifiedClosures(item.report_id,d.pointHistory));if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
       if(item.owner_subject===member.google_subject)button(menu,'Enviar revisão em segundo plano',async()=>{
         if(!window.VistoriaBackground||!navigator.serviceWorker)throw Error('Segundo plano indisponível neste navegador.');
@@ -655,17 +655,17 @@
       });
       button(row,'Criar cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(menu,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
-      for(const b of row.querySelectorAll('button')){b.style.cssText='min-height:40px;padding:8px 12px;margin:4px 0;font-size:14px;width:100%';if(b.textContent==='Excluir da equipe'){b.className='danger';b.style.background='#fff0f0';b.style.color='#a12626';}}
+      for(const b of row.querySelectorAll('button')){b.classList.add('cloud-report-action');if(b.textContent==='Excluir da equipe')b.classList.add('danger');}
     }
     filter();
     if(member.role==='admin'){
-      const trash=document.createElement('details');const heading=document.createElement('summary');heading.textContent='Lixeira da equipe';trash.append(heading);section.append(trash);
+      const trash=document.createElement('details');trash.className='cloud-disclosure';const heading=document.createElement('summary');heading.textContent='Lixeira da equipe';trash.append(heading);section.append(trash);
       const content=document.createElement('div');trash.append(content);
       trash.addEventListener('toggle',async()=>{if(!trash.open)return;content.textContent='Carregando…';try{const d=await reportRequest('GET','',null,false,true);content.replaceChildren();if(!d.reports.length)content.textContent='Nenhuma vistoria excluída.';for(const item of d.reports){const row=document.createElement('div');const label=document.createElement('p');label.textContent=item.report_id+' · Excluída em '+new Date(item.deleted_at).toLocaleString('pt-BR');row.append(label);content.append(row);button(row,'Consultar auditoria',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const previous=row.querySelector('[data-trash-audit]');if(previous){previous.remove();return;}const details=document.createElement('div');details.dataset.trashAudit='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent=({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico: '+(event.actor_name||'Não registrado')+' — '+(event.actor_email||'Conta não registrada');details.append(p);}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details);});button(row,'Restaurar vistoria',async()=>{if(!confirm('Restaurar esta vistoria para a equipe?'))return;await reportRequest('POST',item.report_id,{action:'restore',revision:item.revision});await syncTeam();await showTeam();});}}catch(e){content.textContent=e.message;}});
     }
-    const select=document.createElement('select');section.append(select);
+    const sharePanel=document.createElement('details');sharePanel.className='cloud-disclosure';const shareTitle=document.createElement('summary');shareTitle.textContent='Compartilhar vistoria deste aparelho';sharePanel.append(shareTitle);section.append(sharePanel);const select=document.createElement('select');select.setAttribute('aria-label','Vistoria local para compartilhar');sharePanel.append(select);
     for(const item of local){const option=document.createElement('option');option.value=item.id;const meta=item.document?.meta||{};const tags=[...new Set((item.document?.records||[]).map(p=>p.tag).filter(Boolean))];const date=new Date(item.updated);option.textContent=[meta.title||'Vistoria',tags.slice(0,3).join(', '),Number.isNaN(date.getTime())?'':date.toLocaleString('pt-BR'),String(item.id).slice(0,8)].filter(Boolean).join(' — ');select.append(option)}
-    button(section,'Compartilhar vistoria local selecionada',async()=>{
+    button(sharePanel,'Compartilhar vistoria local selecionada',async()=>{
       const item=(await reports()).find(x=>x.id===select.value);if(!item)throw Error('Selecione uma vistoria');
       const existing=remote.find(x=>x.report_id===item.id);
       if(existing&&existing.owner_subject!==member.google_subject&&member.role!=='admin')throw Error('Sem permissão para editar');
@@ -688,13 +688,13 @@
     try{
       const {member}=await teamRequest('POST',{action:'request'});
       if(generation!==teamViewGeneration)return;
-      status.textContent=member?.status==='approved'?'Acesso aprovado — '+member.role+' — '+(member.technician_name||'Nome não registrado')+' — '+(member.email||'Conta Google'):member?.status==='blocked'?'Acesso bloqueado.':'Solicitação enviada. Aguarde aprovação.';
+      status.textContent=member?.status==='approved'?'Equipe conectada · '+(member.technician_name||member.email||'Conta Google aprovada'):member?.status==='blocked'?'Acesso à equipe bloqueado.':'Solicitação enviada. Aguarde aprovação.';
       if(member?.status!=='approved')return;
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
       if(member.role!=='admin')return;
-      const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
+      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
       authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
-      box.append(authorize);
+      adminPanel.append(authorize);
       const {members}=await teamRequest('GET',null,true);
       for(const m of members){
         const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' — '+(m.technician_name||'Nome não registrado')+' ';
@@ -702,7 +702,7 @@
         if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']]){
           const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);
         }
-        box.append(row);
+        row.className='cloud-member-row';adminPanel.append(row);
       }
     }catch(e){status.textContent=e.message;}
   }
@@ -710,24 +710,35 @@
     if (!document.body || $('gdrive-panel')) return;
     const panel=document.createElement('section');
     panel.id='gdrive-panel';panel.className='card';
-    panel.style.cssText='border:1px solid #b4c5cf;max-width:100%;margin:16px 0;padding:18px;background:#fff';
-    panel.innerHTML=`<h3 style="margin-top:0">Google Drive pessoal — sincronização</h3>
-      <p class="muted">Vistorias, fotos e PDFs na pasta <b>Meu Drive / Vistoria Técnica</b>. As fotos ficam também dentro do backup JSON. </p>
-      <details><summary>Configuração avançada</summary><label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
-      <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com" style="width:100%;max-width:560px"></details>
-      <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
-        <button id="gdrive-connect" type="button">Conectar Google Drive</button>
-        <button id="gdrive-persistent" type="button" class="secondary">Manter conta conectada</button>
-        <button id="gdrive-now" type="button" class="secondary">Sincronizar agora</button>
-        <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar</button>
-      </div>
-      <p id="gdrive-status" role="status" aria-live="polite">Desconectado. Conecte sua conta Google para sincronizar.</p>
-      <p id="gdrive-session-status" class="muted" role="status" aria-live="polite">Para permanecer conectado, autorize a opção “Manter conta conectada” após conectar.</p>
-      <p class="muted">O sincronismo ocorre com o aplicativo aberto e internet. A opção “Manter conta conectada” permite renovar automaticamente a autorização ao reabrir, enquanto a sessão de até 30 dias for válida. O Google pode solicitar nova autorização. Vistorias locais permanecem disponíveis offline.</p>`;
-    const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
+    panel.className='card cloud-dashboard';
+     panel.innerHTML=`<div class="cloud-intro">
+         <div class="cloud-mark" aria-hidden="true">☁</div>
+         <div><span class="cloud-overline">ARMAZENAMENTO E SINCRONIZAÇÃO</span>
+           <h3>Seu Google Drive</h3>
+           <p>Relatórios e fotos organizados em um só lugar.</p>
+         </div>
+       </div>
+       <div class="cloud-primary-actions">
+         <button id="gdrive-connect" type="button">Conectar Google</button>
+         <button id="gdrive-now" type="button" class="secondary">Sincronizar agora</button>
+         <button id="gdrive-persistent" type="button" class="secondary">Manter conectado</button>
+       </div>
+       <p id="gdrive-status" class="cloud-connection-status" role="status" aria-live="polite">Desconectado. Conecte sua conta Google para sincronizar.</p>
+       <details class="cloud-disclosure cloud-account-settings">
+         <summary>Detalhes e configurações da conexão</summary>
+         <p id="gdrive-session-status" class="muted" role="status" aria-live="polite">Para permanecer conectado, autorize “Manter conectado” uma vez.</p>
+         <button id="gdrive-disconnect" type="button" class="danger" hidden>Desconectar conta</button>
+         <details class="cloud-disclosure cloud-oauth-settings"><summary>Configuração avançada do Google</summary>
+           <label for="gdrive-client-id">ID do cliente OAuth (Google Cloud)</label>
+           <input id="gdrive-client-id" type="text" autocomplete="off" spellcheck="false" placeholder="123456789-...apps.googleusercontent.com">
+         </details>
+         <p class="muted">Os relatórios locais permanecem disponíveis offline. O Google pode solicitar nova autorização quando necessário.</p>
+       </details>`;
+     const anchor=document.getElementById('googleCloudHost')||document.getElementById('view-cloud')||document.querySelector('main');
     if(anchor)anchor.prepend(panel);
     const team=document.createElement('section');
-    team.innerHTML='<h3>Gerenciamento de usuários</h3><button type="button" id="gdrive-team-refresh">Solicitar acesso / Atualizar usuários</button><p id="gdrive-team-status" role="status"></p><div id="gdrive-queue" role="status" aria-live="polite"></div><div id="gdrive-team-users"></div>';
+    team.className='cloud-team-panel';
+     team.innerHTML='<div class="cloud-section-head"><div><span class="cloud-overline">TRABALHO COMPARTILHADO</span><h3>Minha equipe</h3><p>Compartilhe e acompanhe vistorias com segurança.</p></div><button type="button" class="secondary" id="gdrive-team-refresh">Atualizar</button></div><p id="gdrive-team-status" class="cloud-team-status" role="status" aria-live="polite"></p><details class="cloud-disclosure cloud-local-queue"><summary>Alterações locais aguardando sincronização</summary><div id="gdrive-queue" role="status" aria-live="polite"></div></details><div id="gdrive-team-users"></div>';
     panel.append(team);
     $('gdrive-team-refresh').onclick=showTeam;
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
