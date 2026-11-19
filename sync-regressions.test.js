@@ -41,3 +41,24 @@ test('PDF registra aviso quando o arquivo de origem falha',()=>{
  assert.match(src,/sourcePdfFailed=true;sourcePdfWarnings\+\+/);
  assert.match(src,/O PDF de origem não pôde ser incorporado/);
 });
+
+
+test('equipe pesquisa OS individual com zeros iniciais e sem confundir com referência',()=>{
+ const source=file('google-drive-sync.js');
+ assert.match(source,/p\.pointWorkOrder,p\.tag,p\.area/);
+ const fixture={meta:{number:'RV-001',workOrder:'0001020'},records:[{tag:'C550_CF02',pointWorkOrder:'00000035',area:'Flotação'}]};
+ const haystack=[fixture.meta.title,fixture.meta.number,JSON.stringify(fixture.meta),
+  ...fixture.records.map(p=>[p.pointWorkOrder,p.tag,p.area].join(' '))].join(' ').toLocaleLowerCase('pt-BR');
+ assert.ok(haystack.includes('00000035'));
+ assert.ok(haystack.includes('0001020'));
+ assert.ok(!haystack.includes('9999999'));
+});
+test('logout não limpa a fila global e é limitado à conta autenticada',()=>{
+ const drive=file('google-drive-sync.js');
+ const background=file('background-sync.js');
+ assert.match(drive,/clearFor\(disconnectingSubject\)/);
+ assert.doesNotMatch(drive,/VistoriaBackground\?\.clear\(\)/);
+ assert.match(background,/keyFor\(job.subject,job.id\)/);
+ assert.match(background,/const clearFor=subject/);
+ assert.match(background,/leaseUntil/);
+});
