@@ -12,7 +12,7 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 | 3 | Zeros iniciais preservados | Campos string; `app-integrity.test.js` | C/T |
 | 4 | OS nos PDFs por ponto e completos | `pdf-export.js` | C/T estrutural; M para impressão |
 | 5 | Busca exata e parcial de OS no histórico local | `history.js` | C; M para registros reais |
-| 6 | Busca de OS por ponto na lista compartilhada | `google-drive-sync.js` | P: corrigido para documentos locais; indexação remota integral ainda não homologada |
+| 6 | Busca exata e parcial de OS na equipe, mesmo sem cópia local | `api/team-reports.mjs`, `team-os-search.mjs`, `google-drive-sync.js`, `team-os-api.test.js` | C/T: consulta paginada em relatórios ativos do Drive, sem baixar fotos nem modificar registros; M: validar com dois usuários reais |
 | 7 | Backup, recuperação e compatibilidade com relatórios antigos | `history.js`, `point-identity.js` | C/T de IDs; M de recuperação completa |
 | 8 | Manter a conta conectada | `google-drive-sync.js`, `api/personal-session.mjs`, `personal-session.test.js` | C/T de sessão simulada; M em Android |
 | 9 | Acesso aprovado, administrador e permissões Google | `team-auth.mjs`, `api/team.mjs`, `team-security.test.js` | C/T; M com dois usuários reais |
@@ -40,7 +40,7 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 2. Duas contas Google aprovadas: mesma TAG/OS, editar, finalizar, excluir/restaurar e consultar auditoria; sem acesso indevido.
 3. Administrador cadastra nomes dos técnicos (sob consentimento da equipe), testa troca de nome sem reescrever eventos antigos.
 4. Simular conflito de duas revisões do mesmo relatório e comparar versões antes de resolver.
-5. Validar busca de OS de relatórios compartilhados **não presentes no armazenamento local**, que ainda precisa de indexação segura no servidor.
+5. Homologar em Android, com duas contas autorizadas, a busca por OS de relatórios compartilhados **não presentes no armazenamento local**. A implementação consulta o Drive sob demanda em páginas de 20, sem criar índice persistente ou precisar regravar relatórios antigos.
 6. Testar os recursos opcionais QR, ditado e IA no ambiente autorizado; sem envio de dados operacionais reais aos serviços externos durante testes.
 
 ## Segurança e operação
@@ -50,3 +50,12 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - A fila em segundo plano depende de suporte de navegador e condições do Android; não prometer 100% de entrega com app fechado em todos os aparelhos.
 - A publicação somente é considerada concluída após CI aprovada, Vercel **READY** e domínio oficial apontando para o commit correto.
 - Retomar nas próximas execuções somente os critérios **P/M**, atualizando esta matriz com evidências e sem renomear resultados pendentes como concluídos.
+
+## Lote de melhorias — busca OS remota
+
+- Pesquisa por OS **exata ou parcial** incluindo zeros iniciais preservados, relatórios antigos e documentos da equipe ausentes do celular.
+- Endpoint exige membro Google aprovado, pesquisa apenas relatórios ativos, lê metadados no Drive central **sem baixar arquivos de fotos** e não modifica nenhum documento.
+- Páginas de até 20 relatórios e quatro leituras paralelas por lote, com botão de continuar e mensagem de falha explícita.
+- Cópia local apenas sob comando explícito, com novo identificador, sem sobrescrever a vistoria da equipe.
+- Testes sintéticos: autenticação negada, OS de cabeçalho e pontos, exata/parcial, zeros, lixeira ignorada, paginação e falha de rede.
+- **Pendente de homologação**: Android real, duas contas reais, câmera/permissões, PDF longo com fotos e recursos de QR/ditado/IA. Nenhum destes é declarado homologado.
