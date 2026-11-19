@@ -29,7 +29,7 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 | 20 | Upload por partes, retomada e limite de 12 MB | `background-sync.js`, `api/team-reports.mjs` | C/T de 3,2 MB e rejeição >12 MB |
 | 21 | Enviar com aplicativo fechado | Service Worker + Background Sync | P/M: depende do Android/navegador, não garantido universalmente |
 | 22 | Dois seletores de fotos: câmera traseira e galeria | `index.html`, `field-tools.js` | C; M: permissão negada/cancelada, fotos múltiplas |
-| 23 | Fotos antes/depois, legenda, prévia e ordenação | `photo-markup.js`, `field-tools.js` | P/M: validar preservação e ordenação no Android |
+| 23 | Fotos antes/depois, legenda, prévia e ordenação | `photo-markup.js`, `field-tools.js`, `photo-order.js`, `photo-order.test.js`, `team-drive.test.js` | C/T: ordenação com legenda, original e marcação preservados, oito fotos sintéticas recuperadas do Drive; M: validar no Android |
 | 24 | PDF longo e com muitas fotos, individual e consolidado | `pdf-export.js`, `pdf-lib.min.js` | C; M: memória/paginação com fotos reais |
 | 25 | TAG por QR Code e ditado opcional | `management-tools.js` | C condicional; M: depende de BarcodeDetector/SpeechRecognition |
 | 26 | Indicadores/CSV, revisão técnica por IA e acessibilidade | `management-tools.js`, `technical-review.js`, `layout.js` | P: implementações presentes, exigir QA funcional, teclado/leitor de tela e autorização IA |
@@ -59,3 +59,10 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Cópia local apenas sob comando explícito, com novo identificador, sem sobrescrever a vistoria da equipe.
 - Testes sintéticos: autenticação negada, OS de cabeçalho e pontos, exata/parcial, zeros, lixeira ignorada, paginação e falha de rede.
 - **Pendente de homologação**: Android real, duas contas reais, câmera/permissões, PDF longo com fotos e recursos de QR/ditado/IA. Nenhum destes é declarado homologado.
+
+## Lote de QA — ordenação de evidências
+
+- Botões acessíveis de foto anterior/próxima na prévia de cada ponto, sem modificar imagem, legenda, original ou marcação.
+- Ordenação funciona na edição local, backups e sincronização porque altera a sequência da lista de fotos já persistida.
+- Teste de regressão para reordenação, bloqueio durante carregamento, preservação dos objetos e disponibilidade offline.
+- Teste de recuperação de **oito fotografias sintéticas** por ponto, com OS geral e OS individual, no Drive simulado (não testa Android nem paginação visual do PDF).
