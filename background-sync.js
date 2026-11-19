@@ -1,52 +1,147 @@
-/* Explicit background queue: existing shared reports only. No OAuth tokens persisted. */
+/* Fila offline isolada por Google subject e relatório. Nenhum token OAuth é salvo. */
 (function(root){
- const open=()=>new Promise((resolve,reject)=>{const q=indexedDB.open('vistoria-background-v1',1);q.onupgradeneeded=()=>q.result.createObjectStore('jobs',{keyPath:'id'});q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)});
- async function store(mode,fn){const db=await open();try{return await new Promise((resolve,reject)=>{const t=db.transaction('jobs',mode),q=fn(t.objectStore('jobs'));t.oncomplete=()=>resolve(q.result);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);});}finally{db.close();}}
- const list=()=>store('readonly',s=>s.getAll()),put=j=>store('readwrite',s=>s.put(j)),clear=()=>store('readwrite',s=>s.clear());
- // Compare-and-set in a single IndexedDB transaction; never resurrect a cleared or replaced job.
- const same=(a,b)=>!!a&&a.state==='pending'&&a.subject===b.subject&&a.hash===b.hash&&a.revision===b.revision&&a.generation===b.generation;
- async function change(job,patch){
- const db=await open();try{return await new Promise((resolve,reject)=>{const t=db.transaction('jobs','readwrite'),s=t.objectStore('jobs'),q=s.get(job.id);let changed=false;
- q.onsuccess=()=>{if(!same(q.result,job))return;changed=true;if(patch===null)s.delete(job.id);else s.put({...q.result,...patch});};
- t.oncomplete=()=>resolve(changed);t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error);});}finally{db.close();}
+ 'use strict';
+ const DATABASE='vistoria-background-v1',VERSION=2,STORE='jobs_scoped';
+ const keyFor=(subject,id)=>{
+  if(typeof subject!=='string'||!subject||typeof id!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(id))throw Error('Conta ou relatório inválido');
+  return subject.length+':'+subject+':'+id;
+ };
+ const open=()=>new Promise((resolve,reject)=>{
+  const q=indexedDB.open(DATABASE,VERSION);
+  q.onupgradeneeded=()=>{
+   const db=q.result,transaction=q.transaction;
+   const next=db.objectStoreNames.contains(STORE)?transaction.objectStore(STORE):db.createObjectStore(STORE,{keyPath:'key'});
+   // Migração atômica: conserva a tabela anterior como cópia de recuperação.
+   if(q.oldVersion<2&&db.objectStoreNames.contains('jobs')){
+    const legacy=transaction.objectStore('jobs').getAll();
+    legacy.onsuccess=()=>{
+     for(const job of legacy.result||[]){
+      try{next.put({...job,key:keyFor(job.subject,job.id)})}catch{/* Entrada incompleta permanece na cópia antiga, nunca enviada. */}
+     }
+    };
+   }
+  };
+  q.onsuccess=()=>resolve(q.result);
+  q.onerror=()=>reject(q.error);
+ });
+ async function transaction(mode,fn){
+  const db=await open();
+  try{return await new Promise((resolve,reject)=>{
+   const t=db.transaction(STORE,mode),s=t.objectStore(STORE);
+   let result;try{fn(s,t,value=>{result=value})}catch(error){t.abort();reject(error);return;}
+   t.oncomplete=()=>resolve(result);
+   t.onerror=()=>reject(t.error||Error('Falha na fila'));
+   t.onabort=()=>reject(t.error||Error('Operação interrompida'));
+  })}finally{db.close()}
+ }
+ const list=()=>transaction('readonly',(s,t,done)=>{const q=s.getAll();q.onsuccess=()=>done(q.result||[])});
+ const put=job=>{
+  const key=keyFor(job?.subject,job?.id);
+  if(job.state!=='pending'||typeof job.generation!=='string'||!job.generation||typeof job.hash!=='string'||!job.hash||!job.document)throw Error('Envio inválido');
+  return transaction('readwrite',s=>s.put({...job,key,queuedAt:job.queuedAt||new Date().toISOString()}));
+ };
+ const same=(current,job)=>!!current&&current.state==='pending'&&current.key===keyFor(job.subject,job.id)
+  &&current.subject===job.subject&&current.hash===job.hash&&current.revision===job.revision
+  &&current.generation===job.generation;
+ async function change(job,patch,lease){
+  const key=keyFor(job.subject,job.id);
+  return transaction('readwrite',(s,t,done)=>{
+   const q=s.get(key);
+   q.onsuccess=()=>{
+    const current=q.result;
+    if(!same(current,job)||(lease&&current.lease!==lease)){done(false);return;}
+    if(patch===null)s.delete(key);
+    else s.put({...current,...patch});
+    done(true);
+   };
+  });
  }
  const cancel=job=>change(job,null);
- const active=async job=>same((await list()).find(j=>j.id===job.id),job);
- async function checkpoint(job,patch){if(!await change(job,patch))throw Error('Fila alterada');}
-
+ // Desconectar cancela apenas as transmissões da conta em uso; não toca nos relatórios locais ou em outras contas.
+ const clearFor=subject=>transaction('readwrite',(s,t,done)=>{
+  if(typeof subject!=='string'||!subject)throw Error('Conta necessária');
+  const q=s.getAll();
+  q.onsuccess=()=>{
+   let count=0;for(const job of q.result||[])if(job.subject===subject){s.delete(job.key);count++}
+   done(count);
+  };
+ });
+ async function claim(job,lease){
+  return transaction('readwrite',(s,t,done)=>{
+   const q=s.get(keyFor(job.subject,job.id));
+   q.onsuccess=()=>{
+    const current=q.result,now=Date.now();
+    if(!same(current,job)||(current.leaseUntil>now)){done(false);return;}
+    s.put({...current,lease,leaseUntil:now+120000});
+    done(true);
+   };
+  });
+ }
+ async function active(job,lease){
+  const stored=await transaction('readonly',(s,t,done)=>{
+   const q=s.get(keyFor(job.subject,job.id));
+   q.onsuccess=()=>done(q.result);
+  });
+  return same(stored,job)&&stored.lease===lease;
+ }
+ async function checkpoint(job,lease,patch){
+  if(!await change(job,{...patch,leaseUntil:Date.now()+120000},lease))throw Error('Fila alterada ou cancelada');
+ }
+ const successStatus=s=>s>=200&&s<300;
  async function run(){
- const jobs=(await list()).filter(j=>j.state==='pending');if(!jobs.length)return;
- const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store'});if(!session.ok)return;
- const auth=await session.json();if(!auth.subject||!auth.access_token)return;
- for(const job of jobs){
- if(job.subject!==auth.subject)continue;
- const current=(await list()).find(j=>j.id===job.id);if(!same(current,job))continue;
- const bytes=new TextEncoder().encode(JSON.stringify(job.document));
- const request=async body=>{if(!await active(job))throw Error('Fila alterada');return fetch('/api/team-reports?id='+encodeURIComponent(job.id),{method:'POST',cache:'no-store',headers:{Authorization:'Bearer '+auth.access_token,'Content-Type':'application/json'},body:JSON.stringify(body)});};
- let r;
- if(bytes.length<=3000000)r=await request({document:job.document,revision:job.revision});
- else{
- if(bytes.length>12000000){await change(job,{state:'conflict'});continue;}
- const upload_id=job.upload_id||crypto.randomUUID();await checkpoint(job,{upload_id});
- const base={upload_id,revision:job.revision};
- const staged=await request({...base,action:'upload-status'});
- if(!staged.ok){if([400,403,404,409].includes(staged.status)){await change(job,{state:'conflict'});continue;}throw Error('Falha temporária');}
- const received=new Set((await staged.json()).parts||[]),size=750000,total=Math.ceil(bytes.length/size);
- for(let part=0;part<total;part++){
- const latest=(await list()).find(j=>j.id===job.id);if(!same(latest,job))throw Error('Fila alterada');
- if(received.has(part))continue;
- const chunk=bytes.subarray(part*size,(part+1)*size);let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));
- const result=await request({...base,action:'upload-part',part,payload:btoa(binary)});
- if(!result.ok)throw Error('Parte não enviada');
- await checkpoint(job,{progress:part+1,total});
+  const jobs=(await list()).filter(j=>j.state==='pending');
+  if(!jobs.length)return;
+  const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
+  if(!session.ok)return;
+  const auth=await session.json();
+  if(!auth.subject||!auth.access_token)return;
+  for(const job of jobs){
+   if(job.subject!==auth.subject)continue;
+   const lease=crypto.randomUUID();
+   if(!await claim(job,lease))continue;
+   try{
+    const bytes=new TextEncoder().encode(JSON.stringify(job.document));
+    const request=async body=>{
+     if(!await active(job,lease))throw Error('Fila alterada, conta desconectada ou envio cancelado');
+     return fetch('/api/team-reports?id='+encodeURIComponent(job.id),{method:'POST',cache:'no-store',
+      headers:{Authorization:'Bearer '+auth.access_token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    };
+    let response;
+    if(bytes.length>12000000){await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);continue;}
+    if(bytes.length<=3000000)response=await request({document:job.document,revision:job.revision});
+    else{
+     const upload_id=job.upload_id||crypto.randomUUID();
+     await checkpoint(job,lease,{upload_id});
+     const base={upload_id,revision:job.revision};
+     const staged=await request({...base,action:'upload-status'});
+     if(!staged.ok){
+      if([400,403,404,409].includes(staged.status)){await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);continue;}
+      throw Error('Falha temporária ao consultar partes');
+     }
+     const received=new Set((await staged.json()).parts||[]),size=750000,total=Math.ceil(bytes.length/size);
+     for(let part=0;part<total;part++){
+      if(!await active(job,lease))throw Error('Fila alterada');
+      if(received.has(part))continue;
+      const chunk=bytes.subarray(part*size,(part+1)*size);
+      let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));
+      const result=await request({...base,action:'upload-part',part,payload:btoa(binary)});
+      if(!successStatus(result.status))throw Error('Parte não enviada');
+      await checkpoint(job,lease,{progress:part+1,total});
+     }
+     response=await request({...base,action:'upload-finish',total,sha256:job.hash});
+    }
+    if(response.ok){
+     const result=await response.json();
+     if(!Number.isSafeInteger(result.revision)||result.revision<=job.revision)throw Error('Recibo da revisão inválido');
+     await change(job,{document:null,state:'sent',newRevision:result.revision,finishedAt:new Date().toISOString(),lease:null,leaseUntil:0},lease);
+    }else if([400,403,404,409].includes(response.status))
+     await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);
+    else throw Error('Envio temporariamente indisponível');
+   }finally{
+    // Falha temporária não apaga o documento nem prende a fila por dois minutos.
+    await change(job,{lease:null,leaseUntil:0},lease).catch(()=>{});
+   }
+  }
  }
- r=await request({...base,action:'upload-finish',total,sha256:job.hash});
- }
-
- if(r.ok){const d=await r.json();await change(job,{document:null,state:'sent',newRevision:d.revision});}
- else if([400,403,404,409].includes(r.status))await change(job,{state:'conflict'});
- else throw Error('Envio temporariamente indisponível');
- }
- }
- root.VistoriaBackground={list,put,clear,cancel,run};
+ root.VistoriaBackground={list,put,cancel,clearFor,run};
 })(globalThis);
