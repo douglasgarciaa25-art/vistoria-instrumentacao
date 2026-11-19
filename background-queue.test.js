@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-import {webcrypto} from 'node:crypto';
+import {webcrypto,createHash} from 'node:crypto';
 
 const source=readFileSync('background-sync.js','utf8');
 function fakeIndexedDB(legacy=[]){
@@ -164,4 +164,55 @@ test('sem cookie ou autorização, nenhuma requisição de relatório acontece',
  await queue.run();
  assert.equal(calls.filter(x=>x.url.startsWith('/api/team-reports')).length,0);
  assert.equal((await queue.list())[0].state,'pending');
+});
+
+
+test('envio de 3,2 MB retoma partes sem duplicar após falha de rede',async()=>{
+ const document={meta:{workOrder:'0000001234'},records:[],evidence:'X'.repeat(3_200_000)};
+ const hash=createHash('sha256').update(JSON.stringify(document)).digest('hex');
+ let failed=false,statusRequests=0,partRequests=[],uploaded=new Set(),uploadId=null;
+ const {queue}=setup({handler:(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.action==='upload-status'){
+   statusRequests++;
+   if(uploadId)assert.equal(body.upload_id,uploadId);else uploadId=body.upload_id;
+   return Response.json({parts:[...uploaded]});
+  }
+  if(body.action==='upload-part'){
+   assert.equal(body.upload_id,uploadId);
+   partRequests.push(body.part);
+   if(body.part===2&&!failed){failed=true;return new Response('Temporário',{status:503});}
+   uploaded.add(body.part);
+   return Response.json({ok:true});
+  }
+  if(body.action==='upload-finish'){
+   assert.equal(body.sha256,hash);
+   assert.equal(body.total,Math.ceil(new TextEncoder().encode(JSON.stringify(document)).length/750000));
+   assert.equal(uploaded.size,body.total);
+   return Response.json({revision:2});
+  }
+  throw Error('Ação inesperada '+body.action);
+ }});
+ await queue.put({...fixture('report-large','conta-A',1,document),hash});
+ await assert.rejects(queue.run(),/Parte não enviada/);
+ assert.equal((await queue.list())[0].state,'pending');
+ assert.equal((await queue.list())[0].document.evidence.length,3_200_000);
+ await queue.run();
+ assert.equal((await queue.list())[0].state,'sent');
+ assert.equal((await queue.list())[0].document,null);
+ assert.equal(statusRequests,2);
+ assert.equal(partRequests.filter(p=>p===0).length,1,'Parte confirmada não deve ser reenviada');
+ assert.equal(partRequests.filter(p=>p===1).length,1);
+ assert.equal(partRequests.filter(p=>p===2).length,2,'Parte rejeitada deve ser reenviada');
+});
+
+test('limite de 12MB não remove o documento quando excedido',async()=>{
+ const oversized={meta:{},records:[],evidence:'X'.repeat(12_000_100)};
+ const {queue,calls}=setup();
+ await queue.put(fixture('large-report','conta-A',0,oversized));
+ await queue.run();
+ const [job]=await queue.list();
+ assert.equal(job.state,'conflict');
+ assert.equal(job.document.evidence.length,12_000_100);
+ assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,0);
 });
