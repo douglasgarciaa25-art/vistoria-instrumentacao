@@ -8,11 +8,11 @@
  };
  const open=()=>new Promise((resolve,reject)=>{
   const q=indexedDB.open(DATABASE,VERSION);
-  q.onupgradeneeded=()=>{
+  q.onupgradeneeded=event=>{
    const db=q.result,transaction=q.transaction;
    const next=db.objectStoreNames.contains(STORE)?transaction.objectStore(STORE):db.createObjectStore(STORE,{keyPath:'key'});
    // Migração atômica: conserva a tabela anterior como cópia de recuperação.
-   if(q.oldVersion<2&&db.objectStoreNames.contains('jobs')){
+   if(event.oldVersion<2&&db.objectStoreNames.contains('jobs')){
     const legacy=transaction.objectStore('jobs').getAll();
     legacy.onsuccess=()=>{
      for(const job of legacy.result||[]){
