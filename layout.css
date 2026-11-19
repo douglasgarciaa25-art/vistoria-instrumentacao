@@ -28,3 +28,13 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .technical-review-preview[hidden], .technical-review button[hidden] { display:none!important; }
 .technical-review-note { margin:8px 0; font-size:.85rem; }
 @media(max-width:520px){ .technical-review .actions button { flex:1 1 100%; } }
+
+
+/* Ditado por voz: ação discreta, acessível, compatível com campos técnicos. */
+.voice-controls{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:9px 0 4px}
+.voice-controls .voice-button{min-height:36px;padding:8px 12px;border-radius:9px;font-size:12px;line-height:1.4;font-weight:700;background:#f0ecf7;color:#4f3471;white-space:normal}
+.voice-controls .voice-button.voice-listening{background:#fff0eb;color:#a73720;border:1px solid #e9b4a3}
+.voice-controls .voice-status{font-size:11px;line-height:1.45;color:#665970;flex:1 1 180px;overflow-wrap:anywhere}
+.voice-controls .voice-status:empty{display:none}
+.voice-controls .voice-button:focus-visible{outline:3px solid #92b766;outline-offset:3px}
+@media(max-width:760px){.voice-controls .voice-button{min-height:42px;font-size:12px}.voice-controls .voice-status{flex-basis:100%;font-size:12px}}
