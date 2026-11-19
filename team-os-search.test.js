@@ -9,7 +9,7 @@ test('OS preserva zeros iniciais, pesquisa exata e parcial sem converter em núm
   {pointId:'uuid-ghijk1235',pointWorkOrder:'',tag:'SEM OS'}
  ]};
  assert.deepEqual(findOsMatches(doc,parseTeamOsQuery('000045','exact')).map(x=>x.os),['000045']);
- assert.deepEqual(findOsMatches(doc,parseTeamOsQuery('005','partial')).map(x=>x.os),['00010505291']);
+ assert.deepEqual(findOsMatches(doc,parseTeamOsQuery('050','partial')).map(x=>x.os),['00010505291']);
  assert.deepEqual(findOsMatches(doc,parseTeamOsQuery('000','partial')).map(x=>x.scope),['report','point','point']);
  assert.deepEqual(findOsMatches(doc,parseTeamOsQuery('0001','exact')),[]);
 });
