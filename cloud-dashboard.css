@@ -95,3 +95,17 @@
 #view-cloud .cloud-extras>.card{margin:12px 14px;border-radius:12px;box-shadow:none}
 #view-cloud .cloud-extras #installPanel{background:#f7f4fa}
 #view-cloud .cloud-extras button:focus-visible,#view-cloud .cloud-extras summary:focus-visible{outline:3px solid #92b766;outline-offset:3px}
+
+
+/* Lista de vistorias recolhida inicialmente para liberar a tela da nuvem. */
+.cloud-dashboard .cloud-reports-disclosure{margin:9px 0 2px;border:1px solid #ded5ea;border-radius:14px;background:#faf8fe;overflow:hidden}
+.cloud-dashboard .cloud-reports-disclosure>.cloud-reports-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px;min-height:64px;font-size:14px;color:#422b60;cursor:pointer}
+.cloud-dashboard .cloud-reports-disclosure>.cloud-reports-summary::after{content:"⌄";margin-left:auto;font-size:20px;font-weight:700;color:#785d96}
+.cloud-dashboard .cloud-reports-disclosure[open]>.cloud-reports-summary::after{content:"⌃"}
+.cloud-dashboard .cloud-reports-disclosure .cloud-reports-summary-title{font-weight:750}
+.cloud-dashboard .cloud-reports-disclosure .cloud-result-count{font-size:12px;font-weight:600;color:#776785;margin-left:auto}
+.cloud-dashboard .cloud-reports-disclosure>.cloud-report-list{margin:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:760px){
+ .cloud-dashboard .cloud-reports-disclosure>.cloud-reports-summary{padding:13px 15px;min-height:58px;font-size:13px}
+ .cloud-dashboard .cloud-reports-disclosure>.cloud-report-list{grid-template-columns:1fr;margin:10px;gap:10px}
+}
