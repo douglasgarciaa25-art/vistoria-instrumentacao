@@ -416,9 +416,10 @@
   }
   function disconnect() {
     const token=accessToken;
+    const disconnectingSubject=queueMember?.google_subject;
     queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
     localStorage.removeItem(CONNECTED_KEY);
-    void window.VistoriaBackground?.clear().catch(()=>{});
+    if(disconnectingSubject)void window.VistoriaBackground?.clearFor(disconnectingSubject).catch(()=>{});
     void fetch('/api/personal-session',{method:'DELETE',cache:'no-store',credentials:'same-origin'}).catch(()=>{});
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
