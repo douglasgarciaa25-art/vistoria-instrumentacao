@@ -563,6 +563,65 @@
     rememberTeamIds(remote);
     const local=await reports();
     const search=document.createElement('input');search.type='search';search.placeholder='Buscar TAG, OS ou título';search.setAttribute('aria-label','Buscar vistoria compartilhada');section.append(search);
+
+    // Consulta autenticada, sob demanda, também nos relatórios que só existem no Drive central.
+    const osPanel=document.createElement('details');const osTitle=document.createElement('summary');
+    osTitle.textContent='Pesquisar OS em todas as vistorias da equipe (incluindo as não salvas neste aparelho)';
+    osPanel.append(osTitle);section.append(osPanel);
+    const osInput=document.createElement('input');osInput.type='search';osInput.placeholder='Ex.: 00010505291';
+    osInput.setAttribute('aria-label','Número da OS na nuvem');osPanel.append(osInput);
+    const osMode=document.createElement('select');osMode.setAttribute('aria-label','Tipo da pesquisa por OS');
+    for(const [value,label] of [['partial','OS contém o número'],['exact','OS exatamente igual']]){
+      const o=document.createElement('option');o.value=value;o.textContent=label;osMode.append(o);
+    }osPanel.append(osMode);
+    const osStart=document.createElement('button');osStart.type='button';osStart.textContent='Pesquisar OS da equipe';osPanel.append(osStart);
+    const osMore=document.createElement('button');osMore.type='button';osMore.className='secondary';osMore.textContent='Procurar nas próximas 20 vistorias';osMore.hidden=true;osPanel.append(osMore);
+    const osResult=document.createElement('div');osResult.setAttribute('aria-live','polite');osPanel.append(osResult);
+    let osCursor=0,osQuery='',osQueryMode='',osBusy=false,osGeneration=0;
+    osInput.oninput=osMode.onchange=()=>{++osGeneration;osMore.hidden=true;osCursor=0;};
+    async function searchRemoteOs(fresh){
+      if(osBusy)return;
+      const query=osInput.value.trim(),mode=osMode.value;
+      if(query.length<2||query.length>80){osResult.textContent='Digite ao menos dois caracteres da OS.';return;}
+      if(fresh){osCursor=0;osResult.replaceChildren();osQuery=query;osQueryMode=mode;}
+      if(query!==osQuery||mode!==osQueryMode)return;
+      const generation=osGeneration,view=teamViewGeneration,token=accessToken;
+      osBusy=true;osStart.disabled=osMore.disabled=true;osMore.hidden=true;
+      try{
+        const {member:current}=await teamRequest();
+        if(current?.google_subject!==member.google_subject)throw Error('Conta Google alterada. Atualize a equipe.');
+        const r=await fetch('/api/team-reports?os='+encodeURIComponent(query)+'&match='+mode+'&offset='+osCursor,{cache:'no-store',headers:{Authorization:'Bearer '+token}});
+        const d=await r.json().catch(()=>({error:'Servidor indisponível'}));
+        if(!r.ok||d.error)throw Error(d.error||'Falha na busca de OS');
+        if(generation!==osGeneration||view!==teamViewGeneration||token!==accessToken||!validToken())return;
+        for(const match of d.matches||[]){
+          const line=document.createElement('div');line.style.cssText='border-top:1px solid #ddd;padding:10px 0';
+          const p=document.createElement('p');
+          p.textContent='OS '+match.os+' — '+(match.scope==='report'?'Cabeçalho do relatório':'Ponto '+(match.tag||'TAG não informada'))+' — Revisão '+match.revision;
+          line.append(p);
+          const open=document.createElement('button');open.type='button';open.className='secondary';open.textContent='Criar cópia local para consultar';
+          open.onclick=async()=>{
+            open.disabled=true;
+            try{
+              if(!validToken())throw Error('Conecte a conta antes de consultar');
+              const copy=await reportRequest('GET',match.report_id);
+              const copyId=crypto.randomUUID();
+              await putReport({id:copyId,updated:new Date().toISOString(),document:structuredClone(copy.document)});
+              status.textContent='Cópia local criada, sem modificar o relatório da equipe.';
+            }catch(e){status.textContent=e.message;}finally{open.disabled=false;}
+          };
+          line.append(open);osResult.append(line);
+        }
+        if(!d.matches?.length){const p=document.createElement('p');p.textContent='Nenhuma OS correspondente nesta página.';osResult.append(p);}
+        if(d.truncated){const p=document.createElement('p');p.textContent='Resultados limitados nesta página. Refine a OS.';osResult.append(p);}
+        osCursor=d.next_offset;osMore.hidden=osCursor===null;
+        if(osCursor===null){const done=document.createElement('p');done.textContent='Busca concluída em todas as páginas consultadas.';osResult.append(done);}
+      }catch(e){if(generation===osGeneration&&view===teamViewGeneration)osResult.textContent='Não foi possível concluir a busca: '+e.message;}
+      finally{osBusy=false;osStart.disabled=osMore.disabled=false;}
+    }
+    osStart.onclick=()=>searchRemoteOs(true);
+    osMore.onclick=()=>searchRemoteOs(false);
+
      let verifiedReports=null;
      const tech=document.createElement('input');tech.type='search';tech.placeholder='Pesquisar baixas pelo nome cadastrado do técnico';tech.setAttribute('aria-label','Pesquisar técnico autenticado');section.append(tech);
      const verifyButton=document.createElement('button');verifyButton.type='button';verifyButton.textContent='Pesquisar baixa autenticada';section.append(verifyButton);
