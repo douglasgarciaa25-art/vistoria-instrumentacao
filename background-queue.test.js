@@ -8,13 +8,14 @@ const source=readFileSync('background-sync.js','utf8');
 function fakeIndexedDB(legacy=[]){
  const stores=new Map([['jobs',new Map(legacy.map(j=>[j.id,structuredClone(j)]))]]);
  let version=legacy.length?1:0;
+ let writeBarrier=Promise.resolve();
  const clone=x=>x===undefined?undefined:structuredClone(x);
- function transaction(){
+ function transaction(wait=Promise.resolve(),release=()=>{}){
   let pending=0,closed=false,failed=false;
   const t={oncomplete:null,onerror:null,onabort:null,error:null,abort(){failed=true;queueMicrotask(()=>t.onabort?.())}};
-  function finish(){if(!pending&&!closed&&!failed){closed=true;queueMicrotask(()=>t.oncomplete?.())}}
+  function finish(){if(!pending&&!closed&&!failed){closed=true;queueMicrotask(()=>{t.oncomplete?.();release()})}}
   function request(operation){const r={result:null,error:null,onsuccess:null,onerror:null};pending++;
-   queueMicrotask(()=>{try{r.result=clone(operation());r.onsuccess?.({target:r})}catch(error){r.error=error;failed=true;r.onerror?.({target:r});t.error=error;t.onerror?.({target:t})}finally{pending--;finish()}});
+   wait.then(()=>queueMicrotask(()=>{try{r.result=clone(operation());r.onsuccess?.({target:r})}catch(error){r.error=error;failed=true;r.onerror?.({target:r});t.error=error;t.onerror?.({target:t})}finally{pending--;finish()}}));
    return r;
   }
   t.objectStore=name=>{
@@ -32,7 +33,14 @@ function fakeIndexedDB(legacy=[]){
  const db={
   objectStoreNames:{contains:name=>stores.has(name)},
   createObjectStore(name,options){stores.set(name,new Map());return {put:item=>{stores.get(name).set(item[options.keyPath],clone(item))}}},
-  transaction:()=>{const t=transaction();return t;},
+  transaction:(name,mode)=>{
+   if(mode==='readwrite'){
+    const wait=writeBarrier;let release;
+    writeBarrier=new Promise(resolve=>{release=resolve});
+    return transaction(wait,release);
+   }
+   return transaction(writeBarrier);
+  },
   close(){}
  };
  return {
