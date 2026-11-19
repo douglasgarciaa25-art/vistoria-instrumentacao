@@ -84,3 +84,14 @@
  .cloud-report-card{padding:16px}
 }
 @media(prefers-reduced-motion:reduce){.cloud-report-card{transition:none}}
+
+/* Backup e instalação permanecem acessíveis sem ocupar espaço na tela inicial. */
+#view-cloud .cloud-extras{padding:0;border:1px solid #e6e2ee;background:#fff;border-radius:15px;overflow:hidden;box-shadow:none;margin:16px 0 24px}
+#view-cloud .cloud-extras>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 19px;min-height:52px;cursor:pointer;list-style:none;font-size:13px;font-weight:700;color:#544368}
+#view-cloud .cloud-extras>summary::-webkit-details-marker{display:none}
+#view-cloud .cloud-extras>summary::after{content:"+";font-size:22px;color:#8b74a0;font-weight:400}
+#view-cloud .cloud-extras[open]>summary::after{content:"−"}
+#view-cloud .cloud-extras[open]>summary{background:#faf8fd;border-bottom:1px solid #e9e4ef}
+#view-cloud .cloud-extras>.card{margin:12px 14px;border-radius:12px;box-shadow:none}
+#view-cloud .cloud-extras #installPanel{background:#f7f4fa}
+#view-cloud .cloud-extras button:focus-visible,#view-cloud .cloud-extras summary:focus-visible{outline:3px solid #92b766;outline-offset:3px}
