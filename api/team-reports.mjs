@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {approvedMember,teamDb} from '../team-auth.mjs';
 import {pointChanges} from '../point-audit-core.mjs';
+import {parseTeamOsQuery,scanTeamOsPage} from '../team-os-search.mjs';
 import {createPrivateReport,readPrivateReport} from '../team-drive.mjs';
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
@@ -12,6 +13,15 @@ export default async function handler(req,res){
  const valid=/^[a-zA-Z0-9_-]{1,100}$/.test(id);
  const base='vistoria_report_index';
  if(req.method==='GET'&&!id){
+ if(req.query?.os!==undefined){
+  let args;
+  try{args=parseTeamOsQuery(req.query.os,req.query.match==='exact'?'exact':req.query.match===undefined||req.query.match==='partial'?'partial':'invalid',Number(req.query.offset??0));}
+  catch(e){return reply(400,{error:e.message});}
+  // Páginas pequenas: evita varredura ilimitada e consulta somente arquivos já visíveis à equipe aprovada.
+  const rows=await teamDb(base+'?deleted_at=is.null&select=report_id,drive_file_id,revision&order=report_id.asc&limit=20&offset='+args.offset);
+  const {matches,truncated}=await scanTeamOsPage(rows,args,file=>readPrivateReport(file,{withPhotos:false}));
+  return reply(200,{matches,truncated,scanned:rows.length,next_offset:rows.length===20?args.offset+rows.length:null});
+ }
  if(req.query?.technician!==undefined){
  const term=String(req.query.technician||'').normalize('NFC').trim();
  if(term.length<3||term.length>80||/[\x00-\x1f*(),]/.test(term))return reply(400,{error:'Informe ao menos 3 letras do nome cadastrado'});
