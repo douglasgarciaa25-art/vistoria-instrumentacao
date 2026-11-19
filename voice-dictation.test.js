@@ -140,6 +140,6 @@ test('PWA carrega código, estilo e preserva controle antigo contra duplicaçõe
  assert.doesNotMatch(mg,/const Speech=window\.SpeechRecognition/);
  assert.match(css,/\.voice-controls/);
  assert.match(source,/recognition\.lang='pt-BR'/);
- assert.match(source,/audio pode ser processado pelo serviço de reconhecimento de voz/);
+ assert.match(source,/áudio pode ser processado pelo serviço de reconhecimento de voz/);
  assert.match(source,/document\.querySelectorAll/);
 });
