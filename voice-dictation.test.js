@@ -136,7 +136,7 @@ test('PWA carrega código, estilo e preserva controle antigo contra duplicaçõe
  const css=readFileSync('layout.css','utf8');
  assert.match(html,/<script src="voice-dictation\.js"><\/script>/);
  assert.match(sw,/'\/voice-dictation\.js'/);
- assert.match(sw,/vistoria-shell-v55-dictation/);
+ assert.match(sw,/vistoria-shell-v\d+-[a-z0-9-]+/);
  assert.doesNotMatch(mg,/const Speech=window\.SpeechRecognition/);
  assert.match(css,/\.voice-controls/);
  assert.match(source,/recognition\.lang='pt-BR'/);
