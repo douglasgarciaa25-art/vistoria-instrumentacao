@@ -32,7 +32,12 @@
    state.textContent='Conferindo vistorias locais e recebimentos da equipe…';
    const before=(await cloudApi('sync-list')).items||[];
    const serverIds=new Set(before.map(m=>m.id));
-   let sent=0,already=0;
+   const serverByReport=new Map();
+   for(const revision of before){
+    if(!serverByReport.has(revision.reportId))serverByReport.set(revision.reportId,[]);
+    serverByReport.get(revision.reportId).push(revision);
+   }
+   let sent=0,already=0,pendingConflicts=0;
    const receipts=[];
    // Publish against the revisions actually seen by this device, never unseen edits.
    const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id),...trashedIds]);
@@ -44,6 +49,20 @@
     const value={deleted:false,document:row.document};
     const fingerprint=await hash(value);
     const acknowledged=(meta.heads[id]||[]).filter(x=>serverIds.has(x));
+    const revisions=serverByReport.get(id)||[];
+    const superseded=new Set(revisions.flatMap(m=>m.parents||[]));
+    const live=revisions.filter(m=>!superseded.has(m.id));
+    // Não enviar uma alteração local sobre uma revisão remota que este aparelho não conhece.
+    if(live.length && live.some(m=>!acknowledged.includes(m.id))){
+      const latest=live.toSorted((a,b)=>String(a.created).localeCompare(String(b.created))).at(-1);
+      const remote=await payload(latest);
+      if(!remote.deleted && await hash(remote)===fingerprint){
+        meta.base[id]=fingerprint;meta.heads[id]=live.map(x=>x.id);
+        await set(stateKey,meta);already++;continue;
+      }
+      pendingConflicts++;
+      continue;
+    }
     if(meta.base[id]===fingerprint&&acknowledged.length){already++;continue}
     state.textContent='Enviando '+(sent+1)+' / '+local.length+' vistorias locais à equipe…';
     const revision=await publish(id,acknowledged,value);
@@ -99,7 +118,7 @@
     t.objectStore('reports').put({id:change.id,document:change.value.document,updated:change.updated});
    }
    t.objectStore('draft').put(next,stateKey);await transactionDone(t);await refreshHistory();
-   state.textContent='Equipe: '+sent+' enviada(s) agora, '+already+' já confirmada(s); '+local.length+' vistoria(s) locais conferidas. Sincronizado às '+new Date().toLocaleTimeString('pt-BR')+'.';
+   state.textContent='Equipe: '+sent+' enviada(s) agora, '+already+' já confirmada(s), '+pendingConflicts+' divergência(s) não enviada(s). '+local.length+' vistoria(s) locais conferidas às '+new Date().toLocaleTimeString('pt-BR')+'.'+(pendingConflicts?' Compare as versões antes de enviar estas vistorias.':'');
    await inspectTeam();
    if(conflicts)notify('Edições simultâneas preservadas como versões para comparação.');
   }catch(e){state.textContent='Sincronização pendente: '+e.message+' Os dados locais foram mantidos.'}
