@@ -13,31 +13,11 @@ async function exportReportDocuments(documents){
  function clean(v){return String(v??'').replace(/[–—]/g,'-').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").split('').map(c=>{if(c==='\n')return c;if(c==='\r')return '';try{regular.encodeText(c);return c}catch{return '?'}}).join('')}
  function wrap(value,size,width,font=regular){let lines=[];for(const para of clean(value).split('\n')){let current='';for(const word of para.split(/\s+/)){if(!word)continue;const candidate=current?current+' '+word:word;if(font.widthOfTextAtSize(candidate,size)<=width){current=candidate;continue}if(current){lines.push(current);current=''}for(const c of word){if(font.widthOfTextAtSize(current+c,size)>width){lines.push(current);current=''}current+=c}}lines.push(current)}return lines}
  function draw(text,x,yy,size=10,font=regular,color=ink){page.drawText(clean(text),{x,y:yy,size,font,color})}
- function newPage(){page=doc.addPage([W,H]);if(m.watermark)page.drawText(clean(m.watermark),{x:80,y:180,size:53,font:bold,color:rgb(.93,.93,.93),rotate:degrees(52)});page.drawImage(logo,{x:M,y:H-69,width:130,height:130*logo.height/logo.width});draw('CMOC BRASIL',W-M-115,H-43,9,bold);draw('Versão app: v'+(typeof window!=='undefined'&&window.VISTORIA_APP_VERSION||'6.0.1'),W-M-115,H-59,9);page.drawLine({start:{x:M,y:H-83},end:{x:W-M,y:H-83},thickness:.6,color:line});y=H-108}
+ function newPage(){page=doc.addPage([W,H]);if(m.watermark)page.drawText(clean(m.watermark),{x:80,y:180,size:53,font:bold,color:rgb(.93,.93,.93),rotate:degrees(52)});page.drawImage(logo,{x:M,y:H-69,width:130,height:130*logo.height/logo.width});draw('CMOC BRASIL',W-M-115,H-43,9,bold);draw('Revisão: '+(m.revision||'A definir'),W-M-115,H-59,9);page.drawLine({start:{x:M,y:H-83},end:{x:W-M,y:H-83},thickness:.6,color:line});y=H-108}
  function need(h){if(y-h<55)newPage()}
  function paragraph(v,size=10,color=ink){for(const t of wrap(v,size,CW)){need(size+5);draw(t,M,y,size,regular,color);y-=size+5}y-=5}
  function heading(v){const lines=wrap(v,12,CW,bold);need(33+Math.min(lines.length-1,35)*16);y-=7;for(const t of lines){need(26);draw(t,M,y,12,bold,green);y-=16}y+=6;page.drawLine({start:{x:M,y},end:{x:W-M,y},thickness:1.4,color:ink});y-=18}
- function detail(label,value){
-   if(value===null||value===undefined||String(value).trim()==='')return;
-   const labelLines=wrap(label.toUpperCase(),8,CW-24,bold);
-   const textLines=wrap(value,10,CW-30);
-   const lineHeight=15, top=12, labelHeight=labelLines.length*12;
-   const maxLinesPerBlock=Math.max(1,Math.floor((H-108-55-top-labelHeight-18)/lineHeight));
-   for(let start=0;start<textLines.length;){
-     const count=Math.min(maxLinesPerBlock,textLines.length-start);
-     const blockHeight=top+labelHeight+10+count*lineHeight+12;
-     need(blockHeight+8);
-     const topY=y;
-     page.drawRectangle({x:M,y:topY-blockHeight,width:CW,height:blockHeight,color:light,borderColor:line,borderWidth:.6});
-     page.drawRectangle({x:M,y:topY-blockHeight,width:3,height:blockHeight,color:green});
-     let labelY=topY-17;
-     for(const t of labelLines){draw(t,M+13,labelY,8,bold,green);labelY-=12}
-     if(start>0)draw('(CONTINUAÇÃO)',W-M-95,topY-17,7,bold,muted);
-     let textY=topY-top-labelHeight-12;
-     for(const t of textLines.slice(start,start+count)){draw(t,M+15,textY,10,regular,ink);textY-=lineHeight}
-     y-=blockHeight+9;start+=count;
-   }
- }
+ function detail(label,value){if(!value)return;need(39);draw(label.toUpperCase(),M,y,8,bold,muted);y-=16;paragraph(value)}
  function grid(items){const gap=10,width=(CW-gap)/2;for(let k=0;k<items.length;k+=2){const cells=items.slice(k,k+2).map(([label,value])=>({label,lines:wrap(value||'Não informado',10,width-20)}));const maxLines=Math.max(...cells.map(c=>c.lines.length));for(let off=0;off<maxLines;off+=30){const n=Math.min(30,maxLines-off),h=34+n*14;need(h+10);cells.forEach((c,i)=>{const x=M+i*(width+gap);page.drawRectangle({x,y:y-h,width,height:h,color:light,borderWidth:.5,borderColor:line});draw(c.label.toUpperCase()+(off?' (CONT.)':''),x+10,y-15,7,bold,muted);c.lines.slice(off,off+n).forEach((t,j)=>draw(t,x+10,y-32-j*14,10))});y-=h+9}}}
  for(const reportDocument of documents){m=reportDocument.meta;const records=reportDocument.records;
  let sourcePdfFailed=false;
