@@ -108,6 +108,15 @@
     };
     let response;
     if(bytes.length>12000000){await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);continue;}
+    // Verificar os bytes persistidos antes de transmitir. Um registro corrompido ou
+    // alterado fora do fluxo normal nunca deve receber recibo de envio válido.
+    const calculated=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),
+      byte=>byte.toString(16).padStart(2,'0')).join('');
+    if(!/^[a-f0-9]{64}$/.test(job.hash)||calculated!==job.hash){
+     await change(job,{state:'conflict',integrityError:'sha256-mismatch',lease:null,leaseUntil:0},lease);
+     continue;
+    }
+    if(!await active(job,lease))throw Error('Fila alterada antes do envio');
     if(bytes.length<=3000000)response=await request({document:job.document,revision:job.revision});
     else{
      const upload_id=job.upload_id||crypto.randomUUID();
