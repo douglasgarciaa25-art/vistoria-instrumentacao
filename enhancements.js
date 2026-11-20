@@ -41,5 +41,45 @@
  document.addEventListener('vistoria-saved',()=>{dirty=false;$('localProtection').textContent='Salvo no aparelho · '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});cloudStatus().catch(()=>{$('cloudProtection').textContent='Não foi possível conferir a cópia na nuvem'});if(!trash.open&&$('trashList').childElementCount===0)window.refreshTrash().catch(()=>{})});
  new MutationObserver(()=>{if(/indisponível|Falha|Não foi/i.test($('saveState').textContent))$('localProtection').textContent=$('saveState').textContent}).observe($('saveState'),{childList:true});
  if(historyReady){$('localProtection').textContent='Salvo no aparelho';cloudStatus().catch(()=>{});window.refreshTrash().catch(()=>{})}
- if('serviceWorker' in navigator){let waiting=null,requested=false;navigator.serviceWorker.getRegistration().then(reg=>{if(!reg)return;const check=()=>{if(reg.waiting){waiting=reg.waiting;updates.hidden=false}};check();reg.addEventListener('updatefound',()=>{const w=reg.installing;w?.addEventListener('statechange',check)})});$('applyUpdate').onclick=async()=>{if(!waiting)return;if(busy||historyBusy||cloudWorking)return notify('Aguarde a operação em andamento antes de atualizar.');$('applyUpdate').disabled=true;try{await persistCurrent();requested=true;waiting.postMessage({type:'ACTIVATE_UPDATE'});$('applyUpdate').textContent='Atualizando…'}catch(e){$('applyUpdate').disabled=false;notify('Não foi possível salvar. A atualização foi cancelada.')}};navigator.serviceWorker.addEventListener('controllerchange',()=>{if(requested)location.reload()})}
+ if('serviceWorker' in navigator){
+  let requested=false;
+  const updateButton=$('applyUpdate');
+  navigator.serviceWorker.getRegistration().then(reg=>{
+    if(!reg)return;
+    const check=()=>{
+      if(reg.waiting){updates.hidden=false;updateButton.disabled=false;updateButton.textContent='Salvar e atualizar'}
+    };
+    check();
+    reg.addEventListener('updatefound',()=>{
+      const worker=reg.installing;
+      worker?.addEventListener('statechange',check);
+    });
+  }).catch(()=>notify('Não foi possível verificar a atualização do aplicativo.'));
+  updateButton.onclick=async()=>{
+    if(busy||historyBusy||(typeof cloudWorking!=='undefined'&&cloudWorking)){
+      notify('Aguarde a operação em andamento antes de atualizar.');return;
+    }
+    updateButton.disabled=true;
+    updateButton.textContent='Verificando atualização…';
+    try{
+      const reg=await navigator.serviceWorker.getRegistration();
+      const worker=reg?.waiting;
+      if(!worker){
+        updates.hidden=true;
+        notify('A atualização não está mais pendente. Reabra o aplicativo para conferir a versão.');
+        return;
+      }
+      updateButton.textContent='Salvando antes de atualizar…';
+      await persistCurrent();
+      requested=true;
+      worker.postMessage({type:'ACTIVATE_UPDATE'});
+      updateButton.textContent='Atualizando…';
+    }catch(e){
+      notify('Não foi possível salvar e atualizar: '+(e?.message||String(e)));
+    }finally{
+      if(!requested){updateButton.disabled=false;updateButton.textContent='Salvar e atualizar'}
+    }
+  };
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(requested)location.reload()});
+ }
 })();
