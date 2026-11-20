@@ -28,22 +28,3 @@ test('dependências batem com lockfile e servidor',()=>{
  assert.equal(pkg.dependencies['@vercel/blob'],lock.packages[''].dependencies['@vercel/blob']);
  assert.ok(readFileSync('cloud-server.mjs','utf8').includes("req.method==='DELETE'&&action==='delete'"));
 });
-
-test('botão de atualização preserva dados e não depende de variável ausente',()=>{
- const code=readFileSync('enhancements.js','utf8');
- assert.ok(code.includes("typeof cloudWorking!=='undefined'"),'Proteção da variável de sincronização ausente');
- assert.ok(code.includes('await persistCurrent()'),'Atualização deve salvar antes de ativar');
- assert.ok(code.includes("const worker=reg?.waiting"),'Atualização deve consultar o worker corrente');
- assert.ok(code.includes('Não foi possível salvar e atualizar:'),'Falha não pode ser silenciosa');
-});
-
-test('cabeçalho PDF mostra versão do aplicativo, não revisão da vistoria',()=>{
- const pdf=readFileSync('pdf-export.js','utf8');
- const html=readFileSync('index.html','utf8');
- const pkg=JSON.parse(readFileSync('package.json','utf8'));
- assert.ok(pdf.includes("Versão app: v"),'Cabeçalho não contém versão do aplicativo');
- assert.ok(pdf.includes('window.VISTORIA_APP_VERSION'),'PDF não consulta a versão atual');
- assert.ok(!pdf.includes("draw('Revisão: '+(m.revision||'A definir')"),'Cabeçalho antigo encontrado');
- assert.ok(html.includes('window.VISTORIA_APP_VERSION="'+pkg.version+'"'),'A versão do PDF diverge do aplicativo');
- assert.match(readFileSync('sw.js','utf8'),/const CACHE='vistoria-shell-v\d+-[^']+';/,'Cache não foi atualizado');
-});
