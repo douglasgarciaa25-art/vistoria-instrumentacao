@@ -121,6 +121,52 @@
    if(live.length){const head=live.at(-1);if(!head.deleted)heads.push(head)}
   }
   $('teamRemoteCount').textContent='Nuvem da equipe: '+heads.length+' vistoria(s) ativas e '+(listing.items||[]).length+' revisão(ões) registradas.';
+  $('teamListCount').textContent='('+heads.length+')';
+  const list=$('teamList');list.replaceChildren();
+  if(!heads.length){const p=document.createElement('p');p.className='muted';p.textContent='Nenhuma vistoria ativa encontrada. Consulte também os backups históricos abaixo.';list.append(p);}
+  for(const head of heads){
+   const entry=document.createElement('article');entry.className='entry';
+   const title=document.createElement('h3');title.textContent='Vistoria '+head.reportId.slice(0,8).toUpperCase();
+   const date=document.createElement('p');date.className='muted';date.textContent='Última atualização: '+new Date(head.created).toLocaleString('pt-BR');
+   const details=document.createElement('p');details.className='muted';details.setAttribute('role','status');
+   const actions=document.createElement('div');actions.className='actions';
+   const view=document.createElement('button');view.type='button';view.className='secondary';view.textContent='Ver detalhes';
+   view.onclick=async()=>{
+    view.disabled=true;details.textContent='Abrindo informações da vistoria…';
+    try{
+     const report=await payload(head),doc=report.document;
+     details.textContent='OS / referência: '+(doc.meta?.number||'Não informada')+' • '+(doc.meta?.title||'Relatório técnico')+' • '+doc.records.length+' ponto(s). TAGs: '+(doc.records.map(r=>r.tag).filter(Boolean).slice(0,8).join(', ')||'Não informadas');
+     title.textContent=(doc.meta?.number?doc.meta.number+' · ':'')+(doc.meta?.title||'Vistoria compartilhada');
+    }catch(e){details.textContent='Não foi possível abrir os detalhes: '+e.message;}
+    finally{view.disabled=false}
+   };
+   const recover=document.createElement('button');recover.type='button';recover.className='secondary';recover.textContent='Criar cópia local';
+   recover.onclick=async()=>{
+    if(!historyReady||busy||historyBusy||cloudWorking){state.textContent='Aguarde a operação anterior antes de recuperar a vistoria.';return}
+    if(!confirm('Criar uma cópia local desta vistoria da equipe? Nenhum registro será substituído.'))return;
+    recover.disabled=true;historyBusy=true;
+    try{
+     await persistCurrent();
+     if(await get('team-recovery-v1:'+head.id)){state.textContent='Esta revisão já foi recuperada neste aparelho.';return}
+     const packet=await payload(head);
+     if(packet.deleted)throw Error('Revisão excluída não pode ser importada.');
+     const doc=structuredClone(packet.document),id=newId();
+     doc.meta.title=(doc.meta.title||'Vistoria')+' (cópia da equipe)';
+     const tx=db.transaction(['reports','draft'],'readwrite');
+     tx.objectStore('reports').put({id,document:doc,updated:new Date().toISOString()});
+     tx.objectStore('draft').put({revisionId:head.id,recoveredAt:new Date().toISOString()},'team-recovery-v1:'+head.id);
+     await transactionDone(tx);await refreshHistory();
+     state.textContent='Cópia da equipe recuperada. Consulte a aba Início.';
+    }catch(e){state.textContent='Não foi possível recuperar: '+e.message}
+    finally{historyBusy=false;recover.disabled=false}
+   };
+   const history=document.createElement('button');history.type='button';history.className='secondary';history.textContent='Histórico de revisões';
+   history.onclick=()=>{
+    const revisions=byReport.get(head.reportId)||[];
+    details.textContent='Histórico: '+revisions.length+' revisão(ões). Última atualização em '+new Date(head.created).toLocaleString('pt-BR')+'.';
+   };
+   actions.append(view,recover,history);entry.append(title,date,actions,details);list.append(entry);
+  }
   return heads;
  }
  async function recoverTeam(){
@@ -158,6 +204,17 @@
   }catch(e){state.textContent='Recuperação não concluída: '+e.message+' Nenhuma cópia antiga foi excluída.'}
   finally{historyBusy=false;button.disabled=false}
  }
+ $('teamSendAll').onclick=async()=>{
+  if(!cloudKey){state.textContent='Primeiro conecte a equipe com a chave de acesso.';return}
+  if(!historyReady||busy||historyBusy||cloudWorking||running){state.textContent='Aguarde a operação em andamento e tente novamente.';return}
+  const count=(await rows()).length;
+  if(!count){state.textContent='Nenhuma vistoria local disponível para envio.';return}
+  if(!confirm('Conferir e enviar as '+count+' vistorias locais à nuvem da equipe? Envios já confirmados serão ignorados; dados remotos não serão excluídos.'))return;
+  const before=active,button=$('teamSendAll');button.disabled=true;
+  active=true;
+  try{await run()}
+  finally{if(!before){active=false;clearTimeout(timer)}button.disabled=false}
+ };
  $('teamInspect').onclick=()=>inspectTeam().catch(e=>{state.textContent='Falha ao consultar a equipe: '+e.message});
  $('teamRecover').onclick=recoverTeam;
  document.addEventListener('vistoria-dirty',()=>{epoch++;schedule()});
