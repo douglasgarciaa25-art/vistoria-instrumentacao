@@ -1,7 +1,7 @@
 /* Immutable revisions: concurrent edits remain separate heads until a later edit. */
 (()=>{
  const panel=document.createElement('section');panel.className='auto-cloud';
- panel.innerHTML='<h3>Vistorias compartilhadas da equipe</h3><p class="muted">Acesse o histórico da equipe com a chave já utilizada. Consulte ou recupere cópias sem apagar registros. A sincronização contínua exige ativação explícita e funciona apenas com o aplicativo aberto.</p><p id="teamRemoteCount" role="status">Conecte a equipe para consultar as vistorias compartilhadas.</p><p id="sharedCloudState" role="status">Sincronização contínua desativada por segurança.</p><div class="actions"><button type="button" id="teamInspect" class="secondary">Consultar vistorias da equipe</button><button type="button" id="teamRecover" class="secondary">Recuperar vistorias neste aparelho</button><button type="button" id="teamSyncToggle">Ativar sincronização da equipe</button><button type="button" id="sharedCloudNow" class="secondary" disabled>Sincronizar agora</button></div>';
+ panel.innerHTML='<h3>Vistorias compartilhadas da equipe</h3><p class="muted">Consulte as vistorias da equipe e os backups antigos. A lista fica recolhida até você abrir. Nenhum dado existente será excluído.</p><p id="teamRemoteCount" role="status">Conecte a equipe para consultar as vistorias compartilhadas.</p><details id="teamListDisclosure" class="team-reports-disclosure"><summary>Mostrar vistorias da equipe <span id="teamListCount"></span></summary><div id="teamList" class="team-report-list"><p class="muted">Conecte a equipe e consulte a lista.</p></div></details><p id="sharedCloudState" role="status">Sincronização contínua desativada. Os envios precisam ser confirmados.</p><div class="actions"><button type="button" id="teamInspect" class="secondary">Atualizar lista da equipe</button><button type="button" id="teamSendAll" class="secondary">Enviar todas as vistorias locais</button><button type="button" id="teamRecover" class="secondary">Recuperar vistorias neste aparelho</button><button type="button" id="teamSyncToggle">Ativar sincronização contínua</button><button type="button" id="sharedCloudNow" class="secondary" disabled>Sincronizar agora</button></div>';
  $('cloudControls').before(panel);
  const state=$('sharedCloudState');let running=false,timer,epoch=0,active=false;
  const get=key=>requestResult(db.transaction('draft').objectStore('draft').get(key));
@@ -29,7 +29,11 @@
    // Mantém tombstones mesmo após esvaziar a lixeira enquanto o aparelho estava offline.
    const trashedIds=new Set([...trashed.map(r=>r.id),...erasedKeys.filter(k=>typeof k==='string'&&k.startsWith('deleted-report:')).map(k=>k.slice('deleted-report:'.length))]);
    const startEpoch=epoch;
-   state.textContent='Sincronizando vistorias…';
+   state.textContent='Conferindo vistorias locais e recebimentos da equipe…';
+   const before=(await cloudApi('sync-list')).items||[];
+   const serverIds=new Set(before.map(m=>m.id));
+   let sent=0,already=0;
+   const receipts=[];
    // Publish against the revisions actually seen by this device, never unseen edits.
    const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id),...trashedIds]);
    for(const id of ids){
@@ -38,11 +42,17 @@
     // Only an explicitly trashed report can delete shared data.
     if(!row)continue; // Não publicar exclusões na nuvem legada.
     const value={deleted:false,document:row.document};
-    const fingerprint=await hash(value);if(meta.base[id]===fingerprint)continue;
-    const revision=await publish(id,meta.heads[id]||[],value);
+    const fingerprint=await hash(value);
+    const acknowledged=(meta.heads[id]||[]).filter(x=>serverIds.has(x));
+    if(meta.base[id]===fingerprint&&acknowledged.length){already++;continue}
+    state.textContent='Enviando '+(sent+1)+' / '+local.length+' vistorias locais à equipe…';
+    const revision=await publish(id,acknowledged,value);
+    receipts.push(revision.id);sent++;
     meta.base[id]=fingerprint;meta.heads[id]=[revision.id];await set(stateKey,meta);
    }
    const listing=await cloudApi('sync-list');
+   const confirmed=new Set((listing.items||[]).map(x=>x.id));
+   if(receipts.some(id=>!confirmed.has(id)))throw Error('Nem todos os envios foram confirmados pela nuvem da equipe. Tente novamente.');
    const byReport=new Map();for(const m of listing.items){if(!byReport.has(m.reportId))byReport.set(m.reportId,[]);byReport.get(m.reportId).push(m)}
    const changes=[],next=structuredClone(meta);let conflicts=0;
    for(const [id,revisions] of byReport){
@@ -89,7 +99,8 @@
     t.objectStore('reports').put({id:change.id,document:change.value.document,updated:change.updated});
    }
    t.objectStore('draft').put(next,stateKey);await transactionDone(t);await refreshHistory();
-   state.textContent='Conectado • Vistorias sincronizadas às '+new Date().toLocaleTimeString('pt-BR')+'.';
+   state.textContent='Equipe: '+sent+' enviada(s) agora, '+already+' já confirmada(s); '+local.length+' vistoria(s) locais conferidas. Sincronizado às '+new Date().toLocaleTimeString('pt-BR')+'.';
+   await inspectTeam();
    if(conflicts)notify('Edições simultâneas preservadas como versões para comparação.');
   }catch(e){state.textContent='Sincronização pendente: '+e.message+' Os dados locais foram mantidos.'}
   finally{running=false;cloudWorking=false}
