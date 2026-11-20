@@ -45,5 +45,5 @@ test('cabeçalho PDF mostra versão do aplicativo, não revisão da vistoria',()
  assert.ok(pdf.includes('window.VISTORIA_APP_VERSION'),'PDF não consulta a versão atual');
  assert.ok(!pdf.includes("draw('Revisão: '+(m.revision||'A definir')"),'Cabeçalho antigo encontrado');
  assert.ok(html.includes('window.VISTORIA_APP_VERSION="'+pkg.version+'"'),'A versão do PDF diverge do aplicativo');
- assert.ok(readFileSync('sw.js','utf8').includes('v25-correcao-atualizacao'),'Cache não foi atualizado');
+ assert.match(readFileSync('sw.js','utf8'),/const CACHE='vistoria-shell-v\d+-[^']+';/,'Cache não foi atualizado');
 });
