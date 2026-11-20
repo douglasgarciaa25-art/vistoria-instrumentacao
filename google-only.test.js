@@ -46,3 +46,27 @@ test('indicadores e revisão técnica não exigem chave da Vercel',()=>{
  assert.ok(server.includes('VISTORIA_GOOGLE_ALLOWED_EMAILS'));
  assert.ok(!server.includes('VISTORIA_ACCESS_HASH'));
 });
+
+test('Falhas do Google Drive têm tempo limite, mensagem clara e não apagam registros',()=>{
+ const drive=read('google-drive-sync.js');
+ assert.match(drive,/DRIVE_REQUEST_TIMEOUT_MS = 30000/);
+ assert.match(drive,/AbortSignal\.timeout\(DRIVE_REQUEST_TIMEOUT_MS\)/);
+ assert.match(drive,/O Google Drive não respondeu em 30 segundos/);
+ assert.match(drive,/Pasta do Google Drive verificada\. Conferindo as vistorias/);
+ assert.match(drive,/Aguardando o carregamento das vistorias locais/);
+ assert.match(drive,/Sincronização em andamento\. Aguarde o resultado/);
+ assert.ok(!drive.includes('localStorage.clear()'));
+ assert.ok(!drive.includes("indexedDB.deleteDatabase("));
+});
+
+test('Versão e cache da atualização de diagnóstico estão alinhados',()=>{
+ const pkg=JSON.parse(read('package.json'));
+ const lock=JSON.parse(read('package-lock.json'));
+ const html=read('index.html');
+ const sw=read('sw.js');
+ assert.equal(pkg.version, '6.0.2');
+ assert.equal(lock.version,pkg.version);
+ assert.equal(lock.packages[''].version,pkg.version);
+ assert.ok(html.includes('window.VISTORIA_APP_VERSION="'+pkg.version+'"'));
+ assert.ok(sw.includes('vistoria-shell-v26-diagnostico-drive'));
+});
