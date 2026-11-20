@@ -1,6 +1,6 @@
 # Matriz de verificação — 26 frentes do Vistoria Técnica
 
-Atualização: 19/11/2026. Base: branch `feat/equipe-compartilhada`.
+Atualização: 20/11/2026. Base: branch `feat/equipe-compartilhada`.
 **Atenção:** estes 26 critérios foram organizados a partir dos requisitos disponíveis. Não foi localizada uma lista original numerada com critérios de aceitação. Portanto, **não representam 26 homologações concluídas**.
 
 Legenda: **C** = implementação presente e conferida no código; **T** = teste sintético automatizado; **M** = validação manual indispensável; **P** = implementação ou comprovação parcial.
@@ -25,7 +25,7 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 | 16 | Fila isolada por conta Google mesmo com mesmo ID | `background-sync.js`, `background-queue.test.js` | C/T |
 | 17 | Cancelamento individual e logout sem afetar outra conta | `background-sync.js`, `google-drive-sync.js` | C/T |
 | 18 | Concorrência da fila sem envio duplicado | Lease transacional IndexedDB; `background-queue.test.js` | C/T |
-| 19 | Recibos, conflitos, falhas e documento preservado | `background-sync.js`, `background-queue.test.js` | C/T |
+| 19 | Recibos, conflitos, falhas e documento preservado | `background-sync.js`, `background-queue.test.js` | C/T: falha HTTP/JSON isolada por item, envio dos demais, documento e revisão preservados; M: teste Android |
 | 20 | Upload por partes, retomada e limite de 12 MB | `background-sync.js`, `api/team-reports.mjs` | C/T de 3,2 MB e rejeição >12 MB |
 | 21 | Enviar com aplicativo fechado | Service Worker + Background Sync | P/M: depende do Android/navegador, não garantido universalmente |
 | 22 | Dois seletores de fotos: câmera traseira e galeria | `index.html`, `field-tools.js` | C; M: permissão negada/cancelada, fotos múltiplas |
@@ -66,3 +66,11 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Ordenação funciona na edição local, backups e sincronização porque altera a sequência da lista de fotos já persistida.
 - Teste de regressão para reordenação, bloqueio durante carregamento, preservação dos objetos e disponibilidade offline.
 - Teste de recuperação de **oito fotografias sintéticas** por ponto, com OS geral e OS individual, no Drive simulado (não testa Android nem paginação visual do PDF).
+
+## Lote de resiliência da fila — 20/11/2026
+
+- Falha transitória de envio de um relatório não interrompe os demais itens da mesma conta: cada item libera sua lease e preserva documento e revisão para nova tentativa.
+- Resposta JSON inválida de um recibo não remove o documento nem impede o envio de outros relatórios.
+- Dois novos testes sintéticos verificam falha HTTP 503, retomada posterior, recibo inválido e ausência de reenvio duplicado do item já confirmado.
+- A identidade da conta continua verificada pela sessão antes da transmissão e o isolamento por chave composta, geração e lease permanece inalterado.
+- Ainda exige validação Android real, app fechado, duas contas autorizadas e concorrência de dispositivos. Não equivale a homologação integral.
