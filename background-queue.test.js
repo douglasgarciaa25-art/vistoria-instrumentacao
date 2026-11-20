@@ -137,7 +137,7 @@ test('HTTP 409 preserva documento, bloqueia reenvio automático',async()=>{
 test('recibo inválido não remove o documento nem marca envio como confirmado',async()=>{
  const {queue}=setup({handler:()=>Response.json({revision:0})});
  await queue.put(fixture('registro-4','conta-A',1));
- await assert.rejects(queue.run(),/Recibo da revisão inválido/);
+ await queue.run();
  const [job]=await queue.list();
  assert.equal(job.state,'pending');
  assert.ok(job.document);
@@ -194,7 +194,7 @@ test('envio de 3,2 MB retoma partes sem duplicar após falha de rede',async()=>{
   throw Error('Ação inesperada '+body.action);
  }});
  await queue.put({...fixture('report-large','conta-A',1,document),hash});
- await assert.rejects(queue.run(),/Parte não enviada/);
+ await queue.run();
  assert.equal((await queue.list())[0].state,'pending');
  assert.equal((await queue.list())[0].document.evidence.length,3_200_000);
  await queue.run();
@@ -226,7 +226,7 @@ test('falha HTTP 503 preserva revisão e permite retomada segura após reinício
  }});
  const original=fixture('retomada-503','conta-A',3,{meta:{workOrder:'00000987'},records:[{tag:'CT01'}]});
  await queue.put(original);
- await assert.rejects(queue.run(),/temporariamente indisponível/);
+ await queue.run();
  let [stored]=await queue.list();
  assert.equal(stored.state,'pending');
  assert.equal(stored.document.meta.workOrder,'00000987');
@@ -343,4 +343,44 @@ test('hash malformado nunca é aceito como prova de integridade',async()=>{
  assert.equal(stored.state,'conflict');
  assert.ok(stored.document);
  assert.equal(calls.filter(x=>x.url.startsWith('/api/team-reports')).length,0);
+});
+
+
+test('falha transitória de um ponto não bloqueia outro e ambos podem ser recuperados',async()=>{
+ let firstFails=true;
+ const {queue,calls}=setup({handler:(url,options)=>{
+  const id=new URL(url,'https://local.invalid').searchParams.get('id');
+  if(id==='a-falha'&&firstFails)return new Response('Indisponível',{status:503});
+  return Response.json({revision:2});
+ }});
+ await queue.put(fixture('a-falha','conta-A',1,{meta:{workOrder:'0001'},records:[]}));
+ await queue.put(fixture('b-ok','conta-A',1,{meta:{workOrder:'0002'},records:[]}));
+ await queue.run();
+ let jobs=await queue.list();
+ assert.equal(jobs.find(j=>j.id==='a-falha').state,'pending');
+ assert.equal(jobs.find(j=>j.id==='a-falha').document.meta.workOrder,'0001');
+ assert.equal(jobs.find(j=>j.id==='a-falha').lease,null);
+ assert.equal(jobs.find(j=>j.id==='b-ok').state,'sent');
+ assert.equal(jobs.find(j=>j.id==='b-ok').newRevision,2);
+ firstFails=false;
+ await queue.run();
+ jobs=await queue.list();
+ assert.equal(jobs.find(j=>j.id==='a-falha').state,'sent');
+ assert.equal(jobs.find(j=>j.id==='b-ok').state,'sent');
+ assert.equal(calls.filter(c=>c.url.includes('id=b-ok')).length,1);
+ assert.equal(calls.filter(c=>c.url.includes('id=a-falha')).length,2);
+});
+
+test('recibo JSON inválido não impede outro relatório e mantém cópia original',async()=>{
+ const {queue}=setup({handler:(url)=>{
+  const id=new URL(url,'https://local.invalid').searchParams.get('id');
+  return id==='a-json'?new Response('{inválido',{status:200,headers:{'Content-Type':'application/json'}}):Response.json({revision:2});
+ }});
+ await queue.put(fixture('a-json','conta-A',1));
+ await queue.put(fixture('b-valid','conta-A',1));
+ await queue.run();
+ const jobs=await queue.list();
+ assert.equal(jobs.find(j=>j.id==='a-json').state,'pending');
+ assert.ok(jobs.find(j=>j.id==='a-json').document);
+ assert.equal(jobs.find(j=>j.id==='b-valid').state,'sent');
 });

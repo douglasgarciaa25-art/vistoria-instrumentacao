@@ -146,6 +146,12 @@
     }else if([400,403,404,409].includes(response.status))
      await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);
     else throw Error('Envio temporariamente indisponível');
+   }catch(error){
+    // Uma falha de rede, recibo ou JSON de um ponto não deve impedir os demais
+    // pontos da mesma conta de serem enviados. A cópia permanece na fila.
+    // Não persistir tokens, respostas do servidor nem detalhes sensíveis.
+    if(typeof console!=='undefined'&&console.warn)
+     console.warn('Envio em segundo plano pendente; nova tentativa necessária.');
    }finally{
     // Falha temporária não apaga o documento nem prende a fila por dois minutos.
     await change(job,{lease:null,leaseUntil:0},lease).catch(()=>{});
