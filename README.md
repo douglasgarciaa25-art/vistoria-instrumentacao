@@ -6,7 +6,7 @@ Aplicativo web/PWA para criar, editar, acompanhar e exportar relatórios técnic
 - Vistorias com pontos, fotos, legendas, andamento e conclusão.
 - Exportação de PDFs por ponto, por relatório e de todos os relatórios.
 - Importação de PDF antigo, cópia JSON e lixeira local.
-- **Google Drive pessoal como única nuvem ativa**; cópias editáveis locais em JSON continuam disponíveis.
+- **Nuvem da equipe (Vercel Blob) e Google Drive pessoal em painéis separados**, sem apagar registros ou migrar backups automaticamente.
 - Funcionamento offline para registros locais; o envio exige rede.
 
 ## Configurar Google Drive pessoal
@@ -18,10 +18,17 @@ Aplicativo web/PWA para criar, editar, acompanhar e exportar relatórios técnic
 
 Não insira *client secret*, senhas nem tokens no GitHub ou aplicativo. O Drive pessoal não substitui uma solução corporativa colaborativa: exclusões locais não apagam automaticamente backups no Drive.
 
-## Google Drive como armazenamento único
-A aba **Nuvem** mostra somente o Google Drive. A chave da nuvem privada Vercel e os botões de cópias antigas foram retirados da interface. **A sincronização só acontece com o aplicativo aberto, uma conta Google autorizada e internet.** Dados offline permanecem no IndexedDB e são enviados após reconexão. Fotos e PDFs enviados ficam nas pastas do Google Drive.
+## Nuvem da equipe e recuperação das vistorias anteriores (v6.0.3)
+A aba **Nuvem** volta a mostrar a **nuvem da equipe da Vercel** e o **Google Drive pessoal** como serviços distintos. Os arquivos existentes em cada armazenamento não são apagados ou migrados automaticamente.
 
-As cópias históricas de Vercel Blob **não foram excluídas ou migradas automaticamente**. O endpoint antigo `/api/cloud` fica temporariamente disponível para uma eventual recuperação controlada, mas não é chamado pela interface. Não apague esse armazenamento antes de conferir que todos os registros necessários foram importados no Google Drive.
+- Para localizar os registros anteriores, informe a **mesma chave da equipe** e selecione **Conectar equipe**. **Consultar vistorias da equipe** mostra o número de vistorias ativas e revisões registradas; **Consultar backups** lista arquivos antigos, inclusive backups de vários formulários.
+- **Recuperar vistorias neste aparelho** exige confirmação e adiciona vistorias ausentes. Se houver ID igual com conteúdo diferente, mantém a vistoria local e importa uma cópia separada. A recuperação é deduplicada por revisão; não apaga dados locais ou remotos.
+- A **sincronização contínua da equipe fica desativada ao entrar**. Se o usuário a habilitar explicitamente, funciona apenas com o app aberto. Nesta versão, exclusões remotas não excluem vistorias locais; versões divergentes são preservadas como cópias.
+- O botão de **excluir backups antigos da nuvem** foi desabilitado nesta fase para proteger o histórico.
+- O número de revisões no armazenamento pode ser diferente do número de vistorias ativas. Conferir a disponibilidade real depende da chave autorizada e de consultar o armazenamento; os registros anteriores não são presumidos recuperados antes dessa validação.
+- Se a sincronização da equipe falhar, preservar o armazenamento do navegador e não limpar dados, desinstalar o app ou sobrescrever arquivos por restauração indiscriminada.
+
+O Google Drive continua independente, com autenticação OAuth e sincronização enquanto a sessão estiver válida e o aplicativo estiver aberto. A nuvem legada usa a chave de acesso compartilhada e o endpoint `/api/cloud`, que exige `VISTORIA_ACCESS_HASH` e `BLOB_READ_WRITE_TOKEN` no servidor.
 
 ## Verificação
 Execute com Node.js 22:
