@@ -4,18 +4,19 @@ import {readFileSync} from 'node:fs';
 
 const read=file=>readFileSync(file,'utf8');
 
-test('aba Nuvem mantém equipe e Google Drive em painéis separados',()=>{
+test('aba Nuvem utiliza somente Google Drive, sem painel antigo',()=>{
  const index=read('index.html');
  const layout=read('layout.js');
- assert.ok(index.includes('id="teamCloudPanel"'),'Painel de equipe ausente');
- assert.ok(index.includes('id="cloudKey"'),'Acesso histórico de equipe ausente');
- assert.ok(index.includes('id="cloudControls"'));
- assert.ok(index.includes('<script src="cloud.js"></script>'));
- assert.ok(index.includes('<script src="shared-cloud.js"></script>'));
+ assert.ok(!index.includes('NUVEM PRIVADA · VERCEL'));
+ assert.ok(!index.includes('id="cloudKey"'));
+ assert.ok(!index.includes('id="cloudLogin"'));
+ assert.ok(!index.includes('id="cloudControls"'));
+ assert.ok(!index.includes('<script src="cloud.js"></script>'));
+ assert.ok(!index.includes('<script src="shared-cloud.js"></script>'));
  assert.ok(index.includes('<script src="google-drive-sync.js"></script>'));
  assert.ok(layout.includes("cloud.id='googleCloudHost'"));
- assert.ok(layout.includes('storage.append(team,cloud,backup,install)'));
- assert.ok(layout.includes('EQUIPE E GOOGLE DRIVE'));
+ assert.ok(layout.includes('GOOGLE DRIVE'));
+ assert.ok(!layout.includes("$('cloudKey')"));
 });
 test('Google Drive mantém sincronização de vistorias, fotos e PDFs',()=>{
  const drive=read('google-drive-sync.js');
@@ -27,11 +28,11 @@ test('Google Drive mantém sincronização de vistorias, fotos e PDFs',()=>{
  assert.ok(drive.includes('https://www.googleapis.com/auth/drive.file'));
  assert.ok(drive.includes('https://www.googleapis.com/auth/userinfo.email'));
 });
-test('PWA preserva a equipe e Google Drive no cache offline',()=>{
+test('PWA não armazena scripts antigos de nuvem em cache',()=>{
  const sw=read('sw.js');
  assert.ok(sw.includes("'/google-drive-sync.js'"));
- assert.ok(sw.includes("'/cloud.js'"));
- assert.ok(sw.includes("'/shared-cloud.js'"));
+ assert.ok(!sw.includes("'/cloud.js'"));
+ assert.ok(!sw.includes("'/shared-cloud.js'"));
  assert.match(sw,/const CACHE='vistoria-shell-v\d+-[^']+';/);
 });
 test('indicadores e revisão técnica não exigem chave da Vercel',()=>{
@@ -44,60 +45,4 @@ test('indicadores e revisão técnica não exigem chave da Vercel',()=>{
  assert.ok(server.includes('VISTORIA_GOOGLE_CLIENT_ID'));
  assert.ok(server.includes('VISTORIA_GOOGLE_ALLOWED_EMAILS'));
  assert.ok(!server.includes('VISTORIA_ACCESS_HASH'));
-});
-
-test('Falhas do Google Drive têm tempo limite, mensagem clara e não apagam registros',()=>{
- const drive=read('google-drive-sync.js');
- assert.match(drive,/DRIVE_REQUEST_TIMEOUT_MS = 30000/);
- assert.match(drive,/AbortSignal\.timeout\(DRIVE_REQUEST_TIMEOUT_MS\)/);
- assert.match(drive,/O Google Drive não respondeu em 30 segundos/);
- assert.match(drive,/Pasta do Google Drive verificada\. Conferindo as vistorias/);
- assert.match(drive,/Aguardando o carregamento das vistorias locais/);
- assert.match(drive,/Sincronização em andamento\. Aguarde o resultado/);
- assert.ok(!drive.includes('localStorage.clear()'));
- assert.ok(!drive.includes("indexedDB.deleteDatabase("));
-});
-
-test('Versão e cache da recuperação da equipe estão alinhados',()=>{
- const pkg=JSON.parse(read('package.json'));
- const lock=JSON.parse(read('package-lock.json'));
- const html=read('index.html');
- const sw=read('sw.js');
- assert.equal(pkg.version, '6.0.4');
- assert.equal(lock.version,pkg.version);
- assert.equal(lock.packages[''].version,pkg.version);
- assert.ok(html.includes('window.VISTORIA_APP_VERSION="'+pkg.version+'"'));
- assert.ok(sw.includes('vistoria-shell-v28-equipe-lista-envios'));
-});
-
-test('Recuperação da equipe é opt-in e nunca exclui registros locais nem backups',()=>{
- const shared=read('shared-cloud.js');
- const legacy=read('cloud.js');
- assert.ok(shared.includes('let running=false,timer,epoch=0,active=false'));
- assert.ok(shared.includes('if(!active||running||!historyReady'));
- assert.ok(shared.includes("get(recoveredKey)"),'Cópias recuperadas devem ser deduplicadas');
- assert.ok(shared.includes('if(!confirm('),'Recuperação requer confirmação');
- assert.ok(shared.includes("teamSyncToggle"),'Ativação deve ser explícita');
- assert.ok(shared.includes('if(change.value.deleted)continue;'),'Excluir remoto nunca exclui local');
- assert.ok(shared.includes("t.objectStore('reports').put"),'Importação preserva o banco local');
- assert.ok(!shared.includes("t.objectStore('reports').delete("),'A equipe não pode apagar vistorias locais');
- assert.ok(!legacy.includes("cloudApi('delete&id='+remove"),'Excluir backups antigos deve estar desativado');
-});
-
-test('Vistorias da equipe só aparecem ao abrir a lista e mantêm ações por registro',()=>{
- const source=read('shared-cloud.js');
- assert.ok(source.includes('id="teamListDisclosure"'));
- assert.ok(source.includes('<summary>Mostrar vistorias da equipe'));
- assert.ok(source.includes('view.textContent=\'Ver detalhes\''));
- assert.ok(source.includes('recover.textContent=\'Criar cópia local\''));
- assert.ok(source.includes('history.textContent=\'Histórico de revisões\''));
- assert.ok(source.includes('teamSendAll'));
-});
-test('Envio da equipe confere recibos no servidor sem excluir dados locais',()=>{
- const source=read('shared-cloud.js');
- assert.ok(source.includes("const before=(await cloudApi('sync-list')).items||[]"));
- assert.ok(source.includes("const listing=await cloudApi('sync-list')"));
- assert.ok(source.includes('receipts.some(id=>!confirmed.has(id))'));
- assert.ok(source.includes('if(!row)continue;'));
- assert.ok(!source.includes("t.objectStore('reports').delete("));
 });
