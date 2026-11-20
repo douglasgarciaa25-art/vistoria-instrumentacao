@@ -82,17 +82,13 @@
      conflicts++;
     }
    }
-   const t=db.transaction(['reports','trash','draft'],'readwrite');
-   let activeChange=null;
+   // Não alterar o formulário aberto: a equipe grava somente no histórico.
+   const t=db.transaction(['reports','draft'],'readwrite');
    for(const change of changes){
-    if(change.value.deleted)continue; // Exclusões antigas permanecem como histórico, sem remoção local.
+    if(change.value.deleted)continue; // Nuvem legada nunca exclui vistorias deste dispositivo.
     t.objectStore('reports').put({id:change.id,document:change.value.document,updated:change.updated});
-    if(change.id===activeReportId)activeChange=change;
    }
-   if(activeChange){
-    if(!activeChange.value.deleted){reset();fill(activeChange.value.document);t.objectStore('draft').put({...activeChange.value.document,reportId:activeReportId},'current')}
-   }
-   t.objectStore('draft').put(next,stateKey);await transactionDone(t);await refreshHistory();if(window.refreshTrash)await window.refreshTrash();
+   t.objectStore('draft').put(next,stateKey);await transactionDone(t);await refreshHistory();
    state.textContent='Conectado • Vistorias sincronizadas às '+new Date().toLocaleTimeString('pt-BR')+'.';
    if(conflicts)notify('Edições simultâneas preservadas como versões para comparação.');
   }catch(e){state.textContent='Sincronização pendente: '+e.message+' Os dados locais foram mantidos.'}
