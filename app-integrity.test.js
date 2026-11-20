@@ -47,17 +47,18 @@ test('OS textual opcional e seletores de fotos independentes',()=>{
 });
 
 
-test('preenchimento em quatro etapas mantém controles originais e só altera apresentação',()=>{
+test('assistente compacto em cinco seções mantém controles originais e dados',()=>{
  const html=readFileSync('index.html','utf8');
  const wizard=readFileSync('form-wizard.js','utf8');
  const sw=readFileSync('sw.js','utf8');
  assert.ok(html.includes('<script src="form-wizard.js"></script>'));
  assert.ok(html.indexOf('voice-dictation.js')<html.indexOf('form-wizard.js'),'Guia deve carregar após os complementos');
  assert.match(wizard,/title:'Identificação'/);
- assert.match(wizard,/title:'Condição e análise'/);
- assert.match(wizard,/title:'Ações e conclusão'/);
+ assert.match(wizard,/title:'Condição encontrada'/);
+ assert.match(wizard,/title:'Diagnóstico e impacto'/);
+ assert.match(wizard,/title:'Plano de ação'/);
  assert.match(wizard,/title:'Fotos e salvar'/);
- assert.ok(wizard.includes('tag:0')&&wizard.includes('problem:1')&&wizard.includes('action:2'));
+ assert.ok(wizard.includes('tag:0')&&wizard.includes('problem:1')&&wizard.includes('analysisDraft:2')&&wizard.includes('action:3'));
  assert.ok(wizard.includes("const oldReset=reset")&&wizard.includes("const oldFill=fill"),'Troca de vistoria deve reiniciar etapa sem apagar dados');
  assert.ok(wizard.includes("event.preventDefault();event.stopImmediatePropagation()"),'Não pode salvar antes da última etapa');
  assert.ok(wizard.includes("form.addEventListener('invalid'"),'Campo obrigatório de outra etapa precisa ficar visível');
@@ -74,5 +75,41 @@ test('guia por etapas não altera módulos da equipe nem PDF',()=>{
  assert.ok(!wizard.includes('exportReportDocuments'));
  assert.ok(wizard.includes("form.querySelector('.photo')"));
  assert.ok(wizard.includes("document.getElementById('savedPointPicker')"));
- assert.ok(wizard.includes("step===2&&document.getElementById('status')?.value==='Corrigido'"));
+ assert.ok(wizard.includes("index===3&&document.getElementById('status')?.value==='Corrigido'"));
+});
+
+
+test('assistente mostra somente uma seção por vez com opções extras acessíveis',()=>{
+ const wizard=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(wizard),'Assistente deve ser JavaScript válido');
+ assert.ok(wizard.includes("node.dataset.wizardHidden=String(config.step!==current"));
+ assert.ok(wizard.includes("config.optional&&!expanded[current]"));
+ assert.ok(wizard.includes("more.setAttribute('aria-expanded',String(expanded[current]))"));
+ assert.ok(wizard.includes("more.addEventListener('click'"));
+ assert.ok(wizard.includes("const optionalIds=new Set(['pointWorkOrder','equipment','priority','owner','deadline'])"));
+ assert.ok(wizard.includes("child.classList.contains('guided-description')"));
+ assert.ok(wizard.includes("child.classList.contains('technical-review')"));
+ assert.ok(wizard.includes("if(child.classList.contains('photo'))group.set(child,{step:4,optional:false})"));
+ assert.ok(wizard.includes("child.classList.contains('completion')"));
+ assert.ok(wizard.includes("child.querySelector?.('#inspectionType')"));
+ assert.ok(wizard.includes("revealFilledOptions()"));
+});
+
+test('campos gerais podem ser abertos e os erros trazem o campo à vista',()=>{
+ const wizard=readFileSync('form-wizard.js','utf8');
+ const sw=readFileSync('sw.js','utf8');
+ assert.ok(wizard.includes('reportFields.hidden=!reportExpanded'));
+ assert.ok(wizard.includes('setReportExpanded(true)'));
+ assert.ok(wizard.includes('oldSteps.hidden=true'));
+ assert.ok(wizard.includes("setReportExpanded(false);return result"));
+ assert.ok(wizard.includes("if(!validate(step)){event.preventDefault();event.stopImmediatePropagation();return}"));
+ assert.ok(wizard.includes("form.addEventListener('invalid'"));
+ assert.ok(wizard.includes("expanded[stage]=true"));
+ assert.ok(wizard.includes("input.focus({preventScroll:true})"));
+ assert.ok(wizard.includes("index===3&&document.getElementById('status')?.value==='Corrigido'"));
+ assert.match(sw,/vistoria-shell-v57-campo-compacto/);
+ assert.match(sw,/'\/form-wizard\.js'/);
+ assert.ok(!wizard.includes('fetch('),'Assistente não deve depender de rede');
+ assert.ok(!wizard.includes('localStorage.clear('),'Assistente não deve limpar dados');
+ assert.ok(!wizard.includes('indexedDB.deleteDatabase('),'Assistente não deve excluir a base');
 });
