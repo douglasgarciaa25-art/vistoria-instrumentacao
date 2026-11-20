@@ -28,13 +28,3 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .technical-review-preview[hidden], .technical-review button[hidden] { display:none!important; }
 .technical-review-note { margin:8px 0; font-size:.85rem; }
 @media(max-width:520px){ .technical-review .actions button { flex:1 1 100%; } }
-
-/* Nuvem: vistorias da equipe e backups recolhidos inicialmente. */
-#view-cloud .team-reports-disclosure { margin:14px 0; border:1px solid #ded5e9; border-radius:12px; background:#fff; overflow:hidden; }
-#view-cloud .team-reports-disclosure>summary { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:15px 17px; font-weight:750; color:#442b62; cursor:pointer; min-height:50px; }
-#view-cloud .team-reports-disclosure[open]>summary { border-bottom:1px solid #e6ddec; }
-#view-cloud .team-report-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; padding:14px; }
-#view-cloud .team-report-list>.entry { min-width:0; margin:0; border:1px solid #e5dfea; border-radius:10px; padding:14px; background:#faf9fc; }
-#view-cloud .team-report-list .actions button { min-height:42px; white-space:normal; }
-#view-cloud .team-report-list .entry h3, #view-cloud .team-report-list .entry p { overflow-wrap:anywhere; }
-@media(max-width:760px){ #view-cloud .team-report-list { grid-template-columns:1fr; padding:10px; } #view-cloud .auto-cloud .actions button { flex:1 1 100%; } }
