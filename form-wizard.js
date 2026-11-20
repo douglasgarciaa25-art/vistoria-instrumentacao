@@ -33,7 +33,7 @@
  }
  const css=document.createElement('style');
  css.textContent=[
-  '#form [data-wizard-hidden="true"]{display:none!important}',
+  '#form [data-wizard-hidden="true"],#form .wizard-footer button[hidden]{display:none!important}',
   '#form .wizard-box{border:1px solid #d8cfe2;background:#fbf9fd;border-radius:12px;padding:14px;margin:16px 0 20px}',
   '#form .wizard-steps{display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin;padding:2px 0 10px}',
   '#form .wizard-steps button{flex:1 0 104px;min-width:0;background:#ede8f3;color:#3c2a52;border:1px solid #d9cce5;padding:9px 7px;border-radius:9px;font-size:12px;line-height:1.25;white-space:normal;text-align:center}',
