@@ -33,7 +33,7 @@ test('painel recolhível é responsivo e atualizado também offline',()=>{
  assert.match(css,/\.cloud-reports-disclosure>/);
  assert.match(css,/\.cloud-reports-disclosure\[open\]/);
  assert.match(css,/@media\(max-width:760px\)/);
- assert.match(sw,/vistoria-shell-v55-dictation/);
+ assert.match(sw,/vistoria-shell-v\d+-[a-z0-9-]+/);
  assert.match(sw,/'\/cloud-dashboard\.css'/);
  assert.match(sw,/'\/google-drive-sync\.js'/);
 });

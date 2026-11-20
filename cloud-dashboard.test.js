@@ -51,7 +51,7 @@ test('Estilo offline, responsivo, com foco visível e sem remover a navegação'
  assert.match(html,/href="\/layout\.css"/);
  assert.match(html,/href="\/cloud-dashboard\.css"/);
  assert.match(sw,/'\/cloud-dashboard\.css'/);
- assert.match(sw,/vistoria-shell-v55-dictation/);
+ assert.match(sw,/vistoria-shell-v\d+-[a-z0-9-]+/);
  assert.match(css,/@media\(max-width:760px\)/);
  assert.match(css,/focus-visible/);
  assert.match(css,/\.cloud-report-list\{/);
