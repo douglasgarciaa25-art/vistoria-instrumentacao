@@ -61,7 +61,7 @@ function fakeIndexedDB(legacy=[]){
  };
 }
 function fixture(id,subject,revision=0,document={meta:{title:'Teste sintético'},records:[]}){
- return {id,subject,revision,hash:'fake-sha256',document,generation:subject+'-generation',state:'pending'};
+ return {id,subject,revision,hash:createHash('sha256').update(JSON.stringify(document)).digest('hex'),document,generation:subject+'-generation',state:'pending'};
 }
 function setup({legacy=[],subject='conta-A',handler}={}){
  const indexedDB=fakeIndexedDB(legacy),calls=[];
@@ -305,4 +305,42 @@ test('logout da conta A mantém trabalhos da conta B durante resposta pendente',
  assert.equal(jobs.length,1);
  assert.equal(jobs[0].subject,'conta-B');
  assert.equal(jobs[0].state,'pending');
+});
+
+test('SHA-256 inválido preserva documento e impede qualquer POST de relatório',async()=>{
+ const {queue,calls}=setup();
+ const job=fixture('hash-invalid','conta-A',1,{meta:{workOrder:'00001'},records:[]});
+ await queue.put({...job,hash:'f'.repeat(64)});
+ await queue.run();
+ const [stored]=await queue.list();
+ assert.equal(stored.state,'conflict');
+ assert.equal(stored.integrityError,'sha256-mismatch');
+ assert.equal(stored.document.meta.workOrder,'00001');
+ assert.equal(stored.lease,null);
+ assert.equal(calls.filter(x=>x.url.startsWith('/api/team-reports')).length,0);
+});
+
+test('alteração silenciosa do documento na IndexedDB é detectada antes do envio',async()=>{
+ const {queue,indexedDB,calls}=setup();
+ await queue.put(fixture('tampered','conta-A',1,{meta:{workOrder:'00012'},records:[]}));
+ const store=indexedDB.getStore('jobs_scoped');
+ const [key,job]=[...store.entries()][0];
+ job.document.meta.workOrder='00013';
+ store.set(key,job);
+ await queue.run();
+ const [stored]=await queue.list();
+ assert.equal(stored.state,'conflict');
+ assert.equal(stored.document.meta.workOrder,'00013');
+ assert.equal(calls.filter(x=>x.url.startsWith('/api/team-reports')).length,0);
+});
+
+test('hash malformado nunca é aceito como prova de integridade',async()=>{
+ const {queue,calls}=setup();
+ await queue.put({...fixture('malformed','conta-A',0),hash:'fake-sha256'});
+ await queue.run();
+ const [stored]=await queue.list();
+ assert.equal(stored.integrityError,'sha256-mismatch');
+ assert.equal(stored.state,'conflict');
+ assert.ok(stored.document);
+ assert.equal(calls.filter(x=>x.url.startsWith('/api/team-reports')).length,0);
 });
