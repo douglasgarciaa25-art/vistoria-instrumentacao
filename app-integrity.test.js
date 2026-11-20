@@ -45,3 +45,34 @@ test('OS textual opcional e seletores de fotos independentes',()=>{
  assert.deepEqual(JSON.parse(JSON.stringify(fixture)),fixture);
  for(const key of keys) assert.equal(typeof fixture[key],'string');
 });
+
+
+test('preenchimento em quatro etapas mantém controles originais e só altera apresentação',()=>{
+ const html=readFileSync('index.html','utf8');
+ const wizard=readFileSync('form-wizard.js','utf8');
+ const sw=readFileSync('sw.js','utf8');
+ assert.ok(html.includes('<script src="form-wizard.js"></script>'));
+ assert.ok(html.indexOf('voice-dictation.js')<html.indexOf('form-wizard.js'),'Guia deve carregar após os complementos');
+ assert.match(wizard,/title:'Identificação'/);
+ assert.match(wizard,/title:'Condição e análise'/);
+ assert.match(wizard,/title:'Ações e conclusão'/);
+ assert.match(wizard,/title:'Fotos e salvar'/);
+ assert.ok(wizard.includes('tag:0')&&wizard.includes('problem:1')&&wizard.includes('action:2'));
+ assert.ok(wizard.includes("const oldReset=reset")&&wizard.includes("const oldFill=fill"),'Troca de vistoria deve reiniciar etapa sem apagar dados');
+ assert.ok(wizard.includes("event.preventDefault();event.stopImmediatePropagation()"),'Não pode salvar antes da última etapa');
+ assert.ok(wizard.includes("form.addEventListener('invalid'"),'Campo obrigatório de outra etapa precisa ficar visível');
+ assert.ok(sw.includes("'/form-wizard.js'"));
+ assert.ok(!wizard.includes('indexedDB.deleteDatabase('));
+ assert.ok(!wizard.includes('localStorage.clear('));
+ assert.ok(!wizard.includes('fetch('));
+});
+
+test('guia por etapas não altera módulos da equipe nem PDF',()=>{
+ const wizard=readFileSync('form-wizard.js','utf8');
+ assert.ok(!wizard.includes('team-reports'));
+ assert.ok(!wizard.includes('VistoriaGoogleDrive'));
+ assert.ok(!wizard.includes('exportReportDocuments'));
+ assert.ok(wizard.includes("form.querySelector('.photo')"));
+ assert.ok(wizard.includes("document.getElementById('savedPointPicker')"));
+ assert.ok(wizard.includes("step===2&&document.getElementById('status')?.value==='Corrigido'"));
+});
