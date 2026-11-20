@@ -64,6 +64,8 @@
   '#form>.fields{row-gap:15px}',
   '#form .photo .thumbs{margin-top:12px}',
   '@media(min-width:760px){#form .wizard-steps{grid-template-columns:repeat(3,minmax(0,1fr))}}',
+  '#identification .wizard-meta-toggle{width:100%;text-align:left;justify-content:flex-start;line-height:1.4;font-size:12px;min-height:46px}',
+  '#identification #meta{margin-top:15px}',
   '@media(max-width:450px){#form .wizard-box{padding:14px}#form .wizard-title{font-size:18px}#form .wizard-steps button{font-size:11px}#form .wizard-footer{gap:8px}}'
  ].join('\n');
  document.head.append(style);
@@ -100,6 +102,41 @@
  const next=footer.querySelector('#wizardNext');
  const expanded=steps.map(()=>false);
  let current=0;
+ // Os dados gerais continuam editáveis, mas não ocupam a tela toda durante o campo.
+ const reportPanel=document.getElementById('identification');
+ const reportFields=document.getElementById('meta');
+ const reportExtra=reportPanel?.querySelector(':scope > details.advanced');
+ let reportExpanded=false;
+ let reportToggle=null;
+ if(reportPanel&&reportFields){
+  reportToggle=document.createElement('button');
+  reportToggle.type='button';
+  reportToggle.id='wizardReportToggle';
+  reportToggle.className='secondary wizard-meta-toggle';
+  reportFields.before(reportToggle);
+  reportToggle.addEventListener('click',()=>setReportExpanded(!reportExpanded));
+  const oldSteps=document.querySelector('#view-editor .editor-steps');
+  if(oldSteps)oldSteps.hidden=true;
+  ['title','date','number','workOrder'].forEach(id=>document.getElementById(id)?.addEventListener('input',refreshReportSummary));
+  setReportExpanded(false);
+ }
+ function refreshReportSummary(){
+  if(!reportToggle)return;
+  const number=document.getElementById('number')?.value.trim();
+  const title=document.getElementById('title')?.value.trim()||'Vistoria sem título';
+  const label=number||title;
+  reportToggle.textContent=(reportExpanded?'− Recolher':'＋ Conferir / editar')+' dados do relatório · '+label.slice(0,65);
+ }
+ function setReportExpanded(open){
+  if(!reportToggle)return;
+  reportExpanded=Boolean(open);
+  reportFields.hidden=!reportExpanded;
+  if(reportExtra)reportExtra.hidden=!reportExpanded;
+  reportToggle.setAttribute('aria-expanded',String(reportExpanded));
+  refreshReportSummary();
+ }
+ document.getElementById('newReport')?.addEventListener('click',()=>setReportExpanded(true));
+ document.getElementById('clear')?.addEventListener('click',()=>setReportExpanded(true));
 
  function hasFilled(node){
   return [...node.querySelectorAll('input[id],select[id],textarea[id]')].some(input=>{
@@ -188,15 +225,17 @@
  const oldReset=reset;
  reset=function(){const result=oldReset.apply(this,arguments);expanded.fill(false);setStep(0);return result};
  const oldFill=fill;
- fill=function(){const result=oldFill.apply(this,arguments);expanded.fill(false);revealFilledOptions();setStep(0);return result};
+ fill=function(){const result=oldFill.apply(this,arguments);expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
  document.getElementById('savedPointPicker')?.addEventListener('change',()=>{
   revealFilledOptions();setStep(0);
  });
  document.getElementById('entries')?.addEventListener('click',event=>{
   if(event.target.closest('[data-edit],[data-duplicate-item]')){
-   expanded.fill(false);
-   revealFilledOptions();
-   setStep(0);
+   queueMicrotask(()=>{
+    expanded.fill(false);
+    revealFilledOptions();
+    setStep(0);
+   });
   }
  },true);
  render();
