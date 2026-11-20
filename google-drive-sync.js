@@ -10,6 +10,7 @@
   const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
   const ROOT_FOLDER = 'Vistoria Técnica';
   const PREFIX = 'vistoria_';
+  const DRIVE_REQUEST_TIMEOUT_MS = 30000;
   const STORE = 'vistoria-google-drive';
   const CLIENT_KEY = STORE + ':clientId';
   const CONNECTED_KEY = STORE + ':connectionWanted';
@@ -71,7 +72,16 @@
     assertReady();
     const headers = new Headers(opts.headers || {});
     headers.set('Authorization', 'Bearer ' + accessToken);
-    const response = await fetch(url, {...opts, headers, cache:'no-store'});
+    let response;
+    try {
+      response = await fetch(url, {...opts, headers, cache:'no-store',
+        signal: opts.signal || AbortSignal.timeout(DRIVE_REQUEST_TIMEOUT_MS)});
+    } catch (error) {
+      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+        throw Error('O Google Drive não respondeu em 30 segundos. Verifique a conexão e toque em Sincronizar agora para tentar novamente.');
+      }
+      throw error;
+    }
     if (response.status === 401) {
       accessToken=''; enabled=false;
       throw Error('Sessão Google expirou. Conecte novamente para continuar sincronizando.');
@@ -224,11 +234,15 @@
     if (!enabled || running) return;
     if (!navigator.onLine) { display('Offline: vistorias preservadas no aparelho.'); return; }
     if (!validToken()) { enabled=false; $('gdrive-connect').textContent='Reconectar Google Drive'; display('Autorização expirada. Toque em Reconectar; seus registros continuam salvos.',true); return; }
-    if (typeof historyReady==='undefined'||!historyReady) return;
+    if (typeof historyReady==='undefined'||!historyReady) {
+      display('Aguardando o carregamento das vistorias locais. A sincronização ainda não começou.');
+      return;
+    }
     running=true;
     let sent=0,received=0,conflicts=0;
     try {
       await ensureFolder();
+      display('Pasta do Google Drive verificada. Conferindo as vistorias…');
       // Nunca reutilizar hashes de outro Drive. Evita sobrescrever arquivos de outra conta.
       loadScope(folderId);
       // Do not upload the draft until the main app commits it to IndexedDB.
@@ -389,7 +403,11 @@
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
-    $('gdrive-now').addEventListener('click',()=>validToken()?sync():startConnection());
+    $('gdrive-now').addEventListener('click',()=>{
+      if(running){display('Sincronização em andamento. Aguarde o resultado antes de tentar novamente.');return;}
+      display('Conferindo a conexão e as vistorias…');
+      return validToken()?sync():startConnection();
+    });
     $('gdrive-disconnect').addEventListener('click',disconnect);
     document.addEventListener('vistoria-saved',()=>{if(!running)schedule()});
     function resume(){
