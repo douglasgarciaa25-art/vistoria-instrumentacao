@@ -63,11 +63,11 @@ test('Versão e cache da recuperação da equipe estão alinhados',()=>{
  const lock=JSON.parse(read('package-lock.json'));
  const html=read('index.html');
  const sw=read('sw.js');
- assert.equal(pkg.version, '6.0.3');
+ assert.equal(pkg.version, '6.0.4');
  assert.equal(lock.version,pkg.version);
  assert.equal(lock.packages[''].version,pkg.version);
  assert.ok(html.includes('window.VISTORIA_APP_VERSION="'+pkg.version+'"'));
- assert.ok(sw.includes('vistoria-shell-v27-equipe-recuperacao'));
+ assert.ok(sw.includes('vistoria-shell-v28-equipe-lista-envios'));
 });
 
 test('Recuperação da equipe é opt-in e nunca exclui registros locais nem backups',()=>{
@@ -82,4 +82,22 @@ test('Recuperação da equipe é opt-in e nunca exclui registros locais nem back
  assert.ok(shared.includes("t.objectStore('reports').put"),'Importação preserva o banco local');
  assert.ok(!shared.includes("t.objectStore('reports').delete("),'A equipe não pode apagar vistorias locais');
  assert.ok(!legacy.includes("cloudApi('delete&id='+remove"),'Excluir backups antigos deve estar desativado');
+});
+
+test('Vistorias da equipe só aparecem ao abrir a lista e mantêm ações por registro',()=>{
+ const source=read('shared-cloud.js');
+ assert.ok(source.includes('id="teamListDisclosure"'));
+ assert.ok(source.includes('<summary>Mostrar vistorias da equipe'));
+ assert.ok(source.includes('view.textContent=\'Ver detalhes\''));
+ assert.ok(source.includes('recover.textContent=\'Criar cópia local\''));
+ assert.ok(source.includes('history.textContent=\'Histórico de revisões\''));
+ assert.ok(source.includes('teamSendAll'));
+});
+test('Envio da equipe confere recibos no servidor sem excluir dados locais',()=>{
+ const source=read('shared-cloud.js');
+ assert.ok(source.includes("const before=(await cloudApi('sync-list')).items||[]"));
+ assert.ok(source.includes("const listing=await cloudApi('sync-list')"));
+ assert.ok(source.includes('receipts.some(id=>!confirmed.has(id))'));
+ assert.ok(source.includes('if(!row)continue;'));
+ assert.ok(!source.includes("t.objectStore('reports').delete("));
 });
