@@ -216,3 +216,93 @@ test('limite de 12MB não remove o documento quando excedido',async()=>{
  assert.equal(job.document.evidence.length,12_000_100);
  assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,0);
 });
+
+
+test('falha HTTP 503 preserva revisão e permite retomada segura após reinício',async()=>{
+ let attempts=0;
+ const {queue,calls}=setup({handler:()=>{
+  attempts++;
+  return attempts===1?new Response('Indisponível',{status:503}):Response.json({revision:4});
+ }});
+ const original=fixture('retomada-503','conta-A',3,{meta:{workOrder:'00000987'},records:[{tag:'CT01'}]});
+ await queue.put(original);
+ await assert.rejects(queue.run(),/temporariamente indisponível/);
+ let [stored]=await queue.list();
+ assert.equal(stored.state,'pending');
+ assert.equal(stored.document.meta.workOrder,'00000987');
+ assert.equal(stored.revision,3);
+ assert.equal(stored.lease,null);
+ assert.equal(stored.leaseUntil,0);
+ await queue.run();
+ [stored]=await queue.list();
+ assert.equal(stored.state,'sent');
+ assert.equal(stored.newRevision,4);
+ assert.equal(stored.document,null);
+ assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,2);
+});
+
+test('substituir geração durante envio impede recibo antigo de apagar versão nova',async()=>{
+ let start,finish;
+ const entered=new Promise(resolve=>{start=resolve});
+ const wait=new Promise(resolve=>{finish=resolve});
+ const {queue}=setup({handler:async()=>{
+  start();
+  await wait;
+  return Response.json({revision:2});
+ }});
+ const first=fixture('same-report','conta-A',1,{meta:{workOrder:'0001'},records:[]});
+ await queue.put(first);
+ const running=queue.run();
+ await entered;
+ const newer={...fixture('same-report','conta-A',1,{meta:{workOrder:'0002'},records:[]}),generation:'generation-new'};
+ await queue.put(newer);
+ finish();
+ await running;
+ const [saved]=await queue.list();
+ assert.equal(saved.state,'pending');
+ assert.equal(saved.generation,'generation-new');
+ assert.equal(saved.document.meta.workOrder,'0002');
+ assert.equal(saved.newRevision,undefined);
+});
+
+test('cancelar somente um item não interrompe outro da mesma conta',async()=>{
+ let start,finish,requested=0;
+ const entered=new Promise(resolve=>{start=resolve});
+ const wait=new Promise(resolve=>{finish=resolve});
+ const {queue}=setup({handler:async()=>{
+  requested++;
+  if(requested===1){start();await wait;}
+  return Response.json({revision:2});
+ }});
+ await queue.put(fixture('a-first','conta-A',1));
+ await queue.put(fixture('b-second','conta-A',1));
+ const running=queue.run();
+ await entered;
+ const first=(await queue.list()).find(x=>x.id==='a-first');
+ assert.equal(await queue.cancel(first),true);
+ finish();
+ await running;
+ const jobs=await queue.list();
+ assert.equal(jobs.length,1);
+ assert.equal(jobs[0].id,'b-second');
+ assert.equal(jobs[0].state,'sent');
+ assert.equal(requested,2);
+});
+
+test('logout da conta A mantém trabalhos da conta B durante resposta pendente',async()=>{
+ let start,finish;
+ const entered=new Promise(resolve=>{start=resolve});
+ const wait=new Promise(resolve=>{finish=resolve});
+ const {queue}=setup({handler:async()=>{start();await wait;return Response.json({revision:2});}});
+ await queue.put(fixture('same-id','conta-A',1));
+ await queue.put(fixture('same-id','conta-B',1));
+ const running=queue.run();
+ await entered;
+ assert.equal(await queue.clearFor('conta-A'),1);
+ finish();
+ await running;
+ const jobs=await queue.list();
+ assert.equal(jobs.length,1);
+ assert.equal(jobs[0].subject,'conta-B');
+ assert.equal(jobs[0].state,'pending');
+});
