@@ -1,7 +1,7 @@
 /* Immutable revisions: concurrent edits remain separate heads until a later edit. */
 (()=>{
  const panel=document.createElement('section');panel.className='auto-cloud';
- panel.innerHTML='<h3>Vistorias compartilhadas da equipe</h3><p class="muted">Acesse o histórico da equipe com a chave já utilizada. Consulte ou recupere cópias sem apagar registros. A sincronização contínua exige ativação explícita e funciona apenas com o aplicativo aberto.</p><p id="teamRemoteCount" role="status">Conecte a equipe para consultar as vistorias compartilhadas.</p><p id="sharedCloudState" role="status">Sincronização contínua desativada por segurança.</p><div class="actions"><button type="button" id="teamInspect" class="secondary">Consultar vistorias da equipe</button><button type="button" id="teamRecover" class="secondary">Recuperar vistorias neste aparelho</button><button type="button" id="teamSyncToggle">Ativar sincronização da equipe</button><button type="button" id="sharedCloudNow" class="secondary" disabled>Sincronizar agora</button></div>';
+ panel.innerHTML='<h3>Vistorias compartilhadas da equipe</h3><p class="muted">Consulte as vistorias da equipe e os backups antigos. A lista fica recolhida até você abrir. Nenhum dado existente será excluído.</p><p id="teamRemoteCount" role="status">Conecte a equipe para consultar as vistorias compartilhadas.</p><details id="teamListDisclosure" class="team-reports-disclosure"><summary>Mostrar vistorias da equipe <span id="teamListCount"></span></summary><div id="teamList" class="team-report-list"><p class="muted">Conecte a equipe e consulte a lista.</p></div></details><p id="sharedCloudState" role="status">Sincronização contínua desativada. Os envios precisam ser confirmados.</p><div class="actions"><button type="button" id="teamInspect" class="secondary">Atualizar lista da equipe</button><button type="button" id="teamSendAll" class="secondary">Enviar todas as vistorias locais</button><button type="button" id="teamRecover" class="secondary">Recuperar vistorias neste aparelho</button><button type="button" id="teamSyncToggle">Ativar sincronização contínua</button><button type="button" id="sharedCloudNow" class="secondary" disabled>Sincronizar agora</button></div>';
  $('cloudControls').before(panel);
  const state=$('sharedCloudState');let running=false,timer,epoch=0,active=false;
  const get=key=>requestResult(db.transaction('draft').objectStore('draft').get(key));
@@ -29,7 +29,16 @@
    // Mantém tombstones mesmo após esvaziar a lixeira enquanto o aparelho estava offline.
    const trashedIds=new Set([...trashed.map(r=>r.id),...erasedKeys.filter(k=>typeof k==='string'&&k.startsWith('deleted-report:')).map(k=>k.slice('deleted-report:'.length))]);
    const startEpoch=epoch;
-   state.textContent='Sincronizando vistorias…';
+   state.textContent='Conferindo vistorias locais e recebimentos da equipe…';
+   const before=(await cloudApi('sync-list')).items||[];
+   const serverIds=new Set(before.map(m=>m.id));
+   const serverByReport=new Map();
+   for(const revision of before){
+    if(!serverByReport.has(revision.reportId))serverByReport.set(revision.reportId,[]);
+    serverByReport.get(revision.reportId).push(revision);
+   }
+   let sent=0,already=0,pendingConflicts=0;
+   const receipts=[];
    // Publish against the revisions actually seen by this device, never unseen edits.
    const ids=new Set([...Object.keys(meta.base),...local.map(r=>r.id),...trashedIds]);
    for(const id of ids){
@@ -38,11 +47,31 @@
     // Only an explicitly trashed report can delete shared data.
     if(!row)continue; // Não publicar exclusões na nuvem legada.
     const value={deleted:false,document:row.document};
-    const fingerprint=await hash(value);if(meta.base[id]===fingerprint)continue;
-    const revision=await publish(id,meta.heads[id]||[],value);
+    const fingerprint=await hash(value);
+    const acknowledged=(meta.heads[id]||[]).filter(x=>serverIds.has(x));
+    const revisions=serverByReport.get(id)||[];
+    const superseded=new Set(revisions.flatMap(m=>m.parents||[]));
+    const live=revisions.filter(m=>!superseded.has(m.id));
+    // Não enviar uma alteração local sobre uma revisão remota que este aparelho não conhece.
+    if(live.length && live.some(m=>!acknowledged.includes(m.id))){
+      const latest=live.toSorted((a,b)=>String(a.created).localeCompare(String(b.created))).at(-1);
+      const remote=await payload(latest);
+      if(!remote.deleted && await hash(remote)===fingerprint){
+        meta.base[id]=fingerprint;meta.heads[id]=live.map(x=>x.id);
+        await set(stateKey,meta);already++;continue;
+      }
+      pendingConflicts++;
+      continue;
+    }
+    if(meta.base[id]===fingerprint&&acknowledged.length){already++;continue}
+    state.textContent='Enviando '+(sent+1)+' / '+local.length+' vistorias locais à equipe…';
+    const revision=await publish(id,acknowledged,value);
+    receipts.push(revision.id);sent++;
     meta.base[id]=fingerprint;meta.heads[id]=[revision.id];await set(stateKey,meta);
    }
    const listing=await cloudApi('sync-list');
+   const confirmed=new Set((listing.items||[]).map(x=>x.id));
+   if(receipts.some(id=>!confirmed.has(id)))throw Error('Nem todos os envios foram confirmados pela nuvem da equipe. Tente novamente.');
    const byReport=new Map();for(const m of listing.items){if(!byReport.has(m.reportId))byReport.set(m.reportId,[]);byReport.get(m.reportId).push(m)}
    const changes=[],next=structuredClone(meta);let conflicts=0;
    for(const [id,revisions] of byReport){
@@ -89,7 +118,8 @@
     t.objectStore('reports').put({id:change.id,document:change.value.document,updated:change.updated});
    }
    t.objectStore('draft').put(next,stateKey);await transactionDone(t);await refreshHistory();
-   state.textContent='Conectado • Vistorias sincronizadas às '+new Date().toLocaleTimeString('pt-BR')+'.';
+   state.textContent='Equipe: '+sent+' enviada(s) agora, '+already+' já confirmada(s), '+pendingConflicts+' divergência(s) não enviada(s). '+local.length+' vistoria(s) locais conferidas às '+new Date().toLocaleTimeString('pt-BR')+'.'+(pendingConflicts?' Compare as versões antes de enviar estas vistorias.':'');
+   await inspectTeam();
    if(conflicts)notify('Edições simultâneas preservadas como versões para comparação.');
   }catch(e){state.textContent='Sincronização pendente: '+e.message+' Os dados locais foram mantidos.'}
   finally{running=false;cloudWorking=false}
@@ -110,6 +140,52 @@
    if(live.length){const head=live.at(-1);if(!head.deleted)heads.push(head)}
   }
   $('teamRemoteCount').textContent='Nuvem da equipe: '+heads.length+' vistoria(s) ativas e '+(listing.items||[]).length+' revisão(ões) registradas.';
+  $('teamListCount').textContent='('+heads.length+')';
+  const list=$('teamList');list.replaceChildren();
+  if(!heads.length){const p=document.createElement('p');p.className='muted';p.textContent='Nenhuma vistoria ativa encontrada. Consulte também os backups históricos abaixo.';list.append(p);}
+  for(const head of heads){
+   const entry=document.createElement('article');entry.className='entry';
+   const title=document.createElement('h3');title.textContent='Vistoria '+head.reportId.slice(0,8).toUpperCase();
+   const date=document.createElement('p');date.className='muted';date.textContent='Última atualização: '+new Date(head.created).toLocaleString('pt-BR');
+   const details=document.createElement('p');details.className='muted';details.setAttribute('role','status');
+   const actions=document.createElement('div');actions.className='actions';
+   const view=document.createElement('button');view.type='button';view.className='secondary';view.textContent='Ver detalhes';
+   view.onclick=async()=>{
+    view.disabled=true;details.textContent='Abrindo informações da vistoria…';
+    try{
+     const report=await payload(head),doc=report.document;
+     details.textContent='OS / referência: '+(doc.meta?.number||'Não informada')+' • '+(doc.meta?.title||'Relatório técnico')+' • '+doc.records.length+' ponto(s). TAGs: '+(doc.records.map(r=>r.tag).filter(Boolean).slice(0,8).join(', ')||'Não informadas');
+     title.textContent=(doc.meta?.number?doc.meta.number+' · ':'')+(doc.meta?.title||'Vistoria compartilhada');
+    }catch(e){details.textContent='Não foi possível abrir os detalhes: '+e.message;}
+    finally{view.disabled=false}
+   };
+   const recover=document.createElement('button');recover.type='button';recover.className='secondary';recover.textContent='Criar cópia local';
+   recover.onclick=async()=>{
+    if(!historyReady||busy||historyBusy||cloudWorking){state.textContent='Aguarde a operação anterior antes de recuperar a vistoria.';return}
+    if(!confirm('Criar uma cópia local desta vistoria da equipe? Nenhum registro será substituído.'))return;
+    recover.disabled=true;historyBusy=true;
+    try{
+     await persistCurrent();
+     if(await get('team-recovery-v1:'+head.id)){state.textContent='Esta revisão já foi recuperada neste aparelho.';return}
+     const packet=await payload(head);
+     if(packet.deleted)throw Error('Revisão excluída não pode ser importada.');
+     const doc=structuredClone(packet.document),id=newId();
+     doc.meta.title=(doc.meta.title||'Vistoria')+' (cópia da equipe)';
+     const tx=db.transaction(['reports','draft'],'readwrite');
+     tx.objectStore('reports').put({id,document:doc,updated:new Date().toISOString()});
+     tx.objectStore('draft').put({revisionId:head.id,recoveredAt:new Date().toISOString()},'team-recovery-v1:'+head.id);
+     await transactionDone(tx);await refreshHistory();
+     state.textContent='Cópia da equipe recuperada. Consulte a aba Início.';
+    }catch(e){state.textContent='Não foi possível recuperar: '+e.message}
+    finally{historyBusy=false;recover.disabled=false}
+   };
+   const history=document.createElement('button');history.type='button';history.className='secondary';history.textContent='Histórico de revisões';
+   history.onclick=()=>{
+    const revisions=byReport.get(head.reportId)||[];
+    details.textContent='Histórico: '+revisions.length+' revisão(ões). Última atualização em '+new Date(head.created).toLocaleString('pt-BR')+'.';
+   };
+   actions.append(view,recover,history);entry.append(title,date,actions,details);list.append(entry);
+  }
   return heads;
  }
  async function recoverTeam(){
@@ -147,6 +223,17 @@
   }catch(e){state.textContent='Recuperação não concluída: '+e.message+' Nenhuma cópia antiga foi excluída.'}
   finally{historyBusy=false;button.disabled=false}
  }
+ $('teamSendAll').onclick=async()=>{
+  if(!cloudKey){state.textContent='Primeiro conecte a equipe com a chave de acesso.';return}
+  if(!historyReady||busy||historyBusy||cloudWorking||running){state.textContent='Aguarde a operação em andamento e tente novamente.';return}
+  const count=(await rows()).length;
+  if(!count){state.textContent='Nenhuma vistoria local disponível para envio.';return}
+  if(!confirm('Conferir e enviar as '+count+' vistorias locais à nuvem da equipe? Envios já confirmados serão ignorados; dados remotos não serão excluídos.'))return;
+  const before=active,button=$('teamSendAll');button.disabled=true;
+  active=true;
+  try{await run()}
+  finally{if(!before){active=false;clearTimeout(timer)}button.disabled=false}
+ };
  $('teamInspect').onclick=()=>inspectTeam().catch(e=>{state.textContent='Falha ao consultar a equipe: '+e.message});
  $('teamRecover').onclick=recoverTeam;
  document.addEventListener('vistoria-dirty',()=>{epoch++;schedule()});
