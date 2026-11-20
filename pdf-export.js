@@ -16,7 +16,7 @@ async function exportReportDocuments(documents){
  function newPage(){page=doc.addPage([W,H]);if(m.watermark)page.drawText(clean(m.watermark),{x:80,y:180,size:53,font:bold,color:rgb(.93,.93,.93),rotate:degrees(52)});page.drawImage(logo,{x:M,y:H-69,width:130,height:130*logo.height/logo.width});draw('CMOC BRASIL',W-M-115,H-43,9,bold);draw('Versão app: v'+(window.VISTORIA_APP_VERSION||'6.0.0'),W-M-115,H-59,9);page.drawLine({start:{x:M,y:H-83},end:{x:W-M,y:H-83},thickness:.6,color:line});y=H-108}
  function need(h){if(y-h<55)newPage()}
  function paragraph(v,size=10,color=ink){for(const t of wrap(v,size,CW)){need(size+5);draw(t,M,y,size,regular,color);y-=size+5}y-=5}
- function heading(v){const lines=wrap(v,12,CW-26,bold),h=17+lines.length*17;need(h+21);y-=8;page.drawRectangle({x:M,y:y-h,width:CW,height:h,color:light});page.drawRectangle({x:M,y:y-h,width:4,height:h,color:green});lines.forEach((t,i)=>draw(t,M+13,y-21-i*17,12,bold,green));y-=h+13}
+ function heading(v){const lines=wrap(v,12,CW-26,bold),h=17+lines.length*17;need(h+92);y-=8;page.drawRectangle({x:M,y:y-h,width:CW,height:h,color:light});page.drawRectangle({x:M,y:y-h,width:4,height:h,color:green});lines.forEach((t,i)=>draw(t,M+13,y-21-i*17,12,bold,green));y-=h+13}
  function detail(label,value){
   if(value===undefined||value===null||value==='')return;
   const lines=wrap(value,10,CW-28);
