@@ -82,3 +82,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Se ocorrer logout, expiração ou troca de conta, a fila mantém o documento e a revisão originais, libera a lease e aguarda nova execução autorizada. Não elimina trabalhos de outras contas.
 - Testes sintéticos específicos: troca de conta entre relatórios; logout entre chunks; troca de conta antes da consulta de partes, sem transmissão indevida.
 - Pendência **M**: verificar em Android real e com duas contas autorizadas o comportamento do Service Worker com aplicativo fechado e retomada de upload. Nenhuma validação real foi simulada como homologação.
+
+## Lote de validação de recibos de partes — 21/11/2026
+
+- A retomada de upload em partes só aceita um vetor de índices inteiros, não negativos, sem duplicação e dentro da quantidade real de partes. Recibos de status com valores negativos, fora do limite, fracionários, textuais, duplicados ou ausentes são recusados sem transmitir bytes.
+- JSON inválido ou recibo malformado preserva o documento, hash, revisão, progresso e lease liberada para nova tentativa. Nenhum documento é excluído ou marcado como enviado sem confirmação final.
+- Testes sintéticos específicos verificam recibos inválidos e recuperação após JSON corrompido; **não substituem** Android real, duas contas autorizadas nem auditoria de rede no dispositivo.
