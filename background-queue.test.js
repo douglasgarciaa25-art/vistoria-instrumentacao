@@ -489,3 +489,46 @@ test('resposta de status com JSON inválido mantém fila e permite recuperação
  assert.equal(saved.document,null);
  assert.ok(parts>0);
 });
+
+
+test('HTTP 200 sem confirmação da parte não avança o progresso nem conclui upload',async()=>{
+ const document={meta:{workOrder:'000009'},records:[],evidence:'X'.repeat(3_100_000)};
+ let partCalls=0,finishCalls=0;
+ const {queue}=setup({handler:(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.action==='upload-status')return Response.json({parts:[]});
+  if(body.action==='upload-part'){partCalls++;return Response.json({ok:false});}
+  if(body.action==='upload-finish'){finishCalls++;return Response.json({revision:2});}
+  throw Error('Ação inesperada');
+ }});
+ await queue.put(fixture('invalid-part-ack','conta-A',1,document));
+ await queue.run();
+ const [job]=await queue.list();
+ assert.equal(partCalls,1);
+ assert.equal(finishCalls,0);
+ assert.equal(job.state,'pending');
+ assert.ok(job.document);
+ assert.equal(job.progress,undefined);
+ assert.equal(job.lease,null);
+});
+
+test('recibo de parte com JSON corrompido não descarta documento e permite retomar',async()=>{
+ const document={meta:{workOrder:'000010'},records:[],evidence:'X'.repeat(3_100_000)};
+ let invalid=true;
+ const {queue}=setup({handler:(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.action==='upload-status')return Response.json({parts:[]});
+  if(body.action==='upload-part')return invalid
+   ?new Response('{broken',{status:200,headers:{'Content-Type':'application/json'}})
+   :Response.json({ok:true});
+  if(body.action==='upload-finish')return Response.json({revision:2});
+  throw Error('Ação inesperada');
+ }});
+ await queue.put(fixture('corrupt-part-ack','conta-A',1,document));
+ await queue.run();
+ assert.equal((await queue.list())[0].state,'pending');
+ assert.ok((await queue.list())[0].document);
+ invalid=false;
+ await queue.run();
+ assert.equal((await queue.list())[0].state,'sent');
+});
