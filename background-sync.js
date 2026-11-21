@@ -151,6 +151,9 @@
       let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));
       const result=await request({...base,action:'upload-part',part,payload:btoa(binary)});
       if(!successStatus(result.status))throw Error('Parte não enviada');
+      // HTTP 2xx sozinho não comprova que a parte foi armazenada.
+      const receipt=await result.json();
+      if(!receipt||receipt.ok!==true)throw Error('Recibo da parte inválido');
       await checkpoint(job,lease,{progress:part+1,total});
      }
      response=await request({...base,action:'upload-finish',total,sha256:job.hash});
