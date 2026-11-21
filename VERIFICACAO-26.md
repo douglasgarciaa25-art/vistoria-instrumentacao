@@ -1,6 +1,6 @@
 # Matriz de verificação — 26 frentes do Vistoria Técnica
 
-Atualização: 20/11/2026. Base: branch `feat/equipe-compartilhada`.
+Atualização: 21/11/2026. Base: branch `feat/equipe-compartilhada`.
 **Atenção:** estes 26 critérios foram organizados a partir dos requisitos disponíveis. Não foi localizada uma lista original numerada com critérios de aceitação. Portanto, **não representam 26 homologações concluídas**.
 
 Legenda: **C** = implementação presente e conferida no código; **T** = teste sintético automatizado; **M** = validação manual indispensável; **P** = implementação ou comprovação parcial.
@@ -74,3 +74,11 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Dois novos testes sintéticos verificam falha HTTP 503, retomada posterior, recibo inválido e ausência de reenvio duplicado do item já confirmado.
 - A identidade da conta continua verificada pela sessão antes da transmissão e o isolamento por chave composta, geração e lease permanece inalterado.
 - Ainda exige validação Android real, app fechado, duas contas autorizadas e concorrência de dispositivos. Não equivale a homologação integral.
+
+## Lote de isolamento de sessão durante transmissão — 21/11/2026
+
+- Revalidação da sessão autenticada e do identificador da conta **antes de cada POST** de relatório, inclusive consulta de partes, envio de cada chunk e conclusão.
+- O token de acesso não é reutilizado após troca de conta; o token fresco da sessão corrente só é usado se a identidade permanecer igual à do trabalho.
+- Se ocorrer logout, expiração ou troca de conta, a fila mantém o documento e a revisão originais, libera a lease e aguarda nova execução autorizada. Não elimina trabalhos de outras contas.
+- Testes sintéticos específicos: troca de conta entre relatórios; logout entre chunks; troca de conta antes da consulta de partes, sem transmissão indevida.
+- Pendência **M**: verificar em Android real e com duas contas autorizadas o comportamento do Service Worker com aplicativo fechado e retomada de upload. Nenhuma validação real foi simulada como homologação.
