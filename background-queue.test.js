@@ -63,12 +63,12 @@ function fakeIndexedDB(legacy=[]){
 function fixture(id,subject,revision=0,document={meta:{title:'Teste sintético'},records:[]}){
  return {id,subject,revision,hash:createHash('sha256').update(JSON.stringify(document)).digest('hex'),document,generation:subject+'-generation',state:'pending'};
 }
-function setup({legacy=[],subject='conta-A',handler}={}){
+function setup({legacy=[],subject='conta-A',handler,sessionHandler}={}){
  const indexedDB=fakeIndexedDB(legacy),calls=[];
  const fetch=async(url,options={})=>{
   calls.push({url,options});
   if(url==='/api/personal-session')
-   return Response.json({subject,access_token:'fake-token'}, {status:200});
+   return sessionHandler?sessionHandler(url,options):Response.json({subject,access_token:'fake-token'}, {status:200});
   if(handler)return handler(url,options);
   return Response.json({revision:2},{status:200});
  };
@@ -383,4 +383,64 @@ test('recibo JSON inválido não impede outro relatório e mantém cópia origin
  assert.equal(jobs.find(j=>j.id==='a-json').state,'pending');
  assert.ok(jobs.find(j=>j.id==='a-json').document);
  assert.equal(jobs.find(j=>j.id==='b-valid').state,'sent');
+});
+
+
+test('troca de conta entre dois relatórios impede envio pela sessão anterior',async()=>{
+ let account='conta-A',sent=0;
+ const {queue,calls}=setup({
+  sessionHandler:()=>Response.json({subject:account,access_token:'synthetic-'+account}),
+  handler:()=>{sent++;account='conta-B';return Response.json({revision:2})}
+ });
+ await queue.put(fixture('primeiro','conta-A',1));
+ await queue.put(fixture('segundo','conta-A',1));
+ await queue.run();
+ const jobs=await queue.list();
+ assert.equal(sent,1,'O segundo relatório não pode usar a sessão anterior');
+ assert.equal(jobs.find(x=>x.id==='primeiro').state,'sent');
+ assert.equal(jobs.find(x=>x.id==='segundo').state,'pending');
+ assert.ok(jobs.find(x=>x.id==='segundo').document);
+ assert.equal(jobs.find(x=>x.id==='segundo').lease,null);
+ assert.equal(calls.filter(x=>x.url.startsWith('/api/team-reports')).length,1);
+});
+
+test('logout antes de enviar um chunk suspende transferência sem perder documento',async()=>{
+ let sessionCount=0,parts=0;
+ const document={meta:{workOrder:'00077'},records:[],evidence:'X'.repeat(3_200_000)};
+ const {queue,calls}=setup({
+  sessionHandler:()=>{
+   sessionCount++;
+   return sessionCount<=3?Response.json({subject:'conta-A',access_token:'synthetic-token'}):
+    new Response('',{status:401});
+  },
+  handler:(url,options)=>{
+   const body=JSON.parse(options.body);
+   if(body.action==='upload-status')return Response.json({parts:[]});
+   if(body.action==='upload-part'){parts++;return Response.json({ok:true})}
+   throw Error('Não deve concluir o upload após logout');
+  }
+ });
+ await queue.put(fixture('chunk-logout','conta-A',1,document));
+ await queue.run();
+ const [job]=await queue.list();
+ assert.equal(parts,1);
+ assert.equal(job.state,'pending');
+ assert.equal(job.lease,null);
+ assert.ok(job.document.evidence.length>3_000_000);
+ assert.equal(calls.filter(c=>c.url.includes('upload-finish')).length,0);
+});
+
+test('troca de conta durante consulta de partes impede qualquer upload',async()=>{
+ let checks=0;
+ const document={meta:{},records:[],evidence:'X'.repeat(3_100_000)};
+ const {queue,calls}=setup({
+  sessionHandler:()=>Response.json({subject:++checks===1?'conta-A':'conta-B',access_token:'synthetic-token'}),
+  handler:()=>{throw Error('Nenhuma requisição de upload autorizada')}
+ });
+ await queue.put(fixture('switch-parts','conta-A',1,document));
+ await queue.run();
+ const [job]=await queue.list();
+ assert.equal(job.state,'pending');
+ assert.ok(job.document);
+ assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,0);
 });
