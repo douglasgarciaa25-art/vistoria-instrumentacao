@@ -103,8 +103,16 @@
     const bytes=new TextEncoder().encode(JSON.stringify(job.document));
     const request=async body=>{
      if(!await active(job,lease))throw Error('Fila alterada, conta desconectada ou envio cancelado');
+     // A sessão pode mudar durante uma transferência longa ou entre duas partes.
+     // Não reutilizar o token capturado no início se a conta tiver mudado ou saído.
+     const check=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
+     if(!check.ok)throw Error('Sessão não disponível para continuar o envio');
+     const fresh=await check.json();
+     if(fresh.subject!==job.subject||fresh.subject!==auth.subject||!fresh.access_token)
+      throw Error('Conta alterada durante o envio');
+     if(!await active(job,lease))throw Error('Fila cancelada durante a verificação da sessão');
      return fetch('/api/team-reports?id='+encodeURIComponent(job.id),{method:'POST',cache:'no-store',
-      headers:{Authorization:'Bearer '+auth.access_token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+      headers:{Authorization:'Bearer '+fresh.access_token,'Content-Type':'application/json'},body:JSON.stringify(body)});
     };
     let response;
     if(bytes.length>12000000){await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);continue;}
