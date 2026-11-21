@@ -135,7 +135,15 @@
       if([400,403,404,409].includes(staged.status)){await change(job,{state:'conflict',lease:null,leaseUntil:0},lease);continue;}
       throw Error('Falha temporária ao consultar partes');
      }
-     const received=new Set((await staged.json()).parts||[]),size=750000,total=Math.ceil(bytes.length/size);
+     const size=750000,total=Math.ceil(bytes.length/size);
+     // Um recibo de partes malformado não pode autorizar pular bytes.
+     // A resposta de status é uma dica do servidor, nunca uma prova de conclusão.
+     const status=await staged.json();
+     if(!status||!Array.isArray(status.parts)||status.parts.length>total
+       ||status.parts.some(part=>!Number.isSafeInteger(part)||part<0||part>=total)
+       ||new Set(status.parts).size!==status.parts.length)
+      throw Error('Recibo de partes inválido');
+     const received=new Set(status.parts);
      for(let part=0;part<total;part++){
       if(!await active(job,lease))throw Error('Fila alterada');
       if(received.has(part))continue;

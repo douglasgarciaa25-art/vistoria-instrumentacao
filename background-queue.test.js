@@ -444,3 +444,48 @@ test('troca de conta durante consulta de partes impede qualquer upload',async()=
  assert.ok(job.document);
  assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,0);
 });
+
+test('recibo de partes inválido não pula bytes nem descarta documento',async()=>{
+ const document={meta:{workOrder:'0000123'},records:[],evidence:'X'.repeat(3_100_000)};
+ for(const parts of [[-1],[99],[0,0],[0.5],['0'],null]){
+  let sent=0;
+  const {queue}=setup({handler:(url,options)=>{
+   const body=JSON.parse(options.body);
+   if(body.action==='upload-status')return Response.json({parts});
+   sent++;
+   throw Error('Não deveria enviar partes com status inválido');
+  }});
+  await queue.put(fixture('invalid-status','conta-A',1,document));
+  await queue.run();
+  const [job]=await queue.list();
+  assert.equal(sent,0);
+  assert.equal(job.state,'pending');
+  assert.equal(job.document.meta.workOrder,'0000123');
+  assert.equal(job.lease,null);
+  assert.equal(job.leaseUntil,0);
+ }
+});
+
+test('resposta de status com JSON inválido mantém fila e permite recuperação',async()=>{
+ const document={meta:{workOrder:'0000777'},records:[],evidence:'X'.repeat(3_100_000)};
+ let bad=true,parts=0;
+ const {queue}=setup({handler:(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.action==='upload-status')return bad
+   ?new Response('{erro',{status:200,headers:{'Content-Type':'application/json'}})
+   :Response.json({parts:[]});
+  if(body.action==='upload-part'){parts++;return Response.json({ok:true})}
+  if(body.action==='upload-finish')return Response.json({revision:2});
+  throw Error('Ação inesperada');
+ }});
+ await queue.put(fixture('invalid-json','conta-A',1,document));
+ await queue.run();
+ assert.equal(parts,0);
+ assert.equal((await queue.list())[0].state,'pending');
+ bad=false;
+ await queue.run();
+ const [saved]=await queue.list();
+ assert.equal(saved.state,'sent');
+ assert.equal(saved.document,null);
+ assert.ok(parts>0);
+});
