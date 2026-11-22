@@ -532,3 +532,61 @@ test('recibo de parte com JSON corrompido não descarta documento e permite reto
  await queue.run();
  assert.equal((await queue.list())[0].state,'sent');
 });
+
+
+test('arquivo sintético próximo de 12 MB retoma upload após falha sem repetir partes confirmadas',async()=>{
+ const document={meta:{workOrder:'00000000042'},records:[],evidence:'X'.repeat(11_800_000)};
+ let uploaded=new Set(),failed=false,attempts=new Map(),finishes=0;
+ const {queue}=setup({handler:(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.action==='upload-status')return Response.json({parts:[...uploaded]});
+  if(body.action==='upload-part'){
+   attempts.set(body.part,(attempts.get(body.part)||0)+1);
+   if(body.part===7&&!failed){failed=true;return new Response('Falha transitória',{status:503});}
+   uploaded.add(body.part);
+   return Response.json({ok:true});
+  }
+  if(body.action==='upload-finish'){
+   finishes++;
+   assert.equal(uploaded.size,body.total);
+   assert.equal(body.total,Math.ceil(new TextEncoder().encode(JSON.stringify(document)).length/750000));
+   return Response.json({revision:3});
+  }
+  throw Error('Ação inesperada');
+ }});
+ await queue.put(fixture('near-limit','conta-A',2,document));
+ await queue.run();
+ let [job]=await queue.list();
+ assert.equal(job.state,'pending');
+ assert.equal(job.document.meta.workOrder,'00000000042');
+ assert.equal(finishes,0);
+ await queue.run();
+ [job]=await queue.list();
+ assert.equal(job.state,'sent');
+ assert.equal(job.newRevision,3);
+ assert.equal(job.document,null);
+ assert.equal(finishes,1);
+ assert.equal(attempts.get(0),1);
+ assert.equal(attempts.get(6),1);
+ assert.equal(attempts.get(7),2);
+});
+
+test('HTTP 200 sem campo ok não confirma parte e mantém relatório para nova tentativa',async()=>{
+ const document={meta:{workOrder:'00000000043'},records:[],evidence:'X'.repeat(3_100_000)};
+ let finish=0;
+ const {queue}=setup({handler:(url,options)=>{
+  const body=JSON.parse(options.body);
+  if(body.action==='upload-status')return Response.json({parts:[]});
+  if(body.action==='upload-part')return Response.json({accepted:true});
+  if(body.action==='upload-finish'){finish++;return Response.json({revision:2});}
+  throw Error('Ação inesperada');
+ }});
+ await queue.put(fixture('missing-ok','conta-A',1,document));
+ await queue.run();
+ const [job]=await queue.list();
+ assert.equal(job.state,'pending');
+ assert.ok(job.document);
+ assert.equal(job.progress,undefined);
+ assert.equal(job.lease,null);
+ assert.equal(finish,0);
+});
