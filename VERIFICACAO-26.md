@@ -114,3 +114,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Navegação do assistente sinaliza campos essenciais preenchidos ou pendentes nas etapas de identificação e condição; na conclusão corrigida, sinaliza os campos de serviço exigidos.
 - Indicadores são informativos, atualizados por input/change, sem escrever nos dados ou esconder opções adicionais.
 - Requer conferência visual Android real e testes de acessibilidade antes de homologação manual.
+
+## Assistente de campo — navegação por pendências (22/11/2026)
+
+- Contador acessível de campos essenciais ainda vazios e atalho para o próximo campo pendente, inclusive campos de conclusão quando o status é Corrigido.
+- O atalho abre a etapa/campo sem alterar os dados digitados e não bloqueia campos opcionais.
+- Teste sintético incluído; experiência real Android ainda requer validação manual.
