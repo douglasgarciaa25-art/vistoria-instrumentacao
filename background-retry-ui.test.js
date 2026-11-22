@@ -17,15 +17,15 @@ test('reagendamento verifica identidade Google da equipe e sessão antes de agen
 });
 
 test('reagendar não duplica, cancela nem exclui documentos da fila',()=>{
- assert.ok(!/VistoriaBackground\\.(put|cancel|clearFor)\\s*\\(/.test(handler));
- assert.match(handler,/if\\(!pending.length\\)/);
+ assert.ok(!/VistoriaBackground\.(put|cancel|clearFor)\s*\(/.test(handler));
+ assert.match(handler,/if\(!pending.length\)/);
  assert.match(handler,/retryButton.disabled=true/);
- assert.match(handler,/finally\\{retryButton.disabled=false;\\}/);
+ assert.match(handler,/finally\{retryButton.disabled=false;\}/);
 });
 
 test('falha de registro inicial preserva fila e orienta reagendar',()=>{
  const put=source.indexOf("await window.VistoriaBackground.put({id:item.report_id");
  const register=source.indexOf("await reg.sync.register('vistoria-background')",put);
  assert.ok(put>=0&&register>put);
- assert.match(source.slice(put,register+250),/catch\\{status.textContent='Revisão salva na fila/);
+ assert.match(source.slice(put,register+250),/catch\{status.textContent='Revisão salva na fila/);
 });
