@@ -51,6 +51,8 @@
   '#form .wizard-question{margin:0;font-size:13px;color:#372b43;font-weight:650}',
   '#form .wizard-caption{font-size:12px;color:#696173;line-height:1.55;margin:6px 0 0}',
   '#form .wizard-progress{width:100%;height:8px;accent-color:#351463;margin:9px 0 5px}',
+  '#form .wizard-pending{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;color:#59476b}',
+  '#form .wizard-pending button{min-height:40px;padding:8px 12px;font-size:12px}',
   '#form .wizard-navigation{margin:14px 0 0;border-top:1px solid #eee9f2;padding-top:10px}',
   '#form .wizard-navigation summary{cursor:pointer;font-size:12px;color:#513c64;font-weight:650}',
   '#form .wizard-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:11px}',
@@ -78,6 +80,7 @@
   +'<h3 class="wizard-title" id="wizardTitle"></h3>'
   +'<p class="wizard-question" id="wizardQuestion"></p>'
   +'<p class="wizard-caption" id="wizardCaption"></p>'
+  +'<div class="wizard-pending"><span id="wizardPendingCount" role="status" aria-live="polite"></span><button type="button" class="secondary" id="wizardGoPending" hidden>Ir para próximo pendente</button></div>'
   +'<details class="wizard-navigation" id="wizardNavigation"><summary>Ver todas as etapas</summary><div class="wizard-steps" role="group" aria-label="Selecionar etapa"></div></details>'
   +'<button type="button" class="secondary wizard-more" id="wizardMore" aria-expanded="false" hidden></button>';
  fields.before(wizard);
@@ -102,9 +105,17 @@
  const next=footer.querySelector('#wizardNext');
  const expanded=steps.map(()=>false);
  const essentials={0:['tag','area'],1:['problem']};
+ function requiredFields(index){
+  return index===3&&document.getElementById('status')?.value==='Corrigido'
+   ?['completionDate','completionWork']:(essentials[index]||[]);
+ }
+ function missingFields(){
+  return steps.flatMap((_,index)=>requiredFields(index)
+   .filter(id=>{const field=document.getElementById(id);return field&&!String(field.value||'').trim()})
+   .map(id=>({id,index})));
+ }
  function stageReady(index){
-  const ids=index===3&&document.getElementById('status')?.value==='Corrigido'
-   ?['completionDate','completionWork']:essentials[index];
+  const ids=requiredFields(index);
   return ids?.length?ids.every(id=>String(document.getElementById(id)?.value||'').trim()):null;
  }
  let current=0;
@@ -166,6 +177,10 @@
   wizard.querySelector('#wizardTitle').textContent=steps[current].title;
   wizard.querySelector('#wizardQuestion').textContent=steps[current].question;
   wizard.querySelector('#wizardCaption').textContent=steps[current].hint;
+  const pending=missingFields();
+  wizard.querySelector('#wizardPendingCount').textContent=pending.length
+   ?pending.length+' campo(s) essencial(is) pendente(s)':'Campos essenciais preenchidos';
+  wizard.querySelector('#wizardGoPending').hidden=!pending.length;
   stepButtons.forEach((button,i)=>{
    const ready=stageReady(i);
    button.textContent=(i+1)+'. '+steps[i].title+(ready===true?' ✓':ready===false?' · pendente':'');
@@ -206,6 +221,12 @@
   }
   return true;
  }
+ wizard.querySelector('#wizardGoPending').addEventListener('click',()=>{
+  const pending=missingFields();
+  if(!pending.length)return;
+  const target=pending.find(item=>item.index>=current)||pending[0];
+  openField(target.id,target.index);
+ });
  back.addEventListener('click',()=>setStep(current-1,true));
  next.addEventListener('click',()=>{if(validate(current))setStep(current+1,true)});
  more.addEventListener('click',()=>{expanded[current]=!expanded[current];render()});
