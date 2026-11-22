@@ -101,6 +101,12 @@
  const back=footer.querySelector('#wizardBack');
  const next=footer.querySelector('#wizardNext');
  const expanded=steps.map(()=>false);
+ const essentials={0:['tag','area'],1:['problem']};
+ function stageReady(index){
+  const ids=index===3&&document.getElementById('status')?.value==='Corrigido'
+   ?['completionDate','completionWork']:essentials[index];
+  return ids?.length?ids.every(id=>String(document.getElementById(id)?.value||'').trim()):null;
+ }
  let current=0;
  // Os dados gerais continuam editáveis, mas não ocupam a tela toda durante o campo.
  const reportPanel=document.getElementById('identification');
@@ -161,6 +167,9 @@
   wizard.querySelector('#wizardQuestion').textContent=steps[current].question;
   wizard.querySelector('#wizardCaption').textContent=steps[current].hint;
   stepButtons.forEach((button,i)=>{
+   const ready=stageReady(i);
+   button.textContent=(i+1)+'. '+steps[i].title+(ready===true?' ✓':ready===false?' · pendente':'');
+   button.setAttribute('aria-label','Abrir etapa '+(i+1)+': '+steps[i].title+(ready===true?', campos essenciais preenchidos':ready===false?', campos essenciais pendentes':''));
    if(i===current)button.setAttribute('aria-current','step');
    else button.removeAttribute('aria-current');
   });
@@ -210,6 +219,12 @@
    if(!validate(step)){event.preventDefault();event.stopImmediatePropagation();return}
   }
  },true);
+ form.addEventListener('input',event=>{
+  if(event.target.matches('input,textarea,select'))render();
+ });
+ form.addEventListener('change',event=>{
+  if(event.target.matches('input,textarea,select'))render();
+ });
  form.addEventListener('invalid',event=>{
   const first=[...form.elements].find(el=>el.willValidate&&el.validity&&!el.validity.valid);
   if(event.target!==first)return;

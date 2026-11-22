@@ -113,3 +113,16 @@ test('campos gerais podem ser abertos e os erros trazem o campo à vista',()=>{
  assert.ok(!wizard.includes('localStorage.clear('),'Assistente não deve limpar dados');
  assert.ok(!wizard.includes('indexedDB.deleteDatabase('),'Assistente não deve excluir a base');
 });
+
+
+test('assistente sinaliza etapas essenciais sem alterar valores dos campos',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/function stageReady\(index\)/);
+ assert.match(source,/essentials=\{0:\['tag','area'\],1:\['problem'\]\}/);
+ assert.match(source,/ready===true\?' ✓'/);
+ assert.match(source,/campos essenciais preenchidos/);
+ assert.match(source,/form\.addEventListener\('input'/);
+ assert.match(source,/form\.addEventListener\('change'/);
+ assert.match(source,/setStep\(index,true\)/);
+});

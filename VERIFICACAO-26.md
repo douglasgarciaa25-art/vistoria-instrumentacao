@@ -108,3 +108,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Testes sintéticos para HTTP 429 transitório: mantém relatório, libera lease, recupera envio e preserva OS com zeros iniciais.
 - Teste de relatório acima de 12 MB: estado de conflito sem transmissão ao servidor, preservando documento para revisão.
 - Não substitui testes Android real, duas contas autorizadas nem PDF visual longo; critérios M/P permanecem pendentes.
+
+## Layout incremental — progresso do assistente (22/11/2026)
+
+- Navegação do assistente sinaliza campos essenciais preenchidos ou pendentes nas etapas de identificação e condição; na conclusão corrigida, sinaliza os campos de serviço exigidos.
+- Indicadores são informativos, atualizados por input/change, sem escrever nos dados ou esconder opções adicionais.
+- Requer conferência visual Android real e testes de acessibilidade antes de homologação manual.
