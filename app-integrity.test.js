@@ -126,3 +126,14 @@ test('assistente sinaliza etapas essenciais sem alterar valores dos campos',()=>
  assert.match(source,/form\.addEventListener\('change'/);
  assert.match(source,/setStep\(index,true\)/);
 });
+
+test('assistente localiza campos essenciais pendentes sem alterar conteúdo',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/function requiredFields\(index\)/);
+ assert.match(source,/function missingFields\(\)/);
+ assert.match(source,/wizardGoPending/);
+ assert.match(source,/openField\(target\.id,target\.index\)/);
+ assert.match(source,/role="status" aria-live="polite"/);
+ assert.match(source,/pending\.find\(item=>item\.index>=current\)\|\|pending\[0\]/);
+});
