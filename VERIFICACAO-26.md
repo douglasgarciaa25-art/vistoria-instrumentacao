@@ -95,3 +95,10 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Resposta HTTP 200 sem `ok: true` não confirma parte, não avança progresso nem apaga documento.
 - **Não homologado em Android real:** teste de PWA fechado, retomada no dispositivo e duas contas autorizadas permanecem M/P.
 - Nenhum relatório real foi alterado por este lote de QA.
+
+## Lote de recuperação do agendamento — 22/11/2026
+
+- Botão **Reagendar envios pendentes** na equipe: verifica identidade Google da equipe, sessão pessoal e seleciona apenas pendências da conta autenticada antes de registrar o Background Sync.
+- Falha ao registrar a sincronização depois de enfileirar não é apresentada como perda do relatório; a fila persistente permanece e a interface orienta reagendamento.
+- Reagendamento não regrava, cancela ou remove relatórios; testes sintéticos de estrutura e autorização em `background-retry-ui.test.js`.
+- Pendente M: testar Android real, app fechado e políticas de execução do navegador; registro de tarefa não garante execução.
