@@ -137,3 +137,12 @@ test('assistente localiza campos essenciais pendentes sem alterar conteúdo',()=
  assert.match(source,/role="status" aria-live="polite"/);
  assert.match(source,/pending\.find\(item=>item\.index>=current\)\|\|pending\[0\]/);
 });
+
+test('assistente detalha pendências por etapa e orienta botão de navegação',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/const stagePending=pending\.filter\(item=>item\.index===current\)\.length/);
+ assert.match(source,/Preencher próximo campo desta etapa/);
+ assert.match(source,/Ir para próxima etapa pendente/);
+ assert.match(source,/const count=pending\.filter\(item=>item\.index===i\)\.length/);
+});
