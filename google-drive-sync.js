@@ -559,6 +559,24 @@
     const refreshBackground=async()=>{if(!window.VistoriaBackground)return;const jobs=(await window.VistoriaBackground.list()).filter(j=>j.subject===member.google_subject);queuePanel.replaceChildren();for(const job of jobs){const line=document.createElement('p');line.textContent='Vistoria '+job.id.slice(0,8)+' — '+(job.state==='sent'?'Enviada':job.state==='conflict'?'Conflito: revisar antes de reenviar':'Pendente'+(job.total?' ('+(job.progress||0)+'/'+job.total+' partes)':''));queuePanel.append(line);if(job.state==='pending'){const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar envio pendente';cancel.onclick=async()=>{try{if(!confirm('Cancelar somente o envio? O relatório local será preservado. Um envio já iniciado pode ter sido concluído.'))return;const current=await teamRequest();if(current.member?.google_subject!==job.subject)throw Error('Conta alterada');const removed=await window.VistoriaBackground.cancel(job);status.textContent=removed?'Envio retirado da fila. Confira a revisão remota se já estava em andamento.':'Fila alterada; atualize a situação.';await refreshBackground();}catch(e){status.textContent=e.message;}};queuePanel.append(cancel);}}};
     await refreshBackground();
     const refreshButton=document.createElement('button');refreshButton.type='button';refreshButton.textContent='Atualizar situação dos envios';refreshButton.onclick=()=>refreshBackground().catch(e=>{status.textContent=e.message});queueDetails.append(refreshButton);
+    const retryButton=document.createElement('button');retryButton.type='button';retryButton.textContent='Reagendar envios pendentes';retryButton.onclick=async()=>{
+      retryButton.disabled=true;
+      try{
+        if(!window.VistoriaBackground||!navigator.serviceWorker)throw Error('Sincronização em segundo plano indisponível.');
+        const current=await teamRequest();
+        if(!current.member?.google_subject||current.member.google_subject!==member.google_subject)throw Error('Conta alterada; abra novamente a equipe.');
+        const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
+        if(!session.ok||(await session.json()).subject!==member.google_subject)throw Error('Ative Manter conta conectada para reagendar.');
+        const pending=(await window.VistoriaBackground.list()).filter(j=>j.subject===member.google_subject&&j.state==='pending');
+        if(!pending.length){status.textContent='Não há envios pendentes desta conta.';return;}
+        const reg=await navigator.serviceWorker.ready;
+        if(!reg.sync?.register)throw Error('Este navegador não permite reagendar envios em segundo plano. Os relatórios permanecem salvos.');
+        await reg.sync.register('vistoria-background');
+        status.textContent=pending.length+' envio(s) pendente(s) reagendado(s) para quando o navegador permitir.';
+        await refreshBackground();
+      }catch(error){status.textContent=error.message;}
+      finally{retryButton.disabled=false;}
+    };queueDetails.append(retryButton);
     const {reports:remote}=await reportRequest();
     rememberTeamIds(remote);
     const local=await reports();
@@ -657,7 +675,7 @@
         if(new TextEncoder().encode(JSON.stringify(localRow.document)).length>12000000)throw Error('Segundo plano disponível até 12 MB.');
         if(!confirm('Autoriza enviar esta revisão para a equipe após fechar o aplicativo?'))return;
         await window.VistoriaBackground.put({id:item.report_id,subject:member.google_subject,document:localRow.document,revision:item.revision,hash,state:'pending',generation:crypto.randomUUID()});
-        await reg.sync.register('vistoria-background');status.textContent='Revisão enfileirada. O navegador poderá enviar após fechar o aplicativo.';
+        try{await reg.sync.register('vistoria-background');status.textContent='Revisão enfileirada. O navegador poderá enviar após fechar o aplicativo.';}catch{status.textContent='Revisão salva na fila, mas o agendamento falhou. Use Reagendar envios pendentes quando disponível.';}
       });
       button(row,'Criar cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
       if(member.role==='admin')button(menu,'Excluir da equipe',async()=>{if(confirm('Excluir esta vistoria da lista da equipe?')){await reportRequest('DELETE',item.report_id);await showTeam()}});
