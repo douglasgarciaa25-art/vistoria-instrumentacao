@@ -146,3 +146,12 @@ test('assistente detalha pendências por etapa e orienta botão de navegação',
  assert.match(source,/Ir para próxima etapa pendente/);
  assert.match(source,/const count=pending\.filter\(item=>item\.index===i\)\.length/);
 });
+
+test('assistente mantém foco acessível e respeita movimento reduzido',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/id="wizardTitle" tabindex="-1"/);
+ assert.match(source,/wizard\.querySelector\('#wizardTitle'\)\.focus\(\{preventScroll:true\}\)/);
+ assert.match(source,/prefers-reduced-motion: reduce/);
+ assert.match(source,/const required=requiredFields\(index\)/);
+});
