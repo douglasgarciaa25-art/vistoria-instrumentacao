@@ -120,3 +120,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Contador acessível de campos essenciais ainda vazios e atalho para o próximo campo pendente, inclusive campos de conclusão quando o status é Corrigido.
 - O atalho abre a etapa/campo sem alterar os dados digitados e não bloqueia campos opcionais.
 - Teste sintético incluído; experiência real Android ainda requer validação manual.
+
+## Layout — foco e acessibilidade do assistente (22/11/2026)
+
+- Mudança incremental: ao navegar entre etapas, o título da etapa recebe foco de teclado e leitor de tela, sem alterar os dados preenchidos.
+- Rolagem respeita a preferência do sistema por movimento reduzido; validação utiliza a mesma lista de campos essenciais exibida no contador.
+- Teste sintético de regressão incluído. Conferência visual e com leitor de tela Android real permanece pendente.
