@@ -178,13 +178,17 @@
   wizard.querySelector('#wizardQuestion').textContent=steps[current].question;
   wizard.querySelector('#wizardCaption').textContent=steps[current].hint;
   const pending=missingFields();
+  const stagePending=pending.filter(item=>item.index===current).length;
   wizard.querySelector('#wizardPendingCount').textContent=pending.length
    ?pending.length+' campo(s) essencial(is) pendente(s)':'Campos essenciais preenchidos';
   wizard.querySelector('#wizardGoPending').hidden=!pending.length;
+  wizard.querySelector('#wizardGoPending').textContent=stagePending
+   ?'Preencher próximo campo desta etapa':'Ir para próxima etapa pendente';
   stepButtons.forEach((button,i)=>{
    const ready=stageReady(i);
-   button.textContent=(i+1)+'. '+steps[i].title+(ready===true?' ✓':ready===false?' · pendente':'');
-   button.setAttribute('aria-label','Abrir etapa '+(i+1)+': '+steps[i].title+(ready===true?', campos essenciais preenchidos':ready===false?', campos essenciais pendentes':''));
+   const count=pending.filter(item=>item.index===i).length;
+   button.textContent=(i+1)+'. '+steps[i].title+(count?' · '+count+' pendente(s)':ready===true?' ✓':'');
+   button.setAttribute('aria-label','Abrir etapa '+(i+1)+': '+steps[i].title+(count?', '+count+' campos essenciais pendentes':ready===true?', campos essenciais preenchidos':''));
    if(i===current)button.setAttribute('aria-current','step');
    else button.removeAttribute('aria-current');
   });
