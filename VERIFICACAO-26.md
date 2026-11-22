@@ -88,3 +88,10 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - A retomada de upload em partes só aceita um vetor de índices inteiros, não negativos, sem duplicação e dentro da quantidade real de partes. Recibos de status com valores negativos, fora do limite, fracionários, textuais, duplicados ou ausentes são recusados sem transmitir bytes.
 - JSON inválido ou recibo malformado preserva o documento, hash, revisão, progresso e lease liberada para nova tentativa. Nenhum documento é excluído ou marcado como enviado sem confirmação final.
 - Testes sintéticos específicos verificam recibos inválidos e recuperação após JSON corrompido; **não substituem** Android real, duas contas autorizadas nem auditoria de rede no dispositivo.
+
+## Lote de QA — limite de upload e recibos — 22/11/2026
+
+- Novos testes sintéticos cobrem documento de 11,8 MB, falha transitória na parte 7, retomada com recibos de partes já armazenadas, nenhuma duplicação de partes confirmadas e OS com zeros iniciais.
+- Resposta HTTP 200 sem `ok: true` não confirma parte, não avança progresso nem apaga documento.
+- **Não homologado em Android real:** teste de PWA fechado, retomada no dispositivo e duas contas autorizadas permanecem M/P.
+- Nenhum relatório real foi alterado por este lote de QA.
