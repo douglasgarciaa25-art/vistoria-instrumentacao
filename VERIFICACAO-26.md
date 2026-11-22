@@ -102,3 +102,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Falha ao registrar a sincronização depois de enfileirar não é apresentada como perda do relatório; a fila persistente permanece e a interface orienta reagendamento.
 - Reagendamento não regrava, cancela ou remove relatórios; testes sintéticos de estrutura e autorização em `background-retry-ui.test.js`.
 - Pendente M: testar Android real, app fechado e políticas de execução do navegador; registro de tarefa não garante execução.
+
+## QA complementar — limite e recuperação (22/11/2026)
+
+- Testes sintéticos para HTTP 429 transitório: mantém relatório, libera lease, recupera envio e preserva OS com zeros iniciais.
+- Teste de relatório acima de 12 MB: estado de conflito sem transmissão ao servidor, preservando documento para revisão.
+- Não substitui testes Android real, duas contas autorizadas nem PDF visual longo; critérios M/P permanecem pendentes.
