@@ -590,3 +590,37 @@ test('HTTP 200 sem campo ok não confirma parte e mantém relatório para nova t
  assert.equal(job.lease,null);
  assert.equal(finish,0);
 });
+
+
+test('HTTP 429 temporário preserva documento, libera lease e permite recuperação',async()=>{
+ let attempts=0;
+ const document={meta:{os:'00001234'},records:[]};
+ const {queue}=setup({handler:()=>{
+  attempts++;
+  return attempts===1?new Response('Limite temporário',{status:429}):Response.json({revision:4});
+ }});
+ await queue.put(fixture('retry-429','conta-A',3,document));
+ await queue.run();
+ let [job]=await queue.list();
+ assert.equal(job.state,'pending');
+ assert.equal(job.lease,null);
+ assert.equal(job.leaseUntil,0);
+ assert.equal(job.document.meta.os,'00001234');
+ await queue.run();
+ [job]=await queue.list();
+ assert.equal(job.state,'sent');
+ assert.equal(job.newRevision,4);
+ assert.equal(attempts,2);
+});
+
+test('limite de 12 MB impede transmissão e preserva dados para revisão',async()=>{
+ const document={meta:{os:'00009999'},evidence:'A'.repeat(12_000_000)};
+ const {queue,calls}=setup();
+ await queue.put(fixture('over-limit','conta-A',0,document));
+ await queue.run();
+ const [job]=await queue.list();
+ assert.equal(job.state,'conflict');
+ assert.equal(job.document.meta.os,'00009999');
+ assert.equal(job.lease,null);
+ assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,0);
+});
