@@ -77,7 +77,7 @@
  wizard.setAttribute('aria-label','Assistente de preenchimento em campo');
  wizard.innerHTML='<div class="wizard-eyebrow"><span>ASSISTENTE DE CAMPO</span><span id="wizardCounter">Etapa 1 de 5</span></div>'
   +'<progress class="wizard-progress" max="5" value="1" aria-label="Progresso do preenchimento"></progress>'
-  +'<h3 class="wizard-title" id="wizardTitle"></h3>'
+  +'<h3 class="wizard-title" id="wizardTitle" tabindex="-1"></h3>'
   +'<p class="wizard-question" id="wizardQuestion"></p>'
   +'<p class="wizard-caption" id="wizardCaption"></p>'
   +'<div class="wizard-pending"><span id="wizardPendingCount" role="status" aria-live="polite"></span><button type="button" class="secondary" id="wizardGoPending" hidden>Ir para próximo pendente</button></div>'
@@ -205,7 +205,10 @@
  function setStep(index,scroll=false){
   current=Math.max(0,Math.min(steps.length-1,index));
   render();
-  if(scroll)wizard.scrollIntoView({behavior:'smooth',block:'start'});
+  if(scroll){
+   wizard.querySelector('#wizardTitle').focus({preventScroll:true});
+   wizard.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+  }
  }
  function openField(id,index){
   expanded[index]=true;
@@ -217,8 +220,7 @@
   if(typeof notify==='function')notify('Preencha: '+(input?.closest('label')?.textContent||id).trim().slice(0,90));
  }
  function validate(index){
-  const required=index===0?['tag','area']:index===1?['problem']:
-   index===3&&document.getElementById('status')?.value==='Corrigido'?['completionDate','completionWork']:[];
+  const required=requiredFields(index);
   for(const id of required){
    const input=document.getElementById(id);
    if(input&&!String(input.value||'').trim()){openField(id,index);return false}
