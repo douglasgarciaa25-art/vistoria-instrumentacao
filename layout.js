@@ -17,6 +17,13 @@
  const filterGroup=$('filterArea').closest('.fields'),filters=document.createElement('details');filters.className='advanced filters';filters.innerHTML='<summary>Filtrar por área, prioridade e situação</summary>';filterGroup.before(filters);filters.append(filterGroup);
  history.querySelector('.step').textContent='HISTÓRICO';history.querySelector('h2').textContent='Suas vistorias';history.querySelector('p.muted').textContent='Toque em Ver relatório na vistoria desejada para revisar seus pontos e baixar o PDF.';
  $('pdfAll').classList.add('secondary');$('saveReport').textContent='Salvar vistoria aberta';$('pdf').innerHTML=icon('report')+'Baixar relatório em PDF';
+ // Keep the primary PDF action visible; secondary formats stay available on demand.
+ const formats=document.createElement('details');formats.className='report-formats advanced';
+ const formatsSummary=document.createElement('summary');formatsSummary.textContent='Outros formatos de exportação';
+ const formatsActions=document.createElement('div');formatsActions.className='actions';
+ const wordButton=$('word');wordButton.parentElement.insertAdjacentElement('afterend',formats);
+ formats.append(formatsSummary,formatsActions);formatsActions.append(wordButton);
+
  backup.querySelector('p').textContent='Baixe uma cópia editável com os registros e fotos. Para levar os dados a outro aparelho, conecte o Google Drive ou restaure o arquivo.';
  const current=document.createElement('div');current.className='current-bar';current.innerHTML='<div><span class="current-dot"></span><span id="activeLabel">Vistoria em edição</span></div><button type="button" class="secondary" id="quickSave">'+icon('check')+'Salvar</button>';editor.insertBefore(current,meta);
  function show(view,focus=false){for(const el of [home,editor,report,storage])el.hidden=el.id!=='view-'+view;nav.querySelectorAll('button').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(focus){window.scrollTo({top:0,behavior:'smooth'});const heading=$('view-'+view).querySelector('h2');heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true})}update()}
