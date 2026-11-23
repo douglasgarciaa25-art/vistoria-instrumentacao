@@ -45,3 +45,8 @@ test('interface exige inclusão explícita, permite desfazer e limpa entre ponto
  assert.ok(js.includes('reset=function()')&&js.includes('fill=function()'));
  assert.ok(js.includes('sem enviar informações para a IA'));
 });
+
+test('guia vazio orienta e posiciona foco no primeiro campo técnico',()=>{
+ const js=readFileSync('descritivo-guiado.js','utf8');
+ assert.match(js,/if\(!text\)\{[\s\S]*?status\.textContent='Preencha pelo menos uma etapa do descritivo\.';[\s\S]*?fieldInputs\[api\.PARTS\[0\]\.key\]\?\.focus\(\);[\s\S]*?return;/);
+});

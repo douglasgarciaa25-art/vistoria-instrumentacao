@@ -59,7 +59,11 @@
  for(const field of Object.values(fieldInputs))field.addEventListener('input',updatePreview);
  section.querySelector('#guidedApply').addEventListener('click',()=>{
   const text=preview.value.trim();
-  if(!text){status.textContent='Preencha pelo menos uma etapa do descritivo.';return}
+  if(!text){
+   status.textContent='Preencha pelo menos uma etapa do descritivo.';
+   fieldInputs[api.PARTS[0].key]?.focus();
+   return;
+  }
   const field=document.getElementById(target.value);
   if(!field){status.textContent='O campo de destino não está disponível.';return}
   const previous=field.value;
