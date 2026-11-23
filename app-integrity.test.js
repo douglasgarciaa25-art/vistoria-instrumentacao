@@ -233,3 +233,11 @@ test('início recolhe indicadores no modo campo sem perder contagens nem acessib
  assert.match(css,/\.home-metrics-disclosure>summary:focus-visible/);
  assert.match(css,/\.home-metrics-disclosure>summary\{[^}]*min-height:48px/);
 });
+
+
+test('navegação entre telas respeita movimento reduzido sem perder foco',()=>{
+ const js=readFileSync('layout.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(js));
+ assert.match(js,/window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches\?'instant':'smooth'/);
+ assert.match(js,/heading\.focus\(\{preventScroll:true\}\)/);
+});
