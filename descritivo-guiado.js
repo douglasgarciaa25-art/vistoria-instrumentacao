@@ -10,6 +10,7 @@
   +'<p class="muted">Registre somente fatos que você observou ou executou. Separe hipóteses de resultados confirmados. A prévia é montada neste aparelho, sem enviar informações para a IA.</p>'
   +'<p id="guidedProgress" class="muted" role="status" aria-live="polite">0 de 6 etapas preenchidas</p>'
   +'<div class="fields" id="guidedFields"></div>'
+  +'<div class="actions"><button type="button" class="secondary" id="guidedNext">Ir para próxima pergunta pendente</button></div>'
   +'<label>Prévia do descritivo<textarea id="guidedPreview" rows="9" readonly placeholder="Descreva pelo menos uma etapa acima."></textarea></label>'
   +'<div class="fields"><label>Onde acrescentar<select id="guidedTarget"><option value="analysisDraft">Andamento da análise (rascunho)</option><option value="problem">Condição encontrada</option><option value="impact">Impacto / consequência</option><option value="action">Ação recomendada</option><option value="completionWork">Serviço realizado</option><option value="conclusion">Conclusão</option></select></label></div>'
   +'<div class="actions"><button type="button" id="guidedApply">Acrescentar descritivo ao campo</button><button type="button" class="secondary" id="guidedUndo" hidden>Desfazer inclusão</button><button type="button" class="secondary" id="guidedClear">Limpar guia</button></div>'
@@ -62,6 +63,12 @@
   status.textContent='';
  }
  for(const field of Object.values(fieldInputs))field.addEventListener('input',updatePreview);
+ section.querySelector('#guidedNext').addEventListener('click',()=>{
+  const pending=api.PARTS.find(part=>!fieldInputs[part.key].value.trim());
+  if(!pending){status.textContent='Todas as perguntas estão preenchidas. Confira a prévia antes de acrescentar.';preview.focus();return;}
+  fieldInputs[pending.key].focus();
+  status.textContent='Próxima pergunta pendente: '+pending.label+'.';
+ });
  section.querySelector('#guidedApply').addEventListener('click',()=>{
   const text=preview.value.trim();
   if(!text){
