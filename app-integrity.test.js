@@ -252,3 +252,10 @@ test('atalho acessível pula navegação sem alterar dados ou estado da vistoria
  assert.match(css,/\.skip-to-content:focus-visible/);
  assert.match(css,/\.skip-to-content\{[^}]*translateY\(-180%\)/);
 });
+
+
+test('modo campo mantém botões do visualizador de fotos legíveis e com toque de 48px',()=>{
+ const css=readFileSync('layout.css','utf8');
+ assert.match(css,/@media\(max-width:750px\)\{\.photo-viewer button\{min-height:48px;font-size:14px;line-height:1\.4;padding:12px 14px\}/);
+ assert.match(css,/\.photo-viewer \.actions button\{white-space:normal\}/);
+});
