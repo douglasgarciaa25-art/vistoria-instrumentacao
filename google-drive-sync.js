@@ -485,9 +485,9 @@
       for(const item of remote){
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
-        if(previous?.revision===item.revision)continue;
+        if(row&&previous?.revision===item.revision&&await digest(row.document)===previous.hash)continue;
         if(row&&(!previous||await digest(row.document)!==previous.hash)){const status=$('gdrive-team-status');if(status)status.textContent='Divergência preservada na vistoria '+item.report_id+'. Compare as versões antes de publicar.';continue;}
-        if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
+        if(row&&typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
         const d=await reportRequest('GET',item.report_id);
         if(!d.document?.meta||!Array.isArray(d.document.records)||!validate({id:item.report_id,document:d.document}))continue;
         const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
