@@ -110,3 +110,22 @@ test('Drive pessoal não envia cópia antiga após conflito sem baseline',()=>{
  assert.match(src,/syncMap\[row\.id\]=marker;saveMap\(\);conflicts\+\+/);
  assert.doesNotMatch(src,/syncMap\[row\.id\]=remoteHash;saveMap\(\);conflicts\+\+/);
 });
+
+test('equipe compara a revisão remota antes de classificar como conflito uma instalação sem baseline',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/if\(row&&!previous\)\{/);
+ assert.match(src,/const received=await reportRequest\('GET',item\.report_id\)/);
+ assert.match(src,/if\(receivedHash===localHash\)\{/);
+ assert.match(src,/baseline\[item\.report_id\]=\{revision:received\.revision,hash:receivedHash\}/);
+ assert.match(src,/if\(!latest\|\|await digest\(latest\.document\)!==localHash\)\{teamDeferred\+\+;continue;\}/);
+ assert.match(src,/teamConflicts\+\+;\s*const status=\$\('gdrive-team-status'\)/);
+ assert.match(src,/Conflito na vistoria/);
+});
+test('interface móvel separa título e botões de sincronização da equipe',()=>{
+ const cloud=file('google-drive-sync.js');
+ const css=file('cloud-dashboard.css');
+ assert.match(cloud,/aria-label="Sincronizar vistorias locais com a equipe">Sincronizar com a equipe/);
+ assert.match(css,/\.cloud-section-head\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+ assert.match(css,/\.cloud-section-head>div\{grid-column:1\/-1/);
+ assert.match(css,/#gdrive-team-local-sync\{grid-column:2\}/);
+});

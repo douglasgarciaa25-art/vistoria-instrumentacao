@@ -505,12 +505,32 @@
         const row=local.find(x=>x.id===item.report_id);
         const localHash=row?await digest(row.document):null;
         if(row&&previous?.revision===item.revision&&localHash===previous.hash)continue;
-        // Divergências de edição permanecem intactas; nunca descartar o trabalho local.
-        if(row&&(!previous||localHash!==previous.hash)){
-          if(!previous||previous.revision!==item.revision){
+        // Sem histórico deste aparelho, comparar o conteúdo antes de acusar conflito.
+        // Relatórios idênticos podem ser vinculados à revisão remota sem alterar dados.
+        if(row&&!previous){
+          const received=await reportRequest('GET',item.report_id);
+          if(!validate({id:item.report_id,document:received.document})){teamDeferred++;continue;}
+          if(queueMember?.google_subject!==member.google_subject||!validToken()){teamDeferred++;continue;}
+          const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
+          if(!latest||await digest(latest.document)!==localHash){teamDeferred++;continue;}
+          const receivedHash=await digest(received.document);
+          if(receivedHash===localHash){
+            baseline[item.report_id]={revision:received.revision,hash:receivedHash};
+            localStorage.setItem(key,JSON.stringify(baseline));
+            continue;
+          }
+          // Conteúdo realmente diferente: preservar ambas as versões para revisão manual.
+          teamConflicts++;
+          const status=$('gdrive-team-status');
+          if(status)status.textContent='Diferença entre a cópia local e a nuvem: '+item.report_id+'. Dados locais preservados.';
+          continue;
+        }
+        // Uma revisão remota e uma edição local podem ter avançado ao mesmo tempo.
+        if(row&&localHash!==previous.hash){
+          if(previous.revision!==item.revision){
+            teamConflicts++;
             const status=$('gdrive-team-status');
             if(status)status.textContent='Conflito na vistoria '+item.report_id+': versão local preservada. Compare antes de atualizar da nuvem.';
-            teamConflicts++;
           }
           continue;
         }
@@ -848,7 +868,7 @@
     if(anchor)anchor.prepend(panel);
     const team=document.createElement('section');
     team.className='cloud-team-panel';
-     team.innerHTML='<div class="cloud-section-head"><div><span class="cloud-overline">TRABALHO COMPARTILHADO</span><h3>Minha equipe</h3><p>Compartilhe e acompanhe vistorias com segurança.</p></div><button type="button" class="secondary" id="gdrive-team-refresh">Atualizar</button><button type="button" id="gdrive-team-local-sync">Sincronizar vistorias locais com a equipe</button></div><p id="gdrive-team-status" class="cloud-team-status" role="status" aria-live="polite"></p><details class="cloud-disclosure cloud-local-queue"><summary>Alterações locais aguardando sincronização</summary><div id="gdrive-queue" role="status" aria-live="polite"></div></details><div id="gdrive-team-users"></div>';
+     team.innerHTML='<div class="cloud-section-head"><div><span class="cloud-overline">TRABALHO COMPARTILHADO</span><h3>Minha equipe</h3><p>Compartilhe e acompanhe vistorias com segurança.</p></div><button type="button" class="secondary" id="gdrive-team-refresh">Atualizar</button><button type="button" id="gdrive-team-local-sync" aria-label="Sincronizar vistorias locais com a equipe">Sincronizar com a equipe</button></div><p id="gdrive-team-status" class="cloud-team-status" role="status" aria-live="polite"></p><details class="cloud-disclosure cloud-local-queue"><summary>Alterações locais aguardando sincronização</summary><div id="gdrive-queue" role="status" aria-live="polite"></div></details><div id="gdrive-team-users"></div>';
     panel.append(team);
     $('gdrive-team-refresh').onclick=showTeam;
     $('gdrive-team-local-sync').onclick=async()=>{const button=$('gdrive-team-local-sync'),status=$('gdrive-team-status');if(teamRunning||historyBusy||busy)return notify('Aguarde a operação atual.');if(!validToken())return notify('Conecte sua conta Google antes de sincronizar com a equipe.');if(!navigator.onLine)return notify('Sem internet. As vistorias locais permanecem salvas.');if(!confirm('Enviar as vistorias locais ainda não compartilhadas para a equipe aprovada? As vistorias abertas serão preservadas e poderão ser enviadas após fechar a edição.'))return;button.disabled=true;try{await persistCurrent();const {member}=await teamRequest();if(member?.status!=='approved')throw Error('Sua conta precisa estar aprovada na equipe.');localStorage.setItem('vistoria-team-auto:'+member.google_subject,'1');status.textContent='Sincronizando vistorias locais com a equipe…';await syncTeam();await showTeam();status.textContent='Sincronização solicitada. Confira a fila de pendências e eventuais conflitos antes de considerar todos os envios concluídos.';}catch(e){status.textContent='Não foi possível sincronizar: '+e.message;}finally{button.disabled=false;}};
