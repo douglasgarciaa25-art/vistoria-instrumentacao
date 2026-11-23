@@ -163,3 +163,14 @@ test('assistente anuncia mudança de etapa para leitores de tela',()=>{
  assert.match(source,/setAttribute\('aria-valuetext','Etapa '/);
  assert.match(source,/id="wizardTitle" tabindex="-1"/);
 });
+
+test('seletor de etapas aceita setas e Home/End sem salvar dados',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/\.wizard-steps'\)\.addEventListener\('keydown'/);
+ assert.match(source,/event\.key==='ArrowRight'/);
+ assert.match(source,/event\.key==='ArrowLeft'/);
+ assert.match(source,/event\.key==='Home'/);
+ assert.match(source,/event\.key==='End'/);
+ assert.match(source,/stepButtons\[target\]\.focus\(\)/);
+});
