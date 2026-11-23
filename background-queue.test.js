@@ -624,3 +624,29 @@ test('limite de 12 MB impede transmissão e preserva dados para revisão',async(
  assert.equal(job.lease,null);
  assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,0);
 });
+
+
+test('limite temporário de uma conta não transmite nem cancela trabalho de outra conta com mesma OS',async()=>{
+ let attempts=0;
+ const {queue,calls}=setup({subject:'conta-A',handler:()=>{
+  attempts++;
+  return attempts===1?new Response('Temporariamente indisponível',{status:429}):Response.json({revision:8});
+ }});
+ const os='00000054';
+ await queue.put(fixture('mesmo-id','conta-A',7,{meta:{os},records:[]}));
+ await queue.put(fixture('mesmo-id','conta-B',4,{meta:{os},records:[]}));
+ await queue.run();
+ let jobs=await queue.list();
+ assert.equal(jobs.find(j=>j.subject==='conta-A').state,'pending');
+ assert.equal(jobs.find(j=>j.subject==='conta-B').state,'pending');
+ assert.equal(jobs.find(j=>j.subject==='conta-B').document.meta.os,os);
+ assert.equal(jobs.find(j=>j.subject==='conta-A').lease,null);
+ assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,1);
+ await queue.run();
+ jobs=await queue.list();
+ assert.equal(jobs.find(j=>j.subject==='conta-A').state,'sent');
+ assert.equal(jobs.find(j=>j.subject==='conta-A').newRevision,8);
+ assert.equal(jobs.find(j=>j.subject==='conta-B').state,'pending');
+ assert.equal(jobs.find(j=>j.subject==='conta-B').document.meta.os,os);
+ assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,2);
+});
