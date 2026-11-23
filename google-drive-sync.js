@@ -321,8 +321,8 @@
         }
       }
       const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-      display(`Drive sincronizado às ${now}. Enviadas: ${sent}; recebidas: ${received}; divergências preservadas: ${conflicts}.`);
-      hadErrors=false;
+      display(`${conflicts?'Drive parcialmente sincronizado':'Drive sincronizado'} às ${now}. Enviadas: ${sent}; recebidas: ${received}; divergências preservadas: ${conflicts}.`);
+      hadErrors=conflicts>0;
     } catch(e) { logError(e); }
     finally { running=false; }
   }
