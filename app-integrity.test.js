@@ -184,3 +184,11 @@ test('assistente revela metadados inválidos e preserva OS textual no resumo',()
  assert.match(source,/reportFields\?\.contains\(event\.target\)\|\|reportExtra\?\.contains\(event\.target\)/);
  assert.match(source,/setReportExpanded\(true\);\s*return;/);
 });
+
+test('assistente identifica campo essencial pendente e limpa alerta após correção',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/input\.setAttribute\('aria-invalid','true'\)/);
+ assert.match(source,/if\(String\(event\.target\.value\|\|''\)\.trim\(\)\)event\.target\.removeAttribute\('aria-invalid'\)/);
+ assert.match(source,/form\.querySelectorAll\('\[aria-invalid="true"\]'\)/);
+});
