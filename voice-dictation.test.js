@@ -149,3 +149,9 @@ test('ditado por voz oferece alvo de toque de 48px no modo campo',()=>{
  const css=readFileSync('layout.css','utf8');
  assert.match(css,/@media\(max-width:760px\)\{\.voice-controls \.voice-button\{min-height:48px;font-size:14px;/);
 });
+
+// Mensagens de permissão/erro do ditado permanecem legíveis em telas pequenas.
+test('status do ditado mantém fonte legível e quebra de palavras no Android',()=>{
+ const css=readFileSync('layout.css','utf8');
+ assert.match(css,/\.voice-controls \.voice-status\{flex-basis:100%;font-size:14px;line-height:1\.6;overflow-wrap:anywhere\}/);
+});
