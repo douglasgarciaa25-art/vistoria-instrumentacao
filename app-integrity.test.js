@@ -198,3 +198,15 @@ test('assistente limpa erros de ponto anterior ao carregar outro ponto',()=>{
  assert.doesNotThrow(()=>new vm.Script(source));
  assert.match(source,/fill=function\(\)\{const result=oldFill\.apply\(this,arguments\);form\.querySelectorAll\('\[aria-invalid="true"\]'\)\.forEach\(el=>el\.removeAttribute\('aria-invalid'\)\)/);
 });
+
+
+test('relatório mantém PDF principal e Word acessível em formatos recolhíveis',()=>{
+ const source=readFileSync('layout.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/\$\('pdf'\)\.innerHTML=icon\('report'\)\+'Baixar relatório em PDF'/);
+ assert.match(source,/document\.createElement\('details'\)/);
+ assert.match(source,/formatsSummary\.textContent='Outros formatos de exportação'/);
+ assert.match(source,/formatsActions\.append\(wordButton\)/);
+ assert.match(source,/const wordButton=\$\('word'\)/);
+ assert.ok(!source.includes('wordButton.remove()'));
+});
