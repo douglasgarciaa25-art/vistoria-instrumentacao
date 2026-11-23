@@ -192,3 +192,9 @@ test('assistente identifica campo essencial pendente e limpa alerta apÃ³s correÃ
  assert.match(source,/if\(String\(event\.target\.value\|\|''\)\.trim\(\)\)event\.target\.removeAttribute\('aria-invalid'\)/);
  assert.match(source,/form\.querySelectorAll\('\[aria-invalid="true"\]'\)/);
 });
+
+test('assistente limpa erros de ponto anterior ao carregar outro ponto',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/fill=function\(\)\{const result=oldFill\.apply\(this,arguments\);form\.querySelectorAll\('\[aria-invalid="true"\]'\)\.forEach\(el=>el\.removeAttribute\('aria-invalid'\)\)/);
+});
