@@ -62,3 +62,17 @@ test('logout não limpa a fila global e é limitado à conta autenticada',()=>{
  assert.match(background,/const clearFor=subject/);
  assert.match(background,/leaseUntil/);
 });
+
+
+test('restauração remota revalida conta antes da leitura e da gravação local',()=>{
+ const src=file('google-drive-sync.js');
+ const start=src.indexOf('      for(const item of remote){');
+ const end=src.indexOf("      if(localStorage.getItem('vistoria-team-auto:",start);
+ assert.ok(start>=0&&end>start);
+ const restore=src.slice(start,end);
+ assert.match(restore,/if\(queueMember\?\.google_subject!==member\.google_subject\|\|!validToken\(\)\)break;/);
+ const afterFetch=restore.slice(restore.indexOf("await reportRequest('GET',item.report_id)"));
+ assert.match(afterFetch,/if\(queueMember\?\.google_subject!==member\.google_subject\|\|!validToken\(\)\)break;/);
+ const beforeWrite=restore.slice(restore.indexOf('const latest=await idbReq'));
+ assert.match(beforeWrite,/if\(queueMember\?\.google_subject!==member\.google_subject\|\|!validToken\(\)\)break;\s*await putReport/);
+});
