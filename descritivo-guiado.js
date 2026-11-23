@@ -8,6 +8,7 @@
  section.className='card guided-description';
  section.innerHTML='<summary>Montar descritivo técnico — preenchimento guiado</summary>'
   +'<p class="muted">Registre somente fatos que você observou ou executou. Separe hipóteses de resultados confirmados. A prévia é montada neste aparelho, sem enviar informações para a IA.</p>'
+  +'<p id="guidedProgress" class="muted" role="status" aria-live="polite">0 de 6 etapas preenchidas</p>'
   +'<div class="fields" id="guidedFields"></div>'
   +'<label>Prévia do descritivo<textarea id="guidedPreview" rows="9" readonly placeholder="Descreva pelo menos uma etapa acima."></textarea></label>'
   +'<div class="fields"><label>Onde acrescentar<select id="guidedTarget"><option value="analysisDraft">Andamento da análise (rascunho)</option><option value="problem">Condição encontrada</option><option value="impact">Impacto / consequência</option><option value="action">Ação recomendada</option><option value="completionWork">Serviço realizado</option><option value="conclusion">Conclusão</option></select></label></div>'
@@ -38,6 +39,7 @@
   fields.append(label);
   fieldInputs[part.key]=field;
  }
+ const progress=section.querySelector('#guidedProgress');
  const preview=section.querySelector('#guidedPreview');
  const target=section.querySelector('#guidedTarget');
  const status=section.querySelector('#guidedStatus');
@@ -47,11 +49,14 @@
   const values={};
   for(const part of api.PARTS)values[part.key]=fieldInputs[part.key].value;
   preview.value=api.compose(values);
+  const completed=api.PARTS.filter(part=>values[part.key].trim()).length;
+  progress.textContent=`${completed} de ${api.PARTS.length} etapas preenchidas`;
   status.textContent=preview.value?'Prévia atualizada. Confira os fatos antes de acrescentar.':'';
  }
  function clearGuide(){
   for(const field of Object.values(fieldInputs))field.value='';
   preview.value='';
+  progress.textContent=`0 de ${api.PARTS.length} etapas preenchidas`;
   lastApplied=null;
   undoButton.hidden=true;
   status.textContent='';

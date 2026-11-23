@@ -50,3 +50,11 @@ test('guia vazio orienta e posiciona foco no primeiro campo técnico',()=>{
  const js=readFileSync('descritivo-guiado.js','utf8');
  assert.match(js,/if\(!text\)\{[\s\S]*?status\.textContent='Preencha pelo menos uma etapa do descritivo\.';[\s\S]*?fieldInputs\[api\.PARTS\[0\]\.key\]\?\.focus\(\);[\s\S]*?return;/);
 });
+
+test('contador de progresso do guia é acessível e reiniciado sem tocar no relato salvo',()=>{
+ const js=readFileSync('descritivo-guiado.js','utf8');
+ assert.match(js,/id="guidedProgress"[^>]*role="status" aria-live="polite"/);
+ assert.match(js,/api\.PARTS\.filter\(part=>values\[part\.key\]\.trim\(\)\)\.length/);
+ assert.match(js,/progress\.textContent=\x60\$\{completed\} de \$\{api\.PARTS\.length\} etapas preenchidas\x60/);
+ assert.match(js,/progress\.textContent=\x600 de \$\{api\.PARTS\.length\} etapas preenchidas\x60/);
+});
