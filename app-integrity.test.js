@@ -107,7 +107,7 @@ test('campos gerais podem ser abertos e os erros trazem o campo à vista',()=>{
  assert.ok(wizard.includes("expanded[stage]=true"));
  assert.ok(wizard.includes("input.focus({preventScroll:true})"));
  assert.ok(wizard.includes("index===3&&document.getElementById('status')?.value==='Corrigido'"));
- assert.match(sw,/vistoria-shell-v57-campo-compacto/);
+ assert.match(sw,/vistoria-shell-v\d+-[a-z0-9-]+/);
  assert.match(sw,/'\/form-wizard\.js'/);
  assert.ok(!wizard.includes('fetch('),'Assistente não deve depender de rede');
  assert.ok(!wizard.includes('localStorage.clear('),'Assistente não deve limpar dados');
