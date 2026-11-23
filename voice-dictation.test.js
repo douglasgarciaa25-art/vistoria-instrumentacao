@@ -143,3 +143,9 @@ test('PWA carrega código, estilo e preserva controle antigo contra duplicaçõe
  assert.match(source,/áudio pode ser processado pelo serviço de reconhecimento de voz/);
  assert.match(source,/document\.querySelectorAll/);
 });
+
+// Proteção do alvo de toque do ditado em campo, sem alterar captura ou dados.
+test('ditado por voz oferece alvo de toque de 48px no modo campo',()=>{
+ const css=readFileSync('layout.css','utf8');
+ assert.match(css,/@media\(max-width:760px\)\{\.voice-controls \.voice-button\{min-height:48px;font-size:14px;/);
+});
