@@ -75,7 +75,7 @@
  const wizard=document.createElement('section');
  wizard.id='vistoriaWizard';wizard.className='wizard-box';
  wizard.setAttribute('aria-label','Assistente de preenchimento em campo');
- wizard.innerHTML='<div class="wizard-eyebrow"><span>ASSISTENTE DE CAMPO</span><span id="wizardCounter">Etapa 1 de 5</span></div>'
+ wizard.innerHTML='<div class="wizard-eyebrow"><span>ASSISTENTE DE CAMPO</span><span id="wizardCounter" role="status" aria-live="polite" aria-atomic="true">Etapa 1 de 5</span></div>'
   +'<progress class="wizard-progress" max="5" value="1" aria-label="Progresso do preenchimento"></progress>'
   +'<h3 class="wizard-title" id="wizardTitle" tabindex="-1"></h3>'
   +'<p class="wizard-question" id="wizardQuestion"></p>'
@@ -173,6 +173,7 @@
    node.dataset.wizardHidden=String(config.step!==current||(config.optional&&!expanded[current]));
   }
   wizard.querySelector('progress').value=current+1;
+  wizard.querySelector('progress').setAttribute('aria-valuetext','Etapa '+(current+1)+' de '+steps.length+': '+steps[current].title);
   wizard.querySelector('#wizardCounter').textContent='Etapa '+(current+1)+' de '+steps.length;
   wizard.querySelector('#wizardTitle').textContent=steps[current].title;
   wizard.querySelector('#wizardQuestion').textContent=steps[current].question;
