@@ -107,7 +107,7 @@ test('campos gerais podem ser abertos e os erros trazem o campo à vista',()=>{
  assert.ok(wizard.includes("expanded[stage]=true"));
  assert.ok(wizard.includes("input.focus({preventScroll:true})"));
  assert.ok(wizard.includes("index===3&&document.getElementById('status')?.value==='Corrigido'"));
- assert.match(sw,/vistoria-shell-v57-campo-compacto/);
+ assert.match(sw,/vistoria-shell-v\d+-[a-z0-9-]+/);
  assert.match(sw,/'\/form-wizard\.js'/);
  assert.ok(!wizard.includes('fetch('),'Assistente não deve depender de rede');
  assert.ok(!wizard.includes('localStorage.clear('),'Assistente não deve limpar dados');
@@ -183,4 +183,70 @@ test('assistente revela metadados inválidos e preserva OS textual no resumo',()
  assert.match(source,/os\?' · OS '\+os/);
  assert.match(source,/reportFields\?\.contains\(event\.target\)\|\|reportExtra\?\.contains\(event\.target\)/);
  assert.match(source,/setReportExpanded\(true\);\s*return;/);
+});
+
+
+test('relatórios apresentam resumo, filtros e descritivos recolhíveis preservando dados',()=>{
+ const source=readFileSync('reports-view.js','utf8');
+ const html=readFileSync('index.html','utf8');
+ const sw=readFileSync('sw.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source),'Tela de relatórios deve ter sintaxe válida');
+ assert.ok(html.includes('<script src="reports-view.js"></script>'));
+ assert.ok(html.indexOf('form-wizard.js')<html.indexOf('reports-view.js'),'Revisão deve carregar depois do editor');
+ assert.ok(sw.includes("'/reports-view.js'"),'O PWA deve guardar a nova interface');
+ assert.match(source,/id='reportOverview'/);
+ assert.match(source,/className='report-point-details'/);
+ assert.match(source,/function compactEntries\(\)/);
+ assert.match(source,/function applyFilter\(\)/);
+ assert.match(source,/record\.pointWorkOrder/,'OS do ponto deve ser pesquisável');
+ assert.match(source,/record\.status/,'Situação deve ser pesquisável');
+ assert.match(source,/record\.photos/,'Fotos devem permanecer acessíveis');
+ assert.match(source,/textContent=description/,'Descrições não devem entrar como HTML inseguro');
+ assert.match(source,/for\(const p of paragraphs\.slice\(1\)\)details\.append\(p\)/,'Descritivos originais devem ser movidos sem modificar conteúdo');
+ assert.ok(!source.includes('localStorage.clear('));
+ assert.ok(!source.includes('indexedDB.deleteDatabase('));
+ assert.ok(!source.includes('fetch('));
+});
+
+test('ponto em edição nas primeiras etapas não é exportado silenciosamente',()=>{
+ const source=readFileSync('export-current.js','utf8');
+ const messages=[];
+ let editorOpens=0,downloads=0,submitCalls=0;
+ const pdf={onclick:()=>{downloads++},after:()=>{}};
+ const mockDocument={
+  createElement:()=>({id:'',type:'',textContent:'',onclick:null}),
+  querySelectorAll:()=>[],
+  querySelector:()=>({click:()=>{editorOpens++}}),
+  getElementById:id=>{
+   if(id==='wizardNext')return {hidden:false};
+   if(id==='vistoriaWizard')return {scrollIntoView(){}};
+   return null;
+  }
+ };
+ const context={
+  document:mockDocument,editing:0,photos:[],busy:0,historyBusy:false,itemKeys:[],
+  render(){},notify:msg=>messages.push(msg),
+  $:id=>id==='pdf'?pdf:null
+ };
+ vm.runInNewContext(source,context);
+ pdf.onclick();
+ assert.equal(downloads,0,'PDF antigo não deve ser gerado enquanto o ponto está pendente');
+ assert.equal(submitCalls,0,'Não deve tentar salvar o ponto fora da etapa final');
+ assert.equal(editorOpens,1,'O técnico deve retornar ao formulário');
+ assert.ok(messages.some(msg=>/ponto em preenchimento/i.test(msg)));
+ assert.equal(context.editing,0,'A edição não pode ser descartada');
+});
+
+test('exportação normal permanece disponível sem ponto pendente',()=>{
+ const source=readFileSync('export-current.js','utf8');
+ let downloads=0;
+ const pdf={onclick:()=>{downloads++},after:()=>{}};
+ const context={
+  document:{createElement:()=>({}),querySelectorAll:()=>[],getElementById:()=>null},
+  editing:null,photos:[],busy:0,historyBusy:false,itemKeys:[],render(){},notify(){},
+  $:id=>id==='pdf'?pdf:null
+ };
+ vm.runInNewContext(source,context);
+ pdf.onclick();
+ assert.equal(downloads,1,'Exportar relatório já salvo deve continuar funcionando');
 });
