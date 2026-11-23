@@ -539,8 +539,8 @@
             const d=await reportRequest('POST',item.id,{document:item.document,revision:0});
             rememberTeamIds([{report_id:item.id}]);
             baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
-            localStorage.setItem(key,JSON.stringify(baseline));
-          }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
+            localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
+          }catch(e){teamDeferred++;const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
         }
       }
       for(const item of remote){
