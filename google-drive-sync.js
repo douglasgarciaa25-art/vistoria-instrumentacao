@@ -483,15 +483,18 @@
       const local=await reports();
       await showPendingQueue(member);
       for(const item of remote){
+        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
         if(row&&previous?.revision===item.revision&&await digest(row.document)===previous.hash)continue;
         if(row&&(!previous||await digest(row.document)!==previous.hash)){const status=$('gdrive-team-status');if(status)status.textContent='Divergência preservada na vistoria '+item.report_id+'. Compare as versões antes de publicar.';continue;}
         if(row&&typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
         const d=await reportRequest('GET',item.report_id);
+        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         if(!d.document?.meta||!Array.isArray(d.document.records)||!validate({id:item.report_id,document:d.document}))continue;
         const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
         if(latest&&(!previous||await digest(latest.document)!==previous.hash))continue;
+        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         await putReport({id:item.report_id,updated:item.updated_at,document:d.document});
         baseline[item.report_id]={revision:d.revision,hash:await digest(d.document)};
         localStorage.setItem(key,JSON.stringify(baseline));
