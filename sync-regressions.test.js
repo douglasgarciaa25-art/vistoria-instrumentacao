@@ -95,3 +95,18 @@ test('guarda de edição ativa bloqueia alterações não salvas mas não bloque
  context.saveTimer=null;context.busy=1;
  assert.equal(await decide('vistoria-a','rev-2'),false);
 });
+
+test('Drive pessoal atualiza relatório e rascunho quando chega revisão no editor aberto',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/const active=row\.id===activeReportId;/);
+ assert.match(src,/if\(active&&!await activeMatchesSaved\(row\.id,docHash\)\)\{conflicts\+\+;continue;\}/);
+ assert.match(src,/tx\.objectStore\('reports'\)\.put\(\{id:row\.id,updated,document:packet\.document\}\)/);
+ assert.match(src,/tx\.objectStore\('draft'\)\.put\(\{\.\.\.structuredClone\(packet\.document\),reportId:row\.id\},'current'\)/);
+});
+test('Drive pessoal não envia cópia antiga após conflito sem baseline',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/const marker='conflito:'\+remoteHash\+':'\+docHash/);
+ assert.match(src,/if\(syncMap\[row\.id\]===marker\)\{conflicts\+\+;continue;\}/);
+ assert.match(src,/syncMap\[row\.id\]=marker;saveMap\(\);conflicts\+\+/);
+ assert.doesNotMatch(src,/syncMap\[row\.id\]=remoteHash;saveMap\(\);conflicts\+\+/);
+});
