@@ -5,16 +5,28 @@
   if(photos.length)return true;
   return itemKeys.some(k=>{const el=$(k);if(!el)return false;const value=el.value.trim();if(el.tagName==='SELECT')return value!==(el.querySelector('option[selected]')||el.options[0])?.value;return value!==String(el.defaultValue||'').trim()});
  }
+ function returnToPendingPoint(message){
+  // Never silently export an older version while a point has unsaved changes.
+  document.querySelector('.app-nav [data-view="editor"]')?.click();
+  const header=document.getElementById('vistoriaWizard')||document.getElementById('form');
+  header?.scrollIntoView({behavior:'smooth',block:'start'});
+  notify(message);
+  return false;
+ }
  function preparePoint(){
   if(busy||historyBusy){notify('Aguarde a operação atual antes de gerar o PDF.');return false}
   if(!hasPendingPoint())return true;
-  if(!$('form').reportValidity()){notify('Complete os campos obrigatórios do ponto para incluí-lo no PDF.');return false}
-  for(const k of ['tag','area','problem'])if(!$(k).value.trim()){notify('Preencha TAG, área e condição encontrada para incluir o ponto no PDF.');$(k).focus();return false}
-  if($('status').value==='Corrigido'&&(!$('completionDate').value||!$('completionWork').value.trim())){notify('Informe a data e o serviço realizado para concluir o ponto.');return false}
+  // The field wizard blocks an early programmatic submit on purpose. Give the
+  // technician a clear path to the final step instead of failing on the PDF tab.
+  const wizardNext=document.getElementById('wizardNext');
+  if(wizardNext&&!wizardNext.hidden)return returnToPendingPoint('Existe um ponto em preenchimento. Avance até Fotos e salvar, confirme o ponto e depois gere o PDF. Nenhum dado foi descartado.');
+  if(!$('form').reportValidity())return returnToPendingPoint('Complete os campos obrigatórios do ponto antes de exportar.');
+  for(const k of ['tag','area','problem'])if(!$(k).value.trim())return returnToPendingPoint('Preencha TAG, área e condição encontrada antes de gerar o PDF.');
+  if($('status').value==='Corrigido'&&(!$('completionDate').value||!$('completionWork').value.trim()))return returnToPendingPoint('Para concluir o ponto, informe a data e o serviço realizado antes de exportar.');
   if($('analysisDraft')?.value.trim())$('appendAnalysis').click();
   $('form').requestSubmit();
   // A successful existing submit resets the editor; otherwise abort the export.
-  if(editing!==null||$('tag').value.trim()||$('problem').value.trim()||photos.length){notify('Não foi possível confirmar o ponto. Revise o formulário antes de baixar.');return false}
+  if(editing!==null||$('tag').value.trim()||$('problem').value.trim()||photos.length)return returnToPendingPoint('O ponto ainda não foi confirmado. Revise a última etapa e toque em Salvar alteração antes de gerar o PDF.');
   return true;
  }
  const allPoints=document.createElement('button');allPoints.id='pdfAllPoints';allPoints.type='button';allPoints.textContent='Baixar PDF com todos os pontos';
