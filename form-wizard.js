@@ -239,7 +239,11 @@
   const required=requiredFields(index);
   for(const id of required){
    const input=document.getElementById(id);
-   if(input&&!String(input.value||'').trim()){openField(id,index);return false}
+   if(input&&!String(input.value||'').trim()){
+    input.setAttribute('aria-invalid','true');
+    openField(id,index);
+    return false;
+   }
   }
   return true;
  }
@@ -263,10 +267,16 @@
   }
  },true);
  form.addEventListener('input',event=>{
-  if(event.target.matches('input,textarea,select'))render();
+  if(event.target.matches('input,textarea,select')){
+   if(String(event.target.value||'').trim())event.target.removeAttribute('aria-invalid');
+   render();
+  }
  });
  form.addEventListener('change',event=>{
-  if(event.target.matches('input,textarea,select'))render();
+  if(event.target.matches('input,textarea,select')){
+   if(String(event.target.value||'').trim())event.target.removeAttribute('aria-invalid');
+   render();
+  }
  });
  form.addEventListener('invalid',event=>{
   if(reportFields?.contains(event.target)||reportExtra?.contains(event.target)){
@@ -285,7 +295,7 @@
   render();
  });
  const oldReset=reset;
- reset=function(){const result=oldReset.apply(this,arguments);expanded.fill(false);setStep(0);return result};
+ reset=function(){const result=oldReset.apply(this,arguments);expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
  const oldFill=fill;
  fill=function(){const result=oldFill.apply(this,arguments);expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
  document.getElementById('savedPointPicker')?.addEventListener('change',()=>{
