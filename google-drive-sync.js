@@ -227,6 +227,7 @@
     if (!navigator.onLine) { display('Offline: vistorias preservadas no aparelho.'); return; }
     if (!validToken()) { enabled=false; $('gdrive-connect').textContent='Reconectar Google Drive'; display('Autorização expirada. Toque em Reconectar; seus registros continuam salvos.',true); return; }
     if (typeof historyReady==='undefined'||!historyReady) return;
+    if (historyBusy || busy) { display('Aguardando conclusão do preenchimento antes de sincronizar.'); return; }
     running=true;
     let sent=0,received=0,conflicts=0;
     try {
@@ -282,33 +283,41 @@
           syncMap[row.id]=docHash;saveMap();sent++;
           await uploadPhotos(row);
         } else if (last && last===docHash) {
-          // The remote record changed; download without losing local unsaved changes.
-          const packet=await downloadJson(remote.id,row.id);
+          // Mudança veio de outro aparelho; não reenviar o rascunho antigo por cima dela.
+          const active=row.id===activeReportId;
+          if(active&&!await activeMatchesSaved(row.id,docHash)){conflicts++;continue;}
+          const scope=folderId,packet=await downloadJson(remote.id,row.id);
           if (!validate({id:row.id,document:packet.document})) continue;
-          if(row.id===activeReportId) {
-            const cloneId=crypto.randomUUID();
-            const copy=structuredClone(packet.document);
-            copy.meta={...copy.meta,title:(copy.meta.title||'Vistoria')+' (versão recebida do Drive)'};
-            await putReport({id:cloneId,updated:new Date().toISOString(),document:copy});
-            // Avoid importing the same remote revision repeatedly.
-            syncMap[row.id]=remoteHash;saveMap();
-            conflicts++;
-          } else {
-            // Outra aba pode ter editado esta vistoria durante o download remoto.
-            const latest=await idbReq(db.transaction('reports').objectStore('reports').get(row.id));
-            if(!latest||await digest(latest.document)!==docHash){conflicts++;continue;}
-            await putReport({id:row.id,updated:packet.savedAt||new Date().toISOString(),document:packet.document});
-            syncMap[row.id]=remoteHash;saveMap();received++;
+          if(scope!==folderId||scope!==syncScope||!validToken()){conflicts++;continue;}
+          const latest=await idbReq(db.transaction('reports').objectStore('reports').get(row.id));
+          if(!latest||await digest(latest.document)!==docHash){conflicts++;continue;}
+          if(active&&!await activeMatchesSaved(row.id,docHash)){conflicts++;continue;}
+          const updated=packet.savedAt||new Date().toISOString();
+          if(active){
+            const tx=db.transaction(['reports','draft'],'readwrite');
+            tx.objectStore('reports').put({id:row.id,updated,document:packet.document});
+            tx.objectStore('draft').put({...structuredClone(packet.document),reportId:row.id},'current');
+            await txDone(tx);
+            reset();fill(structuredClone(packet.document));
+            if(typeof refreshHistory==='function')await refreshHistory();
+          }else{
+            await putReport({id:row.id,updated,document:packet.document});
           }
+          syncMap[row.id]=remoteHash;saveMap();received++;
         } else {
-          // When two devices edit without a shared baseline, preserve BOTH copies.
-          const packet=await downloadJson(remote.id,row.id);
-          const cloneId=crypto.randomUUID();
-          const document=structuredClone(packet.document);
-          document.meta={...document.meta,title:(document.meta.title||'Vistoria')+' (cópia remota)'};
-          await putReport({id:cloneId,updated:new Date().toISOString(),document});
-          // Record this remote hash as the last seen so this device can upload local changes next time.
-          syncMap[row.id]=remoteHash;saveMap();conflicts++;
+          // Duas edições divergentes: preservar ambas sem avançar a base para a remota.
+          // O marcador bloqueia reenvio automático e cópias repetidas do mesmo conflito.
+          const marker='conflito:'+remoteHash+':'+docHash;
+          if(syncMap[row.id]===marker){conflicts++;continue;}
+          const scope=folderId,packet=await downloadJson(remote.id,row.id);
+          if(!validate({id:row.id,document:packet.document}))continue;
+          if(scope!==folderId||scope!==syncScope||!validToken()){conflicts++;continue;}
+          const current=await idbReq(db.transaction('reports').objectStore('reports').get(row.id));
+          if(!current||await digest(current.document)!==docHash){conflicts++;continue;}
+          const cloneId=crypto.randomUUID(),copy=structuredClone(packet.document);
+          copy.meta={...copy.meta,title:(copy.meta.title||'Vistoria')+' (versão remota preservada)'};
+          await putReport({id:cloneId,updated:new Date().toISOString(),document:copy});
+          syncMap[row.id]=marker;saveMap();conflicts++;
         }
       }
       const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
