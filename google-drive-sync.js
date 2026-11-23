@@ -702,6 +702,43 @@
       const title=document.createElement('strong');title.className='cloud-report-title';const tags=[...new Set((doc?.records||[]).map(p=>p.tag).filter(Boolean))];title.textContent=tags.join(' · ')||doc?.meta?.title||'Vistoria compartilhada';row.append(title);const meta=document.createElement('small');meta.className='cloud-report-meta';meta.textContent=[doc?.meta?.number||item.report_id.slice(0,8),'Rev. '+item.revision,item.updated_at?new Date(item.updated_at).toLocaleString('pt-BR'):'',item.owner_subject===member.google_subject?'Minha vistoria':'Equipe'].filter(Boolean).join(' · ');row.append(meta);
       entries.push({row,mine:item.owner_subject===member.google_subject,areas:(doc?.records||[]).map(p=>p.area),date:Date.parse(item.updated_at)||0,tag:title.textContent,text:label+' '+JSON.stringify(doc?.meta||{})+' '+(doc?.records||[]).map(p=>[p.pointWorkOrder,p.tag,p.area,p.os,p.order].filter(Boolean).join(' ')).join(' ')});
       const menu=document.createElement('details');menu.className='cloud-report-menu';const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
+      // Recuperação manual para aparelhos com cópia antiga e sem histórico de revisão compartilhado.
+      // Nunca descartar a versão que já existe no aparelho.
+      button(menu,'Atualizar da nuvem (preservar cópia local)',async()=>{
+        if(!confirm('Buscar a revisão mais recente da equipe? Se houver diferenças, a versão atual deste aparelho será preservada como cópia separada.'))return;
+        if(!validToken())throw Error('Conecte sua conta Google novamente.');
+        const account=member.google_subject,token=accessToken;
+        if(typeof persistCurrent==='function')await persistCurrent();
+        const original=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
+        const originalHash=original?await digest(original.document):null;
+        const active=typeof activeReportId!=='undefined'&&activeReportId===item.report_id;
+        if(active&&!await activeMatchesSaved(item.report_id,originalHash))throw Error('Conclua a edição atual antes de atualizar da nuvem.');
+        const received=await reportRequest('GET',item.report_id);
+        if(!validate({id:item.report_id,document:received.document}))throw Error('Revisão recebida inválida.');
+        const session=await teamRequest();
+        if(!validToken()||accessToken!==token||session.member?.google_subject!==account)throw Error('A conta Google mudou; nenhuma alteração local foi feita.');
+        const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
+        if((latest?await digest(latest.document):null)!==originalHash)throw Error('Houve uma edição local durante a consulta; tente novamente.');
+        if(active&&!await activeMatchesSaved(item.report_id,originalHash))throw Error('A edição foi alterada durante a consulta; nada foi substituído.');
+        const remoteHash=await digest(received.document),copyId=crypto.randomUUID();
+        const tx=db.transaction(['reports','draft'],'readwrite');
+        if(original&&remoteHash!==originalHash){
+          const previous=structuredClone(original.document);
+          previous.meta={...previous.meta,title:(previous.meta.title||'Vistoria')+' (cópia local preservada)'};
+          tx.objectStore('reports').put({id:copyId,updated:new Date().toISOString(),document:previous});
+        }
+        tx.objectStore('reports').put({id:item.report_id,updated:received.updated_at||new Date().toISOString(),document:received.document});
+        if(active)tx.objectStore('draft').put({...structuredClone(received.document),reportId:item.report_id},'current');
+        await txDone(tx);
+        if(active){reset();fill(structuredClone(received.document));}
+        if(typeof refreshHistory==='function')await refreshHistory();
+        const key='vistoria-team-baseline:'+account;
+        const baseline=JSON.parse(localStorage.getItem(key)||'{}');
+        baseline[item.report_id]={revision:received.revision,hash:remoteHash};
+        localStorage.setItem(key,JSON.stringify(baseline));
+        status.textContent='Revisão '+received.revision+' recebida da equipe.'+
+          (original&&remoteHash!==originalHash?' Versão anterior deste aparelho guardada como cópia em Vistorias salvas.':' Nenhum dado local precisou ser substituído.');
+      });
       button(menu,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico cadastrado: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);if(event.available)button(details,'Copiar revisão '+event.revision,async()=>{const d=await reportRequest('GET',item.report_id,null,false,false,event.revision);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:structuredClone(d.document)});status.textContent='Revisão recuperada como cópia local, sem substituir o original.';});}for(const event of d.pointHistory||[]){const p=document.createElement('p');const action={created:'Inclusão',edited:'Edição',completed:'Finalização',reopened:'Reabertura',deleted:'Exclusão',restored:'Restauração'}[event.action]||event.action;p.textContent='Equipamento '+(event.tag_snapshot||event.point_id)+' — OS '+(event.work_order_snapshot||'Não informada')+' — '+action+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);}if((d.pointHistory||[]).some(e=>e.action==='completed'))button(details,'Baixar PDF de baixas autenticadas',()=>downloadVerifiedClosures(item.report_id,d.pointHistory));if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
       if(item.owner_subject===member.google_subject)button(menu,'Enviar revisão em segundo plano',async()=>{
         if(!window.VistoriaBackground||!navigator.serviceWorker)throw Error('Segundo plano indisponível neste navegador.');
