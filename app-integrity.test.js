@@ -155,3 +155,11 @@ test('assistente mantém foco acessível e respeita movimento reduzido',()=>{
  assert.match(source,/prefers-reduced-motion: reduce/);
  assert.match(source,/const required=requiredFields\(index\)/);
 });
+
+test('assistente anuncia mudança de etapa para leitores de tela',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/id="wizardCounter" role="status" aria-live="polite" aria-atomic="true"/);
+ assert.match(source,/setAttribute\('aria-valuetext','Etapa '/);
+ assert.match(source,/id="wizardTitle" tabindex="-1"/);
+});
