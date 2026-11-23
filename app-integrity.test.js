@@ -241,3 +241,14 @@ test('navegação entre telas respeita movimento reduzido sem perder foco',()=>{
  assert.match(js,/window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches\?'instant':'smooth'/);
  assert.match(js,/heading\.focus\(\{preventScroll:true\}\)/);
 });
+
+test('atalho acessível pula navegação sem alterar dados ou estado da vistoria',()=>{
+ const js=readFileSync('layout.js','utf8');
+ const css=readFileSync('layout.css','utf8');
+ assert.match(js,/main\.id='main-content'/);
+ assert.match(js,/skip\.href='#main-content'/);
+ assert.match(js,/skip\.textContent='Pular para o conteúdo principal'/);
+ assert.match(js,/header\.before\(skip\)/);
+ assert.match(css,/\.skip-to-content:focus-visible/);
+ assert.match(css,/\.skip-to-content\{[^}]*translateY\(-180%\)/);
+});
