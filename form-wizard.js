@@ -94,6 +94,19 @@
   nav.querySelector('.wizard-steps').append(button);
   return button;
  });
+ // Navegação acessível no seletor de etapas, sem mudar o formulário ou salvar dados.
+ nav.querySelector('.wizard-steps').addEventListener('keydown',event=>{
+  const index=stepButtons.indexOf(document.activeElement);
+  if(index<0)return;
+  let target=index;
+  if(event.key==='ArrowRight'||event.key==='ArrowDown')target=(index+1)%stepButtons.length;
+  else if(event.key==='ArrowLeft'||event.key==='ArrowUp')target=(index-1+stepButtons.length)%stepButtons.length;
+  else if(event.key==='Home')target=0;
+  else if(event.key==='End')target=stepButtons.length-1;
+  else return;
+  event.preventDefault();
+  stepButtons[target].focus();
+ });
  const more=wizard.querySelector('#wizardMore');
  const footer=document.createElement('div');
  footer.className='wizard-footer';
