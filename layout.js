@@ -4,7 +4,7 @@
  const main=document.querySelector('main'),header=document.querySelector('header'),oldLayout=document.querySelector('.layout'),meta=$('meta').closest('.card'),review=$('entries').closest('.card'),backup=$('backup').closest('.card'),cloud=document.createElement('div'),history=$('historyPanel'),install=$('installPanel');
  document.querySelector('.intro').remove();
  // Keyboard users can bypass the repeated header and navigation on every screen.
- main.id='main-content';
+ main.id='main-content';main.setAttribute('tabindex','-1');
  const skip=document.createElement('a');skip.className='skip-to-content';skip.href='#main-content';skip.textContent='Pular para o conteúdo principal';
  header.before(skip);
  header.innerHTML='<div class="brand">'+header.querySelector('img').outerHTML+'<div><span class="brand-divider"></span><small>INSTRUMENTAÇÃO & AUTOMAÇÃO</small><h1>Vistorias técnicas</h1></div></div><span id="connectionBadge" class="connection"></span>';
