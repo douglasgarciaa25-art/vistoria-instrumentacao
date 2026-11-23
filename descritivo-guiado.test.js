@@ -58,3 +58,12 @@ test('contador de progresso do guia é acessível e reiniciado sem tocar no rela
  assert.match(js,/progress\.textContent=\x60\$\{completed\} de \$\{api\.PARTS\.length\} etapas preenchidas\x60/);
  assert.match(js,/progress\.textContent=\x600 de \$\{api\.PARTS\.length\} etapas preenchidas\x60/);
 });
+
+test('atalho de navegação mantém a ordem técnica e não altera os campos',()=>{
+ const js=readFileSync('descritivo-guiado.js','utf8');
+ assert.ok(js.includes('id="guidedNext"'));
+ assert.match(js,/api\.PARTS\.find\(part=>!fieldInputs\[part\.key\]\.value\.trim\(\)\)/);
+ assert.match(js,/fieldInputs\[pending\.key\]\.focus\(\)/);
+ assert.match(js,/if\(!pending\)\{status\.textContent=.*?preview\.focus\(\);return;/);
+ assert.ok(js.includes('Próxima pergunta pendente: '));
+});
