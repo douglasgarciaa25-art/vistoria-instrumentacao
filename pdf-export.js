@@ -89,5 +89,18 @@ async function exportReportDocuments(documents){
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };
 
-$('pdf').onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();return exportReportDocuments([structuredClone(data())])});
+function reportConsistencyWarnings(document){
+ const warnings=[];
+ for(const [i,r] of (document.records||[]).entries()){
+  const id='Ponto '+(i+1)+(r.tag?' ('+r.tag+')':'');
+  const all=[r.problem,r.analysisHistory,r.impact,r.action,r.completionWork].filter(Boolean).join(' ');
+  if(/(?:40\s*[-–]\s*20|40\s*a\s*20)\s*mA/i.test(all))warnings.push(id+': conferir faixa de corrente escrita como 40–20 mA; não foi alterada automaticamente.');
+  if((r.priority||'').toLowerCase()==='a definir'&&['Pendente','Em acompanhamento'].includes(r.status))warnings.push(id+': prioridade ainda não definida.');
+  if(/SERVIÇO REALIZADO\s*:/i.test(r.action||''))warnings.push(id+': serviço executado informado no campo de ação recomendada; revise a classificação.');
+  if(/\bbypass\b/i.test(all)&&/\b(?:retirada|retirar|remoção|remover|provisório)\b/i.test(all)&&!/(?:retirada|remoção)\s+(?:do\s+)?bypass\s+(?:confirmada|validada)/i.test(all))warnings.push(id+': conferir situação do bypass e validação das proteções.');
+  if(/\b(?:70|72[,.]6)\s*\??\s*V\s*(?:ca|ac)\b/i.test(all))warnings.push(id+': conferir valor de tensão e pontos de medição com a evidência fotográfica.');
+ }
+ return warnings;
+}
+$('pdf').onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();const document=structuredClone(data());const warnings=reportConsistencyWarnings(document);if(warnings.length&&!window.confirm('Revisão técnica antes de gerar PDF:\n\n'+warnings.join('\n')+'\n\nOs dados originais serão preservados. Deseja gerar mesmo assim?'))return;return exportReportDocuments([document])});
 $('pdfAll').onclick=()=>guarded(async()=>{await persistCurrent();const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());const docs=rows.sort((a,b)=>(a.document.meta.date||'').localeCompare(b.document.meta.date||'')||a.updated.localeCompare(b.updated)).map(r=>r.document);if(!docs.length)return notify('Nenhum formulário salvo para exportar.');const b=$('pdfAll');b.disabled=true;b.textContent='Gerando PDF completo…';try{await exportReportDocuments(docs)}finally{b.disabled=false;b.textContent='Baixar todos em um PDF'}});
