@@ -37,7 +37,7 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .voice-controls .voice-status{font-size:11px;line-height:1.45;color:#665970;flex:1 1 180px;overflow-wrap:anywhere}
 .voice-controls .voice-status:empty{display:none}
 .voice-controls .voice-button:focus-visible{outline:3px solid #92b766;outline-offset:3px}
-@media(max-width:760px){.voice-controls .voice-button{min-height:42px;font-size:12px}.voice-controls .voice-status{flex-basis:100%;font-size:12px}}
+@media(max-width:760px){.voice-controls .voice-button{min-height:48px;font-size:14px;line-height:1.4;padding:12px 14px}.voice-controls .voice-status{flex-basis:100%;font-size:12px}}
 
 /* Relatório: formatos secundários recolhíveis, legíveis e acionáveis no campo. */
 #view-review .report-formats{margin:12px 0 4px;padding:0;border:1px solid #d7d0e0;border-radius:12px;background:#faf9fc;overflow:hidden}
