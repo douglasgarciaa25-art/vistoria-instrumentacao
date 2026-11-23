@@ -51,7 +51,7 @@ async function exportReportDocuments(documents){
  const counts={};records.forEach(r=>counts[r.priority]=(counts[r.priority]||0)+1);
  paragraph('Total: '+records.length+' ponto(s). '+Object.entries(counts).map(([k,v])=>k+': '+v).join(' | '),9);
  const urgent=records.filter(r=>['Alta','Crítica'].includes(r.priority)&&!['Corrigido','Sem pendência'].includes(r.status));
- if(urgent.length){detail('Ações prioritárias pendentes',urgent.map(r=>r.tag+' - '+(r.action||'Ação a definir')).join('\n'))}else paragraph('Nenhuma pendência classificada como alta ou crítica.',9);
+ if(urgent.length){detail('Pontos prioritários em aberto',urgent.map(r=>r.tag+' | Prioridade: '+r.priority+' | Situação: '+r.status).join('\n'))}else paragraph('Nenhuma pendência classificada como alta ou crítica.',9);
  const pending=records.filter(r=>r.status==='Pendente'||r.status==='Em acompanhamento').length;
  paragraph(records.length+' ponto(s) registrado(s)  |  '+pending+' em acompanhamento ou pendente(s)',9,muted);
  for(let i=0;i<records.length;i++){
@@ -62,7 +62,7 @@ async function exportReportDocuments(documents){
  grid([['Ordem de serviço (OS)',r.pointWorkOrder||m.workOrder||'Não informado'],['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
  if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
  if(r.problem||r.analysisHistory||r.impact||r.action||r.owner)heading('Descrição técnica e encaminhamentos');
- detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){heading('Baixa e conclusão');detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante informado (sem verificação)',r.completionBy)}
+ detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);const actionText=String(r.action||'');const splitAction=actionText.match(/^SERVIÇO REALIZADO:\s*([\s\S]*?)\s*PENDÊNCIAS:\s*([\s\S]*)$/i);if(splitAction){detail('Serviço realizado (relatado)',splitAction[1]);detail('Pendências e ações recomendadas',splitAction[2]);}else detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){heading('Baixa e conclusão');detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante informado (sem verificação)',r.completionBy)}
  if(r.photos?.length){for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j];let img;
  try{img=/^data:image\/png;base64,/i.test(p.src)?await doc.embedPng(p.src):await doc.embedJpg(p.src)}catch{detail('Foto '+(j+1),'Imagem não incorporada ao PDF. Confira o original.');continue}
