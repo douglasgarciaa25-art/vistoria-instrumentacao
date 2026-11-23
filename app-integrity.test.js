@@ -219,3 +219,17 @@ test('formatos recolhíveis do relatório têm toque amplo e foco visível no An
  assert.match(css,/#view-review \.report-formats>\.actions button\{[^}]*min-height:46px/);
  assert.match(css,/@media\(max-width:750px\)\{#view-review \.report-formats>\.actions\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
 });
+
+
+test('início recolhe indicadores no modo campo sem perder contagens nem acessibilidade',()=>{
+ const js=readFileSync('layout.js','utf8');
+ const css=readFileSync('layout.css','utf8');
+ assert.doesNotThrow(()=>new vm.Script(js));
+ assert.match(js,/home\.querySelector\('\.metrics'\)/);
+ assert.match(js,/metricsDisclosure=document\.createElement\('details'\)/);
+ assert.match(js,/metricsDisclosure\.append\(homeMetrics\)/);
+ assert.match(js,/metricsDisclosure\.open=!window\.matchMedia\('\(max-width:750px\)'\)\.matches/);
+ assert.match(js,/\$\('metricReports'\)\.textContent=docs\.length/);
+ assert.match(css,/\.home-metrics-disclosure>summary:focus-visible/);
+ assert.match(css,/\.home-metrics-disclosure>summary\{[^}]*min-height:48px/);
+});
