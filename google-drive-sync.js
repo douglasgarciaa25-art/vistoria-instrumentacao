@@ -465,9 +465,16 @@
       for(const item of pending){const row=document.createElement('p');row.textContent=(item.document.meta?.title||item.document.meta?.number||item.id)+' — '+(navigator.onLine?'Aguardando verificação':'Sem internet');host.append(row);}
     }catch{if(generation===queueGeneration)host.textContent='Não foi possível consultar as alterações locais.';}finally{queueRunning=false;if(generation!==queueGeneration&&queueMember)void showPendingQueue(queueMember);}
   }
+  // Não sobrescrever nem publicar dados digitados que ainda não foram salvos.
+  async function activeMatchesSaved(id,savedHash) {
+    if(typeof activeReportId==='undefined'||activeReportId!==id)return true;
+    if(saveTimer||historyBusy||busy||!historyReady)return false;
+    return await digest(data())===savedHash;
+  }
   async function syncTeam(){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
+    let teamSent=0,teamReceived=0,teamConflicts=0,teamDeferred=0;
     try{
       const {member}=await teamRequest();
       if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();return;}
@@ -482,26 +489,52 @@
       const queued=new Set(background.filter(j=>j.subject===member.google_subject&&j.state==='pending').map(j=>j.id));
       const local=await reports();
       await showPendingQueue(member);
+      // A revisão recebida deve atualizar também a vistoria que está aberta.
       for(const item of remote){
+        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
-        if(row&&previous?.revision===item.revision&&await digest(row.document)===previous.hash)continue;
-        if(row&&(!previous||await digest(row.document)!==previous.hash)){const status=$('gdrive-team-status');if(status)status.textContent='Divergência preservada na vistoria '+item.report_id+'. Compare as versões antes de publicar.';continue;}
-        if(row&&typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
+        const localHash=row?await digest(row.document):null;
+        if(row&&previous?.revision===item.revision&&localHash===previous.hash)continue;
+        // Divergências de edição permanecem intactas; nunca descartar o trabalho local.
+        if(row&&(!previous||localHash!==previous.hash)){
+          if(!previous||previous.revision!==item.revision){
+            const status=$('gdrive-team-status');
+            if(status)status.textContent='Conflito na vistoria '+item.report_id+': versão local preservada. Compare antes de atualizar da nuvem.';
+            teamConflicts++;
+          }
+          continue;
+        }
+        const active=typeof activeReportId!=='undefined'&&activeReportId===item.report_id;
+        if(active&&!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
         const d=await reportRequest('GET',item.report_id);
         if(!d.document?.meta||!Array.isArray(d.document.records)||!validate({id:item.report_id,document:d.document}))continue;
+        if(queueMember?.google_subject!==member.google_subject||!validToken()){teamDeferred++;continue;}
         const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
-        if(latest&&(!previous||await digest(latest.document)!==previous.hash))continue;
-        await putReport({id:item.report_id,updated:item.updated_at,document:d.document});
+        if(latest&&(!previous||await digest(latest.document)!==previous.hash)){teamConflicts++;continue;}
+        if(active&&!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
+        if(active){
+          // Rascunho e histórico devem receber a revisão no mesmo commit local.
+          // Caso contrário, abrir o PWA novamente republicaria o rascunho antigo.
+          const tx=db.transaction(['reports','draft'],'readwrite');
+          tx.objectStore('reports').put({id:item.report_id,updated:item.updated_at,document:d.document});
+          tx.objectStore('draft').put({...structuredClone(d.document),reportId:item.report_id},'current');
+          await txDone(tx);
+          reset();fill(structuredClone(d.document));
+          if(typeof refreshHistory==='function')await refreshHistory();
+          const saved=$('saveState');if(saved)saved.textContent='Vistoria atualizada da nuvem da equipe.';
+        }else{
+          await putReport({id:item.report_id,updated:item.updated_at,document:d.document});
+        }
         baseline[item.report_id]={revision:d.revision,hash:await digest(d.document)};
-        localStorage.setItem(key,JSON.stringify(baseline));
+        localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
       }
       if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
         const remoteIds=new Set(remote.map(x=>x.report_id));
         for(const item of local){
           if(queueMember?.google_subject!==member.google_subject||!validToken()||localStorage.getItem('vistoria-team-auto:'+member.google_subject)!=='1')break;
           if(remoteIds.has(item.id)||isTeamReport(item.id)||baseline[item.id]||!validate(item)||!item.document.records?.length)continue;
-          if(typeof activeReportId!=='undefined'&&activeReportId===item.id)continue;
+          if(!await activeMatchesSaved(item.id,await digest(item.document))){teamDeferred++;continue;}
           try{
             const d=await reportRequest('POST',item.id,{document:item.document,revision:0});
             rememberTeamIds([{report_id:item.id}]);
@@ -513,7 +546,6 @@
       for(const item of remote){
         if(queued.has(item.report_id))continue;
         if(item.owner_subject!==member.google_subject&&member.role!=='admin')continue;
-        if(typeof activeReportId!=='undefined'&&activeReportId===item.report_id)continue;
         if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         const previous=baseline[item.report_id];
         if(!previous||previous.revision!==item.revision)continue;
@@ -521,15 +553,23 @@
         if(!row)continue;
         const hash=await digest(row.document);
         if(hash===previous.hash)continue;
+        if(!await activeMatchesSaved(item.report_id,hash)){teamDeferred++;continue;}
         try{
           const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
           baseline[item.report_id]={revision:d.revision,hash};
-          localStorage.setItem(key,JSON.stringify(baseline));
-        }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
+          localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
+        }catch(e){teamDeferred++;const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
 
       }
       await showPendingQueue(member);
-    }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: '+e.message;}
+      const status=$('gdrive-team-status');
+      if(status){
+        const moment=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+        status.textContent=(teamConflicts||teamDeferred?'Sincronização parcial':'Equipe sincronizada')+' às '+moment+
+          '. Enviadas: '+teamSent+'; recebidas: '+teamReceived+
+          '; conflitos: '+teamConflicts+'; pendentes: '+teamDeferred+'.';
+      }
+    }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: sincronização pendente — '+e.message;}
     finally{teamRunning=false;}
   }
   window.addEventListener('online',()=>{if(validToken())void syncTeam();else void restoreSession();});
