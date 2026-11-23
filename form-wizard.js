@@ -143,6 +143,7 @@
   reportToggle.type='button';
   reportToggle.id='wizardReportToggle';
   reportToggle.className='secondary wizard-meta-toggle';
+  reportToggle.setAttribute('aria-controls','meta');
   reportFields.before(reportToggle);
   reportToggle.addEventListener('click',()=>setReportExpanded(!reportExpanded));
   const oldSteps=document.querySelector('#view-editor .editor-steps');
@@ -154,7 +155,8 @@
   if(!reportToggle)return;
   const number=document.getElementById('number')?.value.trim();
   const title=document.getElementById('title')?.value.trim()||'Vistoria sem título';
-  const label=number||title;
+  const os=document.getElementById('workOrder')?.value.trim();
+  const label=(number||title)+(os?' · OS '+os:'');
   reportToggle.textContent=(reportExpanded?'− Recolher':'＋ Conferir / editar')+' dados do relatório · '+label.slice(0,65);
  }
  function setReportExpanded(open){
@@ -267,6 +269,10 @@
   if(event.target.matches('input,textarea,select'))render();
  });
  form.addEventListener('invalid',event=>{
+  if(reportFields?.contains(event.target)||reportExtra?.contains(event.target)){
+   setReportExpanded(true);
+   return;
+  }
   const first=[...form.elements].find(el=>el.willValidate&&el.validity&&!el.validity.valid);
   if(event.target!==first)return;
   const holder=[...group.keys()].find(node=>node.contains(event.target));
