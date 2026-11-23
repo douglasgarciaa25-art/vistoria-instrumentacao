@@ -210,3 +210,12 @@ test('relatório mantém PDF principal e Word acessível em formatos recolhívei
  assert.match(source,/const wordButton=\$\('word'\)/);
  assert.ok(!source.includes('wordButton.remove()'));
 });
+
+
+test('formatos recolhíveis do relatório têm toque amplo e foco visível no Android',()=>{
+ const css=readFileSync('layout.css','utf8');
+ assert.match(css,/#view-review \.report-formats>summary\{[^}]*min-height:48px/);
+ assert.match(css,/#view-review \.report-formats>summary:focus-visible\{[^}]*outline:3px/);
+ assert.match(css,/#view-review \.report-formats>\.actions button\{[^}]*min-height:46px/);
+ assert.match(css,/@media\(max-width:750px\)\{#view-review \.report-formats>\.actions\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+});
