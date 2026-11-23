@@ -174,3 +174,13 @@ test('seletor de etapas aceita setas e Home/End sem salvar dados',()=>{
  assert.match(source,/event\.key==='End'/);
  assert.match(source,/stepButtons\[target\]\.focus\(\)/);
 });
+
+test('assistente revela metadados inválidos e preserva OS textual no resumo',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/reportToggle\.setAttribute\('aria-controls','meta'\)/);
+ assert.match(source,/const os=document\.getElementById\('workOrder'\)\?\.value\.trim\(\)/);
+ assert.match(source,/os\?' · OS '\+os/);
+ assert.match(source,/reportFields\?\.contains\(event\.target\)\|\|reportExtra\?\.contains\(event\.target\)/);
+ assert.match(source,/setReportExpanded\(true\);\s*return;/);
+});
