@@ -62,3 +62,51 @@ test('logout não limpa a fila global e é limitado à conta autenticada',()=>{
  assert.match(background,/const clearFor=subject/);
  assert.match(background,/leaseUntil/);
 });
+
+test('sincronização da equipe recebe revisão da vistoria aberta sem perder o rascunho',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/async function activeMatchesSaved\(id,savedHash\)/);
+ assert.match(src,/if\(active&&!await activeMatchesSaved\(item\.report_id,localHash\)\)/);
+ assert.match(src,/db\.transaction\(\['reports','draft'\],'readwrite'\)/);
+ assert.match(src,/tx\.objectStore\('draft'\)\.put\(\{\.\.\.structuredClone\(d\.document\),reportId:item\.report_id\},'current'\)/);
+ assert.match(src,/reset\(\);fill\(structuredClone\(d\.document\)\)/);
+ assert.doesNotMatch(src,/if\(typeof activeReportId!=='undefined'&&activeReportId===item\.report_id\)continue;/);
+});
+test('sincronização da equipe permite envio de alteração em vistoria aberta já salva',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/if\(!await activeMatchesSaved\(item\.report_id,hash\)\)\{teamDeferred\+\+;continue;\}/);
+ assert.match(src,/reportRequest\('POST',item\.report_id,\{document:row\.document,revision:previous\.revision\}\)/);
+ assert.match(src,/Sincronização parcial/);
+ assert.match(src,/Atualizar da nuvem \(preservar cópia local\)/);
+ assert.match(src,/\(cópia local preservada\)/);
+});
+test('guarda de edição ativa bloqueia alterações não salvas mas não bloqueia relatório fechado',async()=>{
+ const vm=await import('node:vm');
+ const src=file('google-drive-sync.js');
+ const found=src.match(/  async function activeMatchesSaved\(id,savedHash\) \{[\s\S]*?\n  \}/);
+ assert.ok(found,'função de segurança não encontrada');
+ const context={activeReportId:'vistoria-a',saveTimer:null,historyBusy:false,busy:0,historyReady:true,digest:async d=>d.hash,data:()=>({hash:'rev-2'})};
+ const decide=vm.runInNewContext('('+found[0].trim()+')',context);
+ assert.equal(await decide('vistoria-b','rev-1'),true);
+ assert.equal(await decide('vistoria-a','rev-2'),true);
+ assert.equal(await decide('vistoria-a','rev-1'),false);
+ context.saveTimer=42;
+ assert.equal(await decide('vistoria-a','rev-2'),false);
+ context.saveTimer=null;context.busy=1;
+ assert.equal(await decide('vistoria-a','rev-2'),false);
+});
+
+test('Drive pessoal atualiza relatório e rascunho quando chega revisão no editor aberto',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/const active=row\.id===activeReportId;/);
+ assert.match(src,/if\(active&&!await activeMatchesSaved\(row\.id,docHash\)\)\{conflicts\+\+;continue;\}/);
+ assert.match(src,/tx\.objectStore\('reports'\)\.put\(\{id:row\.id,updated,document:packet\.document\}\)/);
+ assert.match(src,/tx\.objectStore\('draft'\)\.put\(\{\.\.\.structuredClone\(packet\.document\),reportId:row\.id\},'current'\)/);
+});
+test('Drive pessoal não envia cópia antiga após conflito sem baseline',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/const marker='conflito:'\+remoteHash\+':'\+docHash/);
+ assert.match(src,/if\(syncMap\[row\.id\]===marker\)\{conflicts\+\+;continue;\}/);
+ assert.match(src,/syncMap\[row\.id\]=marker;saveMap\(\);conflicts\+\+/);
+ assert.doesNotMatch(src,/syncMap\[row\.id\]=remoteHash;saveMap\(\);conflicts\+\+/);
+});
