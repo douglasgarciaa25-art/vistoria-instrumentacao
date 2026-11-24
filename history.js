@@ -146,12 +146,12 @@ async function vistoriaMoveArea(id,destination){
 }
 
 // Finalização geral: não altera nem encerra pontos técnicos automaticamente.
-function vistoriaPointClosed(p){return ['Corrigido','Sem pendência'].includes(p?.status);}
-function vistoriaClosedPointCount(doc){return (doc?.records||[]).filter(vistoriaPointClosed).length;}
-function vistoriaHistoryPoints(doc,show){return (doc?.records||[]).filter(p=>show||!vistoriaPointClosed(p));}
 function vistoriaAllPointsClosed(doc){
  return !!doc?.records?.length&&doc.records.every(vistoriaPointClosed);
 }
+function vistoriaPointClosed(p){return ['Corrigido','Sem pendência'].includes(p?.status);}
+function vistoriaClosedPointCount(doc){return (doc?.records||[]).filter(vistoriaPointClosed).length;}
+function vistoriaHistoryPoints(doc,show){return (doc?.records||[]).filter(p=>show||!vistoriaPointClosed(p));}
 function vistoriaHasNewDraft(doc){
  const p=doc?.pending;
  return !!p&&p.editing==null&&!!(p.fields?.tag||p.fields?.problem||p.fields?.pointWorkOrder||p.photos?.length);
