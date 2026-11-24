@@ -480,6 +480,50 @@
     if(saveTimer||historyBusy||busy||!historyReady)return false;
     return await digest(data())===savedHash;
   }
+  // Renovação atômica: uma única linha por ID; o rascunho atual acompanha a revisão.
+  // Sem base comprovada, guarda o original na área de conflitos, não em outra vistoria.
+  async function replaceTeamLocal(item,original,document,member,archive=null){
+    const id=item.report_id,account=member.google_subject,token=accessToken;
+    const expected=original?JSON.stringify(original.document):null;
+    const activeAtStart=activeReportId===id;
+    if(typeof persistQueue!=='undefined')await persistQueue.catch(()=>{});
+    if(activeAtStart&&!await activeMatchesSaved(id,original?await digest(original.document):null))return false;
+    const sessionOK=()=>queueMember?.google_subject===account&&validToken()&&accessToken===token;
+    const editorOK=()=>activeReportId!==id||(!saveTimer&&!historyBusy&&!busy&&historyReady&&expected!==null&&JSON.stringify(data())===expected);
+    if(!sessionOK()||!editorOK())return false;
+    const tx=db.transaction(['reports','draft'],'readwrite'),done=txDone(tx),store=tx.objectStore('reports'),draft=tx.objectStore('draft');
+    let changed=false;
+    const request=store.get(id);
+    request.onsuccess=()=>{
+      const latest=request.result;
+      if((latest?JSON.stringify(latest.document):null)!==expected||!sessionOK()||!editorOK())return;
+      const current=draft.get('current');
+      current.onsuccess=()=>{
+        if(!sessionOK()||!editorOK())return;
+        // Não substituir o rascunho de outra vistoria aberto em outra aba.
+        if(activeReportId===id&&current.result?.reportId&&current.result.reportId!==id)return;
+        if(archive)draft.put(archive,'team-conflict:'+account+':'+id+':'+crypto.randomUUID());
+        store.put({id,updated:item.updated_at||new Date().toISOString(),document});
+        if(current.result?.reportId===id||activeReportId===id)draft.put({...structuredClone(document),reportId:id},'current');
+        changed=true;
+      };
+    };
+    await done;
+    if(!changed)return false;
+    // Se o usuário digitou durante o commit, a edição ativa prevalece e será conciliada no próximo ciclo.
+    if(activeReportId===id&&sessionOK()&&editorOK()){
+      reset();fill(structuredClone(document));
+      const saved=$('saveState');if(saved)saved.textContent='Vistoria atualizada automaticamente da nuvem.';
+    }
+    return true;
+  }
+  function markTeamRenewed(id,revision,archived=false){
+    for(const card of document.querySelectorAll('.cloud-report-card')){
+      if(card.dataset.reportId!==id)continue;
+      const status=card.querySelector('[data-team-renewal]');
+      if(status)status.textContent=archived?'Atualizada · versão local anterior preservada para revisão':'Local atualizado · Rev. '+revision;
+    }
+  }
   async function syncTeam(){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
@@ -506,31 +550,37 @@
         const row=local.find(x=>x.id===item.report_id);
         const localHash=row?await digest(row.document):null;
         if(row&&previous?.revision===item.revision&&localHash===previous.hash)continue;
-        // Sem histórico deste aparelho, comparar o conteúdo antes de acusar conflito.
-        // Relatórios idênticos podem ser vinculados à revisão remota sem alterar dados.
+        // Uma fila ainda em transmissão pode carregar a revisão anterior: aguardar recibo.
+        if(queued.has(item.report_id)){teamDeferred++;continue;}
         if(row&&!previous){
           const received=await reportRequest('GET',item.report_id);
-          if(!validate({id:item.report_id,document:received.document})){teamDeferred++;continue;}
+          if(!validate({id:item.report_id,document:received.document})||received.revision!==item.revision){teamDeferred++;continue;}
           if(queueMember?.google_subject!==member.google_subject||!validToken()){teamDeferred++;continue;}
           const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
           if(!latest||await digest(latest.document)!==localHash){teamDeferred++;continue;}
           const receivedHash=await digest(received.document);
           if(receivedHash===localHash){
             baseline[item.report_id]={revision:received.revision,hash:receivedHash};
-            localStorage.setItem(key,JSON.stringify(baseline));
+            localStorage.setItem(key,JSON.stringify(baseline));markTeamRenewed(item.report_id,received.revision);
             continue;
           }
-          // Conteúdo realmente diferente: preservar ambas as versões para revisão manual.
-          teamConflicts++;
-          const status=$('gdrive-team-status');
-          if(status)status.textContent='Diferença entre a cópia local e a nuvem: '+item.report_id+'. Dados locais preservados.';
+          // Sem base, não inferir quais campos são alterações locais. Renovar o mesmo ID
+          // e arquivar as duas versões em uma única transação, com aviso para revisão.
+          const archive={reportId:item.report_id,account:member.google_subject,baseRevision:null,remoteRevision:received.revision,local:row.document,remote:received.document,choices:[],reason:'missing-baseline',created:new Date().toISOString()};
+          if(!await replaceTeamLocal(item,row,received.document,member,archive)){teamDeferred++;continue;}
+          baseline[item.report_id]={revision:received.revision,hash:receivedHash};
+          localStorage.setItem(key,JSON.stringify(baseline));
+          teamReceived++;teamConflicts++;
+          conflictFields.push(item.report_id+': versão local anterior preservada; consulte as versões locais de conflitos');
+          markTeamRenewed(item.report_id,received.revision,true);
+          if(typeof refreshHistory==='function')await refreshHistory();
           continue;
         }
         // Uma revisão remota e uma edição local podem ter avançado ao mesmo tempo.
         if(row&&localHash!==previous.hash){
           if(previous.revision!==item.revision){
-            // Conciliação conservadora: jamais inventar uma base ou substituir um editor ativo.
-            if(queued.has(item.report_id)||activeReportId===item.report_id){teamDeferred++;continue;}
+            // Conciliação automática inclusive com editor aberto, se estiver integralmente salvo.
+            if(!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
             try{
               const base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);
               const current=await reportRequest('GET',item.report_id);
@@ -544,21 +594,12 @@
               }
               if(!validate({id:item.report_id,document:merged.document}))throw Error('Conciliação inválida');
               const remoteHash=await digest(current.document);
-              if(queueMember?.google_subject!==member.google_subject||!validToken()||activeReportId===item.report_id){teamDeferred++;continue;}
-              const tx=db.transaction('reports','readwrite'),store=tx.objectStore('reports'),done=txDone(tx);
-              const req=store.get(item.report_id);let changed=false;
-              req.onsuccess=()=>{
-                const latest=req.result;
-                const savedBaseline=JSON.parse(localStorage.getItem(key)||'{}')[item.report_id];
-                if(!latest||JSON.stringify(latest.document)!==JSON.stringify(row.document)||savedBaseline?.revision!==previous.revision||savedBaseline?.hash!==previous.hash||activeReportId===item.report_id||queueMember?.google_subject!==member.google_subject||!validToken())return;
-                store.put({id:item.report_id,document:merged.document,updated:new Date().toISOString()});changed=true;
-              };
-              await done;
-              if(!changed){teamDeferred++;continue;}
+              if(!await replaceTeamLocal(item,row,merged.document,member)){teamDeferred++;continue;}
               // O hash de referência continua sendo o conteúdo remoto confirmado.
               // O envio seguinte usa o CAS original para publicar apenas sobre essa revisão.
               baseline[item.report_id]={revision:current.revision,hash:remoteHash};
               localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
+              markTeamRenewed(item.report_id,current.revision);
               if(typeof refreshHistory==='function')await refreshHistory();
             }catch(e){
               teamConflicts++;conflictFields.push(item.report_id+': base ou revisão não confirmada');
@@ -569,26 +610,13 @@
         const active=typeof activeReportId!=='undefined'&&activeReportId===item.report_id;
         if(active&&!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
         const d=await reportRequest('GET',item.report_id);
-        if(!d.document?.meta||!Array.isArray(d.document.records)||!validate({id:item.report_id,document:d.document}))continue;
-        if(queueMember?.google_subject!==member.google_subject||!validToken()){teamDeferred++;continue;}
-        const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
-        if(latest&&(!previous||await digest(latest.document)!==previous.hash)){teamConflicts++;continue;}
-        if(active&&!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
-        if(active){
-          // Rascunho e histórico devem receber a revisão no mesmo commit local.
-          // Caso contrário, abrir o PWA novamente republicaria o rascunho antigo.
-          const tx=db.transaction(['reports','draft'],'readwrite');
-          tx.objectStore('reports').put({id:item.report_id,updated:item.updated_at,document:d.document});
-          tx.objectStore('draft').put({...structuredClone(d.document),reportId:item.report_id},'current');
-          await txDone(tx);
-          reset();fill(structuredClone(d.document));
-          if(typeof refreshHistory==='function')await refreshHistory();
-          const saved=$('saveState');if(saved)saved.textContent='Vistoria atualizada da nuvem da equipe.';
-        }else{
-          await putReport({id:item.report_id,updated:item.updated_at,document:d.document});
-        }
-        baseline[item.report_id]={revision:d.revision,hash:await digest(d.document)};
+        if(!validate({id:item.report_id,document:d.document})||d.revision!==item.revision){teamDeferred++;continue;}
+        const remoteHash=await digest(d.document);
+        if(!await replaceTeamLocal(item,row,d.document,member)){teamDeferred++;continue;}
+        baseline[item.report_id]={revision:d.revision,hash:remoteHash};
         localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
+        markTeamRenewed(item.report_id,d.revision);
+        if(typeof refreshHistory==='function')await refreshHistory();
       }
       if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
         const remoteIds=new Set(remote.map(x=>x.report_id));
@@ -648,7 +676,7 @@
   }
   async function showReports(member,box,status){
     const section=document.createElement('section');section.className='cloud-team-reports';box.append(section);
-    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='Encontre vistorias da equipe sem perder tempo.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
+    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As revisões da equipe renovam automaticamente a vistoria neste aparelho, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
     const autoKey='vistoria-team-auto:'+member.google_subject;
     const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
     const auto=document.createElement('input');auto.type='checkbox';auto.style.width='auto';auto.checked=localStorage.getItem(autoKey)==='1';
@@ -680,6 +708,7 @@
     const {reports:remote}=await reportRequest();
     rememberTeamIds(remote);
     const local=await reports();
+    const archiveKeys=await idbReq(db.transaction('draft').objectStore('draft').getAllKeys());
     const searchLabel=document.createElement('label');searchLabel.className='cloud-search-label';searchLabel.textContent='Buscar vistoria';section.append(searchLabel);const search=document.createElement('input');search.type='search';search.placeholder='Pesquisar TAG, OS, título ou referência';search.setAttribute('aria-label','Buscar vistoria compartilhada');searchLabel.append(search);
 
     // Consulta autenticada, sob demanda, também nos relatórios que só existem no Drive central.
@@ -760,44 +789,17 @@
       const doc=local.find(x=>x.id===item.report_id)?.document;
       const label=[doc?.meta?.title,doc?.meta?.number,...(doc?.records||[]).map(p=>p.tag),item.report_id].filter(Boolean).join(' — ');
       const title=document.createElement('strong');title.className='cloud-report-title';const tags=[...new Set((doc?.records||[]).map(p=>p.tag).filter(Boolean))];title.textContent=tags.join(' · ')||doc?.meta?.title||'Vistoria compartilhada';row.append(title);const meta=document.createElement('small');meta.className='cloud-report-meta';meta.textContent=[doc?.meta?.number||item.report_id.slice(0,8),'Rev. '+item.revision,item.updated_at?new Date(item.updated_at).toLocaleString('pt-BR'):'',item.owner_subject===member.google_subject?'Minha vistoria':'Equipe'].filter(Boolean).join(' · ');row.append(meta);
+      const renewal=document.createElement('small');renewal.dataset.teamRenewal='1';renewal.className='cloud-report-meta';
+      const archivePrefix='team-conflict:'+member.google_subject+':'+item.report_id+':';
+      renewal.textContent=archiveKeys.some(k=>typeof k==='string'&&k.startsWith(archivePrefix))?'Versões anteriores preservadas · consultar histórico local':'Renovação automática ativa';
+      row.append(renewal);
       entries.push({row,mine:item.owner_subject===member.google_subject,areas:(doc?.records||[]).map(p=>p.area),date:Date.parse(item.updated_at)||0,tag:title.textContent,text:label+' '+JSON.stringify(doc?.meta||{})+' '+(doc?.records||[]).map(p=>[p.pointWorkOrder,p.tag,p.area,p.os,p.order].filter(Boolean).join(' ')).join(' ')});
       const menu=document.createElement('details');menu.className='cloud-report-menu';const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
-      // Recuperação manual para aparelhos com cópia antiga e sem histórico de revisão compartilhado.
-      // Nunca descartar a versão que já existe no aparelho.
+      // O botão é apenas uma alternativa; o mesmo fluxo roda sozinho.
       button(menu,'Atualizar da nuvem (mesmo ID)',async()=>{
-        if(!confirm('Buscar a revisão mais recente da equipe? Alterações locais divergentes serão preservadas, sem criar outra vistoria.'))return;
         if(!validToken())throw Error('Conecte sua conta Google novamente.');
-        const account=member.google_subject,token=accessToken;
-        if(typeof persistCurrent==='function')await persistCurrent();
-        const original=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
-        const originalHash=original?await digest(original.document):null;
-        const active=typeof activeReportId!=='undefined'&&activeReportId===item.report_id;
-        if(active&&!await activeMatchesSaved(item.report_id,originalHash))throw Error('Conclua a edição atual antes de atualizar da nuvem.');
-        const received=await reportRequest('GET',item.report_id);
-        if(!validate({id:item.report_id,document:received.document}))throw Error('Revisão recebida inválida.');
-        const session=await teamRequest();
-        if(!validToken()||accessToken!==token||session.member?.google_subject!==account)throw Error('A conta Google mudou; nenhuma alteração local foi feita.');
-        const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
-        if((latest?await digest(latest.document):null)!==originalHash)throw Error('Houve uma edição local durante a consulta; tente novamente.');
-        if(active&&!await activeMatchesSaved(item.report_id,originalHash))throw Error('A edição foi alterada durante a consulta; nada foi substituído.');
-        const remoteHash=await digest(received.document);
-        if(original&&remoteHash!==originalHash){
-          await syncTeam();
-          status.textContent='Alterações locais preservadas no mesmo ID. Confira os conflitos e pendências de sincronização.';
-          return;
-        }
-        const tx=db.transaction(['reports','draft'],'readwrite');
-        tx.objectStore('reports').put({id:item.report_id,updated:received.updated_at||new Date().toISOString(),document:received.document});
-        if(active)tx.objectStore('draft').put({...structuredClone(received.document),reportId:item.report_id},'current');
-        await txDone(tx);
-        if(active){reset();fill(structuredClone(received.document));}
-        if(typeof refreshHistory==='function')await refreshHistory();
-        const key='vistoria-team-baseline:'+account;
-        const baseline=JSON.parse(localStorage.getItem(key)||'{}');
-        baseline[item.report_id]={revision:received.revision,hash:remoteHash};
-        localStorage.setItem(key,JSON.stringify(baseline));
-        status.textContent='Revisão '+received.revision+' recebida da equipe.'+
-          ' Nenhum dado local precisou ser substituído.';
+        if(teamRunning){status.textContent='Atualização automática em andamento.';return;}
+        await syncTeam();
       });
       button(menu,'Revisar conflitos desta vistoria',async()=>{
         if(teamRunning||activeReportId===item.report_id)throw Error('Feche a edição e aguarde a sincronização antes de resolver conflitos.');
@@ -1018,7 +1020,8 @@
     document.addEventListener('vistoria-saved',()=>{if(queueMember)void showPendingQueue(queueMember);});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
     resume();
-    setInterval(()=>{if(document.visibilityState==='visible'){if(validToken()){sync();syncTeam()}else void restoreSession();}},90000);
+    setInterval(()=>{if(document.visibilityState==='visible'){if(validToken())sync();else void restoreSession();}},90000);
+    setInterval(()=>{if(document.visibilityState==='visible'&&validToken()&&navigator.onLine!==false)void syncTeam();},20000);
     document.addEventListener('vistoria-saved',()=>{if(validToken())setTimeout(syncTeam,3000);if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(reg=>reg.sync?.register('vistoria-resume')).catch(()=>{});});
     navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='VISTORIA_RESUME')resume();});
     if(typeof window.download==='function') {
