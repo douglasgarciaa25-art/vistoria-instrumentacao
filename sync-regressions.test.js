@@ -67,7 +67,7 @@ test('sincronização da equipe recebe revisão da vistoria aberta sem perder o 
  const src=file('google-drive-sync.js');
  assert.match(src,/async function activeMatchesSaved\(id,savedHash\)/);
  assert.match(src,/if\(active&&!await activeMatchesSaved\(item\.report_id,localHash\)\)/);
- assert.match(src,/db\.transaction\(\['reports','draft'\],'readwrite'\)/);
+ assert.match(src,/db\.transaction\(\['reports','draft','trash'\],'readwrite'\)/);
  assert.match(src,/draft\.put\(\{\.\.\.structuredClone\(document\),reportId:id\},'current'\)/);
  assert.match(src,/reset\(\);fill\(structuredClone\(document\)\)/);
  assert.doesNotMatch(src,/if\(typeof activeReportId!=='undefined'&&activeReportId===item\.report_id\)continue;/);
@@ -152,10 +152,10 @@ test('renovação transacional preserva ID, rascunho, originais e edição conco
    const reports=new Map([[id,structuredClone(row)]]),draft=new Map([['current',{...structuredClone(old),reportId:otherDraft?'outra':id}]]);
    let pending=0,settle,filled=null;
    const db={transaction(names){
-     assert.deepEqual(Array.from(names),['reports','draft']);
+     assert.deepEqual(Array.from(names),['reports','draft','trash']);
      const promise=new Promise(r=>settle=r);
-     const stores={reports,draft};
-     const tx={promise,objectStore(name){const map=stores[name];return {get(key){const req={};pending++;queueMicrotask(()=>{req.result=map.get(key);req.onsuccess();if(!--pending)settle()});return req;},put(value,key){map.set(key??value.id,structuredClone(value));}}}};
+     const stores={reports,draft,trash:new Map()};
+     const tx={promise,objectStore(name){const map=stores[name];return {get(key){const req={};pending++;queueMicrotask(()=>{req.result=map.get(key);req.onsuccess();if(!--pending)settle()});return req;},put(value,key){map.set(key??value.id,structuredClone(value));},delete(key){map.delete(key);}}}};
      if(changed)reports.set(id,{id,document:{meta:{title:'Outra edição'},records:[]}});
      return tx;
    }};
