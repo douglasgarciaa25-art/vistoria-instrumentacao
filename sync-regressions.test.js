@@ -249,3 +249,26 @@ test('finalização é persistida no mesmo relatório, sem alterar pontos, e fil
  assert.match(html,/"finalizedAt"\]\.includes\(k\)/);
  assert.match(file('layout.css'),/\.vistoria-status-dot\{/);
 });
+
+test('organização por área é única, respeita área explícita e preserva pontos técnicos',async()=>{
+ const vm=await import('node:vm'),src=file('history.js'),code=src.slice(src.indexOf('const VISTORIA_AREA_KEY'),src.indexOf('function vistoriaRefreshAreaOptions'));
+ const ctx=vm.createContext({});vm.runInContext(code,ctx);
+ const rows=[{id:'a',document:{meta:{reportArea:'Moagem'},records:[{area:'Britagem'}]}},{id:'b',document:{meta:{},records:[{area:'flotação'},{area:' Flotação '}]}},{id:'c',document:{meta:{},records:[{area:'A'},{area:'B'}]}}];
+ assert.equal(ctx.vistoriaReportArea(rows[0].document),'Moagem');
+ assert.equal(ctx.vistoriaAreaKey(ctx.vistoriaReportArea(rows[1].document)),'flotação');
+ assert.equal(ctx.vistoriaReportArea(rows[2].document),'');
+ const catalog=ctx.vistoriaAreaCatalog(rows,[' MOAGEM ','moagem','Nova']);
+ assert.equal(catalog.filter(a=>ctx.vistoriaAreaKey(a)==='moagem').length,1);
+ const groups=ctx.vistoriaGroupRows(rows,catalog);
+ assert.equal(groups.flatMap(([,g])=>g.rows).length,3);
+ assert.ok(groups.some(([,g])=>g.name==='Nova'&&!g.rows.length));
+ assert.equal(rows[0].document.records[0].area,'Britagem');
+});
+test('área de organização persistida no mesmo ID e exibida nas listas',()=>{
+ const src=file('history.js'),cloud=file('google-drive-sync.js');
+ assert.match(src,/meta:\{\.\.\.latest\.document\.meta,reportArea:area\}/);
+ assert.match(src,/data-move-report-area/);
+ assert.match(src,/vistoriaGroupRows\(rows,catalog\)/);
+ assert.match(cloud,/vistoriaGroupRows\(ordered\.map/);
+ assert.match(file('index.html'),/id="reportArea"/);
+});

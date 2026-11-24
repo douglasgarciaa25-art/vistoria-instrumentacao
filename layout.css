@@ -74,3 +74,16 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .vistoria-finalized-filter{display:flex!important;align-items:center;gap:8px;font-size:14px;font-weight:650;color:#51436a;min-height:40px;margin:4px 0 8px}
 .vistoria-finalized-filter input[type=checkbox]{width:18px!important;height:18px;min-height:0;margin:0;flex:none;accent-color:#351463}
 .vistoria-finalize-action{white-space:normal;min-height:44px}
+
+/* Pastas de vistorias por área, sem duplicar registros. */
+.vistoria-area-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0 14px}
+.vistoria-area-tools button{min-height:44px}
+.vistoria-area-group{border:1px solid #ded8e7;border-radius:12px;background:#faf9fc;margin:10px 0;overflow:hidden}
+.vistoria-area-group>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 15px;min-height:44px;cursor:pointer;color:#45325e;font-weight:700}
+.vistoria-area-group>summary::before{content:'▸';font-size:14px}
+.vistoria-area-group[open]>summary::before{content:'▾'}
+.vistoria-area-group>summary span{flex:1;overflow-wrap:anywhere}
+.vistoria-area-group>summary small{font-weight:500;color:#6c6477}
+.vistoria-area-body{padding:8px 12px 12px}
+.vistoria-area-body>.entry{margin:8px 0}
+@media(max-width:750px){.vistoria-area-tools button{width:100%}.vistoria-area-body{padding:6px 8px 8px}}
