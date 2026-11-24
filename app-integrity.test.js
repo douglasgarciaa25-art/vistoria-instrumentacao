@@ -323,3 +323,22 @@ test('Mostrar finalizadas revela somente áreas com finalizadas visíveis e info
  assert.match(label(0,true),/nenhuma encontrada/);
  assert.match(source,/if\(\$\('showFinalizedReports'\)\.checked\)vistoriaRevealFinalizedAreas/);
 });
+
+test('filtro de finalizadas preserva registros e distingue conclusão explícita de pontos corrigidos',()=>{
+ const source=readFileSync('history.js','utf8');
+ const snippet=source.slice(source.indexOf('function vistoriaAllPointsClosed'),source.indexOf('function refreshVistoriaCloudStatuses'));
+ const {visible,status}=new Function(snippet+';return {visible:vistoriaVisible,status:vistoriaReportStatus};')();
+ const docs=[
+  {meta:{finalizedAt:'2026-11-24T12:00:00Z'},records:[{status:'Corrigido'}]},
+  {meta:{},records:[{status:'Corrigido'}]},
+  {meta:{},records:[{status:'Pendente'}]},
+  {meta:{finalizedAt:'2026-11-24T12:00:00Z'},records:[{status:'Sem pendência'}]},
+  {meta:{},records:[]}
+ ];
+ const before=JSON.stringify(docs);
+ assert.deepEqual(docs.map(d=>status(d).kind),['done','progress','pending','done','progress']);
+ assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[1],docs[2],docs[4]]);
+ assert.deepEqual(docs.filter(d=>visible(d,true)),docs);
+ assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[1],docs[2],docs[4]]);
+ assert.equal(JSON.stringify(docs),before);
+});
