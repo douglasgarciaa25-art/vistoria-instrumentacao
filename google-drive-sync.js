@@ -799,6 +799,80 @@
         status.textContent='Revisão '+received.revision+' recebida da equipe.'+
           ' Nenhum dado local precisou ser substituído.';
       });
+      button(menu,'Revisar conflitos desta vistoria',async()=>{
+        if(teamRunning||activeReportId===item.report_id)throw Error('Feche a edição e aguarde a sincronização antes de resolver conflitos.');
+        const previousPanel=row.querySelector('[data-team-conflict]');if(previousPanel){previousPanel.remove();return;}
+        const account=member.google_subject,key='vistoria-team-baseline:'+account;
+        const original=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
+        const baseline=JSON.parse(localStorage.getItem(key)||'{}')[item.report_id];
+        if(!original||!baseline)throw Error('Não existe uma revisão-base local confirmada. Nenhum dado foi alterado.');
+        const originalHash=await digest(original.document);
+        const [base,latest]=await Promise.all([reportRequest('GET',item.report_id,null,false,false,baseline.revision),reportRequest('GET',item.report_id)]);
+        if(base.revision!==baseline.revision||await digest(base.document)!==baseline.hash||latest.revision===baseline.revision)throw Error('Não há conflito de revisões confirmado.');
+        const {mergeReport}=await import('./team-merge.mjs');
+        const result=mergeReport(base.document,original.document,latest.document);
+        if(!result.conflicts.length){await syncTeam();return;}
+        const panel=document.createElement('div');panel.dataset.teamConflict='1';row.append(panel);
+        const title=document.createElement('p');title.textContent='Escolha o valor de cada campo em conflito. As duas versões originais serão guardadas no aparelho.';panel.append(title);
+        if(result.conflicts.some(c=>!['same-field','delete-edit'].includes(c.reason))){title.textContent='Conflito de identidade ou ordem dos pontos: revisão técnica necessária. Nenhum dado foi substituído.';return;}
+        const selections=[];
+        for(const conflict of result.conflicts){
+          const label=document.createElement('label');label.textContent=conflict.path.join(' / ');
+          const select=document.createElement('select');select.setAttribute('aria-label',conflict.path.join(' / '));
+          for(const [value,text] of [['','Selecione a versão'],['local','Neste aparelho: '+conflict.local],['remote','Na nuvem: '+conflict.remote]]){
+            const opt=document.createElement('option');opt.value=value;opt.textContent=text;select.append(opt);
+          }
+          label.append(select);panel.append(label);selections.push({path:conflict.path,select});
+        }
+        button(panel,'Aplicar escolhas ao mesmo ID',async()=>{
+          if(teamRunning||activeReportId===item.report_id)throw Error('Aguarde a sincronização e feche a edição.');
+          if(selections.some(x=>!x.select.value))throw Error('Escolha uma versão para todos os campos.');
+          if(!confirm('Confirmar a conciliação? Os documentos originais serão preservados no histórico local de conflitos.'))return;
+          teamRunning=true;
+          try{
+            const currentMember=(await teamRequest()).member;
+            if(currentMember?.google_subject!==account||currentMember.status!=='approved'||!validToken())throw Error('Conta alterada.');
+            const current=await reportRequest('GET',item.report_id);
+            if(current.revision!==latest.revision||await digest(current.document)!==await digest(latest.document))throw Error('A nuvem recebeu nova revisão. Reabra a comparação.');
+            if(window.VistoriaBackground&&(await window.VistoriaBackground.list()).some(j=>j.id===item.report_id&&j.subject===account&&j.state==='pending'))throw Error('Existe um envio pendente. Aguarde a fila.');
+            const resolved=mergeReport(base.document,original.document,latest.document,new Map(selections.map(x=>[JSON.stringify(x.path),x.select.value])));
+            if(resolved.conflicts.length||!validate({id:item.report_id,document:resolved.document}))throw Error('Conciliação incompatível; originais mantidos.');
+            const remoteHash=await digest(latest.document);
+            const tx=db.transaction(['reports','draft'],'readwrite'),done=txDone(tx),store=tx.objectStore('reports');
+            let changed=false;const req=store.get(item.report_id);
+            req.onsuccess=()=>{
+              const currentLocal=req.result,nowBaseline=JSON.parse(localStorage.getItem(key)||'{}')[item.report_id];
+              if(!currentLocal||JSON.stringify(currentLocal.document)!==JSON.stringify(original.document)||nowBaseline?.hash!==baseline.hash||nowBaseline?.revision!==baseline.revision||activeReportId===item.report_id||queueMember?.google_subject!==account||!validToken())return;
+              const archive={reportId:item.report_id,account,baseRevision:base.revision,remoteRevision:latest.revision,local:original.document,remote:latest.document,choices:selections.map(x=>({path:x.path,choice:x.select.value})),created:new Date().toISOString()};
+              tx.objectStore('draft').put(archive,'team-conflict:'+account+':'+item.report_id+':'+crypto.randomUUID());
+              store.put({id:item.report_id,document:resolved.document,updated:archive.created});changed=true;
+            };
+            await done;if(!changed)throw Error('A vistoria mudou durante a operação. Reabra a comparação.');
+            const map=JSON.parse(localStorage.getItem(key)||'{}');map[item.report_id]={revision:latest.revision,hash:remoteHash};localStorage.setItem(key,JSON.stringify(map));
+            panel.remove();if(typeof refreshHistory==='function')await refreshHistory();status.textContent='Conciliação salva no mesmo ID; envio condicionado à revisão confirmada.';
+          }finally{teamRunning=false;}
+          await syncTeam();
+        });
+      });
+      button(menu,'Consultar versões locais de conflitos',async()=>{
+        const host=row.querySelector('[data-conflict-archive]');if(host){host.remove();return;}
+        const panel=document.createElement('div');panel.dataset.conflictArchive='1';row.append(panel);
+        const store=db.transaction('draft').objectStore('draft');
+        const [keys,values]=await Promise.all([idbReq(store.getAllKeys()),idbReq(store.getAll())]);
+        if(queueMember?.google_subject!==member.google_subject||!validToken()){panel.remove();return;}
+        const prefix='team-conflict:'+member.google_subject+':'+item.report_id+':';
+        const archived=values.filter((v,i)=>typeof keys[i]==='string'&&keys[i].startsWith(prefix)&&v?.account===member.google_subject&&v.reportId===item.report_id);
+        if(!archived.length)panel.textContent='Sem conflitos resolvidos neste aparelho.';
+        const {revisionChanges}=await import('./team-merge.mjs');
+        for(const entry of archived){
+          const details=document.createElement('details'),heading=document.createElement('summary');heading.textContent=new Date(entry.created).toLocaleString('pt-BR')+' · revisão '+entry.remoteRevision;details.append(heading);
+          for(const change of revisionChanges(entry.local,entry.remote)){const p=document.createElement('p');p.textContent=change.path.join(' / ')+': aparelho '+change.before+' | nuvem '+change.after;details.append(p);}
+          button(details,'Exportar versões originais (JSON)',async()=>{
+            const session=(await teamRequest()).member;if(session?.google_subject!==entry.account||session.status!=='approved')throw Error('Conta alterada.');
+            const url=URL.createObjectURL(new Blob([JSON.stringify(entry)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='conflito-'+item.report_id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+          });panel.append(details);
+        }
+      });
       button(menu,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico cadastrado: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);
         if(event.available&&event.action==='update'){
           const previous=(d.history||[]).find(e=>e.available&&e.revision===event.revision-1);
