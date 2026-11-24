@@ -319,15 +319,15 @@ test('Mostrar finalizadas revela somente áreas com finalizadas visíveis e info
  const a=folder(card(true)),b=folder(card(false)),c=folder(card(true,'none')),d=folder(card(false));d.open=true;
  reveal({querySelectorAll:()=>[a,b,c,d]},'details');
  assert.equal(a.open,true);assert.equal(b.open,false);assert.equal(c.open,false);assert.equal(d.open,true);
- assert.equal(label(2,true),'Mostrar finalizadas (2)');
+ assert.equal(label(2,true),'Mostrar finalizadas (2 pontos)');
  assert.match(label(0,true),/nenhuma encontrada/);
  assert.match(source,/if\(\$\('showFinalizedReports'\)\.checked\)vistoriaRevealFinalizedAreas/);
 });
 
-test('filtro de finalizadas preserva registros e distingue conclusão explícita de pontos corrigidos',()=>{
+test('filtro de finalizadas preserva registros e classifica automaticamente pontos corrigidos',()=>{
  const source=readFileSync('history.js','utf8');
  const snippet=source.slice(source.indexOf('function vistoriaAllPointsClosed'),source.indexOf('function refreshVistoriaCloudStatuses'));
- const {visible,status}=new Function(snippet+';return {visible:vistoriaVisible,status:vistoriaReportStatus};')();
+ const {visible,status,count,points}=new Function(snippet+';return {visible:vistoriaVisible,status:vistoriaReportStatus,count:vistoriaClosedPointCount,points:vistoriaHistoryPoints};')();
  const docs=[
   {meta:{finalizedAt:'2026-11-24T12:00:00Z'},records:[{status:'Corrigido'}]},
   {meta:{},records:[{status:'Corrigido'}]},
@@ -336,9 +336,16 @@ test('filtro de finalizadas preserva registros e distingue conclusão explícita
   {meta:{},records:[]}
  ];
  const before=JSON.stringify(docs);
- assert.deepEqual(docs.map(d=>status(d).kind),['done','progress','pending','done','progress']);
- assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[1],docs[2],docs[4]]);
+ assert.deepEqual(docs.map(d=>status(d).kind),['done','done','pending','done','progress']);
+ assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[2],docs[4]]);
  assert.deepEqual(docs.filter(d=>visible(d,true)),docs);
- assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[1],docs[2],docs[4]]);
+ assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[2],docs[4]]);
+ const mixed={meta:{},records:[{status:'Corrigido',tag:'A'},{status:'Pendente',tag:'B'},{status:'Em acompanhamento',tag:'C'}]};
+ const original=JSON.stringify(mixed);
+ assert.equal(count(mixed),1);
+ assert.equal(visible(mixed,false),true);
+ assert.deepEqual(points(mixed,false).map(p=>p.tag),['B','C']);
+ assert.deepEqual(points(mixed,true).map(p=>p.tag),['A','B','C']);
+ assert.equal(JSON.stringify(mixed),original);
  assert.equal(JSON.stringify(docs),before);
 });

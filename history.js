@@ -147,8 +147,11 @@ async function vistoriaMoveArea(id,destination){
 
 // Finalização geral: não altera nem encerra pontos técnicos automaticamente.
 function vistoriaAllPointsClosed(doc){
- return !!doc?.records?.length&&doc.records.every(p=>['Corrigido','Sem pendência'].includes(p?.status));
+ return !!doc?.records?.length&&doc.records.every(vistoriaPointClosed);
 }
+function vistoriaPointClosed(p){return ['Corrigido','Sem pendência'].includes(p?.status);}
+function vistoriaClosedPointCount(doc){return (doc?.records||[]).filter(vistoriaPointClosed).length;}
+function vistoriaHistoryPoints(doc,show){return (doc?.records||[]).filter(p=>show||!vistoriaPointClosed(p));}
 function vistoriaHasNewDraft(doc){
  const p=doc?.pending;
  return !!p&&p.editing==null&&!!(p.fields?.tag||p.fields?.problem||p.fields?.pointWorkOrder||p.photos?.length);
@@ -156,14 +159,15 @@ function vistoriaHasNewDraft(doc){
 function vistoriaReportStatus(doc){
  if(!doc||!Array.isArray(doc.records))return {kind:'unknown',label:'Status indisponível'};
  if(doc.records.some(p=>p?.status==='Pendente'))return {kind:'pending',label:'Pendente'};
- if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc)&&doc.meta?.finalizedAt)return {kind:'done',label:'Finalizada'};
+ if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc)&&doc.pending?.editing==null)return {kind:'done',label:'Finalizada'};
  if(!doc.records.length)return {kind:'progress',label:'Não iniciada'};
  if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc))return {kind:'progress',label:'Pronta para finalizar'};
  return {kind:'progress',label:'Em acompanhamento'};
 }
 function vistoriaStatusHtml(doc){
  const {kind,label}=vistoriaReportStatus(doc);
- return '<span class="vistoria-status" data-status-kind="'+kind+'"><span class="vistoria-status-dot" aria-hidden="true"></span>'+label+'</span>';
+ const closed=vistoriaClosedPointCount(doc);
+ return '<span class="vistoria-status" data-status-kind="'+kind+'" data-finalized-points="'+closed+'"><span class="vistoria-status-dot" aria-hidden="true"></span>'+label+(closed?' · '+closed+' ponto(s) finalizado(s)':'')+'</span>';
 }
 function vistoriaStatusAction(doc){
  return vistoriaReportStatus(doc).kind==='done'?'Reabrir vistoria':'Marcar como finalizada';
@@ -172,11 +176,11 @@ function vistoriaStatusAction(doc){
 function vistoriaRevealFinalizedAreas(host,folderSelector){
  for(const folder of host.querySelectorAll(folderSelector)){
   const cards=folder.querySelectorAll('[data-area-report-id],.cloud-report-card[data-report-id]');
-  if(Array.from(cards).some(card=>!card.hidden&&card.style.display!=='none'&&card.querySelector('[data-status-kind="done"]')))folder.open=true;
+  if(Array.from(cards).some(card=>!card.hidden&&card.style.display!=='none'&&(card.querySelector('[data-status-kind="done"]')||Number(card.querySelector('[data-finalized-points]')?.dataset.finalizedPoints)>0)))folder.open=true;
  }
 }
 function vistoriaFinalizedLabel(count,show){
- return 'Mostrar finalizadas ('+count+')'+(show&&count===0?' — nenhuma encontrada nos filtros atuais':'');
+ return 'Mostrar finalizadas ('+count+' pontos)'+(show&&count===0?' — nenhuma encontrada nos filtros atuais':'');
 }
 function vistoriaVisible(doc,showFinalized){
  return !!showFinalized||vistoriaReportStatus(doc).kind!=='done';
@@ -199,6 +203,10 @@ async function setVistoriaFinalized(id){
   const previous=await requestResult(db.transaction('reports').objectStore('reports').get(id));
   if(!previous)throw Error('Vistoria não encontrada neste aparelho. Sincronize a nuvem.');
   const reopen=vistoriaReportStatus(previous.document).kind==='done';
+  if(reopen){
+   if(!confirm('Abrir esta vistoria para reavaliar os pontos? Altere a situação do ponto que precisa ser reaberto.'))return;
+   reset();activeReportId=previous.id;fill(previous.document);if(window.openSavedPointEditor)window.openSavedPointEditor();await persistCurrent();notify('Vistoria aberta. Altere a situação do ponto para reabrir a pendência.');($('identification')||$('meta')).scrollIntoView({behavior:'smooth'});return;
+  }
   if(!reopen&&(!vistoriaAllPointsClosed(previous.document)||vistoriaHasNewDraft(previous.document)))throw Error('Conclua todos os pontos e salve os novos registros antes de finalizar a vistoria.');
   if(!reopen&&previous.document.pending?.editing!=null)throw Error('Salve ou encerre a edição do ponto antes de finalizar a vistoria.');
   if(!confirm(reopen?'Reabrir esta vistoria? Os pontos e o histórico serão preservados.':'Marcar esta vistoria como finalizada? Ela ficará oculta por padrão e poderá ser reaberta.'))return;
@@ -229,7 +237,7 @@ async function setVistoriaFinalized(id){
  });
 }
 async function refreshHistory(){const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());historyItems=rows.sort((a,b)=>b.updated.localeCompare(a.updated));renderHistory();vistoriaRefreshAreaOptions();refreshVistoriaCloudStatuses()}
-function renderHistory(){const query=$('historySearch').value.trim().toLocaleLowerCase('pt-BR');const matching=historyItems.filter(r=>matchesFilters(r.document)).filter(r=>[r.document.meta.title,r.document.meta.number,r.document.meta.workOrder,r.document.meta.date,vistoriaReportArea(r.document),...r.document.records.flatMap(v=>[v.tag,v.area,v.pointWorkOrder,v.completionBy,v.owner])].join(' ').toLocaleLowerCase('pt-BR').includes(query));const showFinalized=!!$('showFinalizedReports')?.checked;const rows=matching.filter(r=>vistoriaVisible(r.document,showFinalized));const finalLabel=$('finalizedReportsLabel');if(finalLabel)finalLabel.textContent=vistoriaFinalizedLabel(matching.filter(r=>vistoriaReportStatus(r.document).kind==='done').length,showFinalized);const host=$('historyList');for(const d of host.querySelectorAll('details[data-area-group]'))vistoriaAreaOpen.set(d.dataset.areaGroup,d.open);const catalog=vistoriaAreaCatalog();const groups=vistoriaGroupRows(rows,catalog);const card=r=>{const d=r.document;return `<div class="entry" data-area-report-id="${esc(r.id)}"><span class="area-drag-handle" draggable="true" title="Arraste para outra área" aria-hidden="true">⠿</span><h3>${esc(d.meta.title||'Relatório de vistoria')}</h3><p class="report-reference">${esc(d.meta.number||'')}</p>${vistoriaStatusHtml(d)}<p>${esc(datefmt(d.meta.date))} · ${d.records.length} ponto(s)${r.id===activeReportId?' · <b>Em edição</b>':''}</p><p class="muted">${esc(d.records.map(v=>v.tag).slice(0,5).join(' · '))}</p><div class="actions"><button type="button" data-review-report="${esc(r.id)}">Ver relatório</button><button type="button" class="secondary" data-open-report="${esc(r.id)}">Abrir / editar</button><button type="button" class="secondary vistoria-finalize-action" data-finalize-report="${esc(r.id)}">${vistoriaStatusAction(d)}</button><details class="report-more"><summary>Mais opções</summary><div class="report-more-actions"><button type="button" class="secondary" data-move-report-area="${esc(r.id)}">Mover para área</button><button type="button" class="secondary" data-duplicate-report="${esc(r.id)}">Duplicar vistoria</button><button type="button" class="danger" data-remove-report="${esc(r.id)}">Mover para lixeira</button></div></details></div></div>`};const markup=groups.length?groups.map(([key,group])=>`<details class="vistoria-area-group" data-area-group="${esc(key)}" ${vistoriaAreaOpen.get(key)===true?'open':''}><summary><span>${esc(group.name)}</span><small>${group.rows.length} vistoria(s)</small></summary><div class="vistoria-area-body">${key?`<div class="area-folder-actions"><button type="button" class="danger" data-delete-area="${esc(key)}">Excluir área</button></div>`:''}${group.rows.map(card).join('')||'<p class="muted">Nenhuma vistoria visível nesta área.</p>'}</div></details>`).join(''):`<p class="empty">${query?'Nenhum formulário encontrado.':'Seus formulários aparecerão aqui ao preencher a vistoria.'}</p>`;vistoriaReplaceHistoryMarkup(host,markup);vistoriaRefreshAreaOptions()}
+function renderHistory(){const query=$('historySearch').value.trim().toLocaleLowerCase('pt-BR');const matching=historyItems.filter(r=>matchesFilters(r.document)).filter(r=>[r.document.meta.title,r.document.meta.number,r.document.meta.workOrder,r.document.meta.date,vistoriaReportArea(r.document),...r.document.records.flatMap(v=>[v.tag,v.area,v.pointWorkOrder,v.completionBy,v.owner])].join(' ').toLocaleLowerCase('pt-BR').includes(query));const showFinalized=!!$('showFinalizedReports')?.checked;const rows=matching.filter(r=>vistoriaVisible(r.document,showFinalized));const finalLabel=$('finalizedReportsLabel');if(finalLabel)finalLabel.textContent=vistoriaFinalizedLabel(matching.reduce((sum,r)=>sum+vistoriaClosedPointCount(r.document),0),showFinalized);const host=$('historyList');for(const d of host.querySelectorAll('details[data-area-group]'))vistoriaAreaOpen.set(d.dataset.areaGroup,d.open);const catalog=vistoriaAreaCatalog();const groups=vistoriaGroupRows(rows,catalog);const card=r=>{const d=r.document;return `<div class="entry" data-area-report-id="${esc(r.id)}"><span class="area-drag-handle" draggable="true" title="Arraste para outra área" aria-hidden="true">⠿</span><h3>${esc(d.meta.title||'Relatório de vistoria')}</h3><p class="report-reference">${esc(d.meta.number||'')}</p>${vistoriaStatusHtml(d)}<p>${esc(datefmt(d.meta.date))} · ${d.records.length} ponto(s)${r.id===activeReportId?' · <b>Em edição</b>':''}</p><p class="muted">${esc(vistoriaHistoryPoints(d,showFinalized).map(v=>v.tag).slice(0,5).join(' · '))}</p><div class="actions"><button type="button" data-review-report="${esc(r.id)}">Ver relatório</button><button type="button" class="secondary" data-open-report="${esc(r.id)}">Abrir / editar</button><button type="button" class="secondary vistoria-finalize-action" data-finalize-report="${esc(r.id)}">${vistoriaStatusAction(d)}</button><details class="report-more"><summary>Mais opções</summary><div class="report-more-actions"><button type="button" class="secondary" data-move-report-area="${esc(r.id)}">Mover para área</button><button type="button" class="secondary" data-duplicate-report="${esc(r.id)}">Duplicar vistoria</button><button type="button" class="danger" data-remove-report="${esc(r.id)}">Mover para lixeira</button></div></details></div></div>`};const markup=groups.length?groups.map(([key,group])=>`<details class="vistoria-area-group" data-area-group="${esc(key)}" ${vistoriaAreaOpen.get(key)===true?'open':''}><summary><span>${esc(group.name)}</span><small>${group.rows.length} vistoria(s)</small></summary><div class="vistoria-area-body">${key?`<div class="area-folder-actions"><button type="button" class="danger" data-delete-area="${esc(key)}">Excluir área</button></div>`:''}${group.rows.map(card).join('')||'<p class="muted">Nenhuma vistoria visível nesta área.</p>'}</div></details>`).join(''):`<p class="empty">${query?'Nenhum formulário encontrado.':'Seus formulários aparecerão aqui ao preencher a vistoria.'}</p>`;vistoriaReplaceHistoryMarkup(host,markup);vistoriaRefreshAreaOptions()}
 function blankReport(){records=[];reset();['reportArea','finalizedAt','number','workOrder','objective','conclusion','revision','approver','approvalDate','homologator','homologDate','revisionNote'].forEach(k=>$(k).value='');$('date').value=today();activeReportId=newId();render()}
 async function guarded(action){if(busy||historyBusy)return notify('Aguarde a operação em andamento.');if(!historyReady)return notify('O armazenamento ainda não está disponível.');historyBusy=true;try{await action()}catch(e){notify('Não foi possível concluir: '+e.message)}finally{historyBusy=false}}
 async function createNew(){await guarded(async()=>{await persistCurrent();blankReport();await persistCurrent();notify('Nova vistoria aberta. A anterior permanece na lista.');($('identification')||$('meta')).scrollIntoView({behavior:'smooth'})})}

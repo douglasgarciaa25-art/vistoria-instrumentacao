@@ -221,13 +221,13 @@ test('cópias locais não são confundidas com lixeira compartilhada',()=>{
  assert.match(file('trash-actions.js'),/window\.VistoriaLocalTrash=\{move:moveLocal\}/);
 });
 
-test('status geral distingue pendências, acompanhamento, pronta e finalizada',async()=>{
+test('status geral distingue pendências, acompanhamento e finalização automática',async()=>{
  const vm=await import('node:vm'),src=file('history.js'),code=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('function refreshVistoriaCloudStatuses'));
  const ctx=vm.createContext({});vm.runInContext(code,ctx);
  const d=(statuses,finalizedAt='',pending)=>({meta:{finalizedAt},records:statuses.map(status=>({status})),pending});
  assert.equal(ctx.vistoriaReportStatus(d(['Pendente','Corrigido'],'2026-11-24')).kind,'pending');
  assert.equal(ctx.vistoriaReportStatus(d(['Em acompanhamento','Corrigido'])).kind,'progress');
- assert.equal(ctx.vistoriaReportStatus(d(['Corrigido','Sem pendência'])).label,'Pronta para finalizar');
+ assert.equal(ctx.vistoriaReportStatus(d(['Corrigido','Sem pendência'])).label,'Finalizada');
  const done=d(['Corrigido','Sem pendência'],'2026-11-24');
  assert.equal(ctx.vistoriaReportStatus(done).kind,'done');
  assert.equal(ctx.vistoriaVisible(done,false),false);
