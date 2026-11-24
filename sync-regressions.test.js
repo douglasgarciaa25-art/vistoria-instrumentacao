@@ -78,7 +78,7 @@ test('sincronização da equipe permite envio de alteração em vistoria aberta 
  assert.match(src,/reportRequest\('POST',item\.report_id,\{document:row\.document,revision:previous\.revision\}\)/);
  assert.match(src,/Sincronização parcial/);
  assert.match(src,/Atualizar da nuvem \(mesmo ID\)/);
- assert.match(src,/\(cópia local preservada\)/);
+ assert.doesNotMatch(src,/\(cópia local preservada\)/);
 });
 test('guarda de edição ativa bloqueia alterações não salvas mas não bloqueia relatório fechado',async()=>{
  const vm=await import('node:vm');
@@ -119,7 +119,7 @@ test('equipe compara a revisão remota antes de classificar como conflito uma in
  assert.match(src,/baseline\[item\.report_id\]=\{revision:received\.revision,hash:receivedHash\}/);
  assert.match(src,/if\(!latest\|\|await digest\(latest\.document\)!==localHash\)\{teamDeferred\+\+;continue;\}/);
  assert.match(src,/teamConflicts\+\+;\s*const status=\$\('gdrive-team-status'\)/);
- assert.match(src,/Conflito na vistoria/);
+ assert.match(src,/Campos em conflito/);
 });
 test('interface móvel separa título e botões de sincronização da equipe',()=>{
  const cloud=file('google-drive-sync.js');
