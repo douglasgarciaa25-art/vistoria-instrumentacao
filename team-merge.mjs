@@ -40,3 +40,27 @@ export function mergeReport(base, local, remote) {
  const document=walk(base,local,remote,[]);
  return {document:conflicts.length?null:JSON.parse(JSON.stringify(document)),conflicts};
 }
+
+// Diferenças entre snapshots históricos; anexos são resumidos, nunca embutidos no log.
+export function revisionChanges(before,after){
+ const changes=[],missing=Symbol('missing');
+ const obj=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+ const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k)?o[k]:missing;
+ const equal=(a,b)=>a===b||(Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>equal(v,b[i])))||(obj(a)&&obj(b)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>equal(a[k],own(b,k))));
+ const keyed=a=>Array.isArray(a)&&a.every(p=>obj(p)&&typeof p.pointId==='string'&&p.pointId)&&new Set(a.map(p=>p.pointId)).size===a.length;
+ const display=v=>{if(v===missing)return 'Ausente';if(typeof v==='string')return /^data:|^blob:/.test(v)?'Anexo':v.slice(0,500);if(Array.isArray(v))return `${v.length} item(ns)`;if(obj(v))return 'Registro';return String(v);};
+ function walk(a,b,path){
+  if(equal(a,b))return;
+  if(path.length===1&&path[0]==='records'&&keyed(a)&&keyed(b)){
+   const am=new Map(a.map(p=>[p.pointId,p])),bm=new Map(b.map(p=>[p.pointId,p]));
+   for(const id of new Set([...am.keys(),...bm.keys()]))walk(am.has(id)?am.get(id):missing,bm.has(id)?bm.get(id):missing,[...path,id]);
+   const shared=a.map(p=>p.pointId).filter(id=>bm.has(id)),order=b.map(p=>p.pointId).filter(id=>am.has(id));
+   if(!equal(shared,order))changes.push({path:['records','ordem'],before:shared.join(', '),after:order.join(', ')});
+   return;
+  }
+  if(obj(a)&&obj(b)){for(const k of new Set([...Object.keys(a),...Object.keys(b)]))walk(own(a,k),own(b,k),[...path,k]);return;}
+  changes.push({path,before:display(a),after:display(b),changed:true});
+ }
+ if(!obj(before)||!obj(after))throw Error('Revisões indisponíveis');
+ walk(before,after,[]);return changes;
+}
