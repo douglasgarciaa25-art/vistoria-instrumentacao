@@ -63,7 +63,7 @@ test('Estilo offline, responsivo, com foco visível e sem remover a navegação'
 test('UI não modifica as permissões autenticadas nem endpoints existentes',()=>{
  assert.match(cloud,/const \{member\}=await teamRequest\('POST',\{action:'request'\}\)/);
  assert.match(cloud,/await reportRequest\('GET',item\.report_id/);
- assert.match(cloud,/reportRequest\('DELETE',item\.report_id\)/);
+ assert.match(cloud,/reportRequest\('DELETE',id,\{revision:state\.revision\}\)/);
  assert.match(cloud,/const baseline=JSON\.parse\(localStorage\.getItem\(/);
  assert.match(cloud,/if\(member\.role!=='admin'\)return/);
 });

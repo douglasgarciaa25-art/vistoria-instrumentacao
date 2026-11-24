@@ -67,7 +67,7 @@ test('sincronização da equipe recebe revisão da vistoria aberta sem perder o 
  const src=file('google-drive-sync.js');
  assert.match(src,/async function activeMatchesSaved\(id,savedHash\)/);
  assert.match(src,/if\(active&&!await activeMatchesSaved\(item\.report_id,localHash\)\)/);
- assert.match(src,/db\.transaction\(\['reports','draft'\],'readwrite'\)/);
+ assert.match(src,/db\.transaction\(\['reports','draft','trash'\],'readwrite'\)/);
  assert.match(src,/draft\.put\(\{\.\.\.structuredClone\(document\),reportId:id\},'current'\)/);
  assert.match(src,/reset\(\);fill\(structuredClone\(document\)\)/);
  assert.doesNotMatch(src,/if\(typeof activeReportId!=='undefined'&&activeReportId===item\.report_id\)continue;/);
@@ -152,14 +152,14 @@ test('renovação transacional preserva ID, rascunho, originais e edição conco
    const reports=new Map([[id,structuredClone(row)]]),draft=new Map([['current',{...structuredClone(old),reportId:otherDraft?'outra':id}]]);
    let pending=0,settle,filled=null;
    const db={transaction(names){
-     assert.deepEqual(Array.from(names),['reports','draft']);
+     assert.deepEqual(Array.from(names),['reports','draft','trash']);
      const promise=new Promise(r=>settle=r);
-     const stores={reports,draft};
-     const tx={promise,objectStore(name){const map=stores[name];return {get(key){const req={};pending++;queueMicrotask(()=>{req.result=map.get(key);req.onsuccess();if(!--pending)settle()});return req;},put(value,key){map.set(key??value.id,structuredClone(value));}}}};
+     const stores={reports,draft,trash:new Map()};
+     const tx={promise,objectStore(name){const map=stores[name];return {get(key){const req={};pending++;queueMicrotask(()=>{req.result=map.get(key);req.onsuccess();if(!--pending)settle()});return req;},put(value,key){map.set(key??value.id,structuredClone(value));},delete(key){map.delete(key);}}}};
      if(changed)reports.set(id,{id,document:{meta:{title:'Outra edição'},records:[]}});
      return tx;
    }};
-   const context={db,txDone:t=>t.promise,activeReportId:active?id:'outra',accessToken:'token',queueMember:member,validToken:()=>true,saveTimer:dirty?1:null,historyBusy:false,busy:0,historyReady:true,data:()=>old,digest:async d=>JSON.stringify(d),activeMatchesSaved:async()=>!dirty,persistQueue:Promise.resolve(),reset(){},fill(d){filled=d;},$:()=>null,structuredClone,crypto:{randomUUID:()=> 'archive-001'}};
+   const context={db,txDone:t=>t.promise,activeReportId:active?id:'outra',accessToken:'token',queueMember:member,validToken:()=>true,saveTimer:dirty?1:null,historyBusy:false,busy:0,historyReady:true,data:()=>old,digest:async d=>JSON.stringify(d),activeMatchesSaved:async()=>!dirty,persistQueue:Promise.resolve(),reset(){},fill(d){filled=d;},$:()=>null,structuredClone,crypto:{randomUUID:()=> 'archive-001'},canRestoreTeamTrash:()=>false};
    const replace=vm.runInNewContext('('+found[0].trim()+')',context);
    const result=await replace({report_id:id,updated_at:'2026-11-24T00:00:00Z'},row,next,member,archive);
    return {result,reports,draft,filled};
@@ -171,4 +171,25 @@ test('renovação transacional preserva ID, rascunho, originais e edição conco
  r=await run({dirty:true});assert.equal(r.result,false);assert.deepEqual(r.reports.get(id).document,old);
  r=await run({otherDraft:true});assert.equal(r.result,false);assert.equal(r.draft.get('current').reportId,'outra');
  r=await run({active:false});assert.equal(r.result,true);assert.deepEqual(r.reports.get(id).document,next);assert.equal(r.filled,null);
+});
+
+test('lixeira da equipe só aplica remoção confirmada pelo servidor e preserva o mesmo ID',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/state\.report_id===row\.id&&state\.deleted_at/);
+ assert.match(src,/trash\.put\(\{\.\.\.latest,deletedAt:item\.deleted_at/);
+ assert.match(src,/draft\.put\(\{account,revision:Number\(item\.revision\)\},'deleted-report:'\+id\)/);
+ assert.match(src,/trash\.delete\(id\);draft\.delete\('deleted-report:'\+id\)/);
+ assert.match(file('trash-actions.js'),/VistoriaTeamTrash\.move\(id\)/);
+ assert.match(file('enhancements.js'),/VistoriaTeamTrash\.restore\(id\)/);
+});
+
+test('uma exclusão local antiga não é revertida por download automático',async()=>{
+ const vm=await import('node:vm'),src=file('google-drive-sync.js');
+ const fn=src.match(/  function canRestoreTeamTrash\(marker,item,account\)\{[\s\S]*?\n  \}/);
+ const canRestore=vm.runInNewContext('('+fn[0].trim()+')');
+ assert.equal(canRestore(true,{revision:3},'admin'),false);
+ assert.equal(canRestore({account:'admin',revision:3},{revision:3},'admin'),false);
+ assert.equal(canRestore({account:'admin',revision:3},{revision:4},'other'),false);
+ assert.equal(canRestore({account:'admin',revision:3},{revision:4},'admin'),true);
+ assert.match(src,/if\(marker.result&&!canRestoreTeamTrash\(marker.result,item,account\)\)return/);
 });

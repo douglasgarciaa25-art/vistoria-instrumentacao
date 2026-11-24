@@ -19,6 +19,9 @@ test('API da equipe: autorização, propriedade, lixeira e partes',async()=>{
   member.status='blocked';assert.equal((await invoke('GET')).status,403);
   member.status='pending';assert.equal((await invoke('GET')).status,403);
   member.status='approved';assert.equal((await invoke('GET',{trash:'1'})).status,403);
+  const state=await invoke('GET',{id:'r1',state:'1'});
+  assert.equal(state.status,200);assert.deepEqual(state.payload,{report_id:'r1',revision:2,deleted_at:null});
+  member.status='blocked';assert.equal((await invoke('GET',{id:'r1',state:'1'})).status,403);member.status='approved';
   assert.equal((await invoke('POST',{id:'r1'},{revision:1,document:{meta:{},records:[]}})).status,409);
   assert.equal((await invoke('DELETE',{id:'r1'})).status,403);
   assert.equal((await invoke('POST',{id:'r1'},{action:'upload-part',revision:2})).status,400);
