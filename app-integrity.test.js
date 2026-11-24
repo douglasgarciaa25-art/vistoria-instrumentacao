@@ -349,3 +349,19 @@ test('filtro de finalizadas preserva registros e classifica automaticamente pont
  assert.equal(JSON.stringify(mixed),original);
  assert.equal(JSON.stringify(docs),before);
 });
+
+
+test('arquivos obrigatórios do cache offline são publicados pelo Vercel',()=>{
+ const sw=readFileSync('sw.js','utf8');
+ const config=JSON.parse(readFileSync('vercel.json','utf8'));
+ const files=sw.match(/const FILES=\[([^\]]+)\]/)[1].match(/'[^']+'/g).map(x=>x.slice(1,-1));
+ const statics=config.builds.filter(x=>x.use==='@vercel/static').map(x=>x.src);
+ for(const path of files){
+  const file=path==='/'?'index.html':path.slice(1);
+  assert.ok(statics.some(src=>src===file||(src.startsWith('*.')&&!file.includes('/')&&file.endsWith(src.slice(1)))),file+' precisa ser publicado');
+ }
+ assert.ok(files.includes('/team-merge.mjs'));
+ assert.ok(statics.includes('team-merge.mjs'));
+ const html=readFileSync('index.html','utf8');
+ for(const [,src] of html.matchAll(/<script[^>]*src=["']([^"']+)["']/g))assert.ok(files.includes('/'+src.replace(/^\//,'')),src+' deve estar no cache');
+});
