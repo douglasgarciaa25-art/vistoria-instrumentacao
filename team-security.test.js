@@ -19,9 +19,10 @@ test('API da equipe: autorização, propriedade, lixeira e partes',async()=>{
   member.status='blocked';assert.equal((await invoke('GET')).status,403);
   member.status='pending';assert.equal((await invoke('GET')).status,403);
   member.status='approved';assert.equal((await invoke('GET',{trash:'1'})).status,403);
-  assert.equal((await invoke('POST',{id:'r1'},{revision:2,document:{meta:{},records:[]}})).status,403);
+  assert.equal((await invoke('POST',{id:'r1'},{revision:1,document:{meta:{},records:[]}})).status,409);
   assert.equal((await invoke('DELETE',{id:'r1'})).status,403);
-  assert.equal((await invoke('POST',{id:'r1'},{action:'upload-part',revision:2})).status,403);
+  assert.equal((await invoke('POST',{id:'r1'},{action:'upload-part',revision:2})).status,400);
+  assert.equal((await invoke('POST',{id:'r1'},{action:'restore',revision:2})).status,403);
   member.role='admin';assert.equal((await invoke('POST',{id:'r1'},{action:'upload-part',upload_id:'invalid',revision:2})).status,400);
   assert.equal((await invoke('POST',{id:'r1'},{action:'upload-status',upload_id:'00000000-0000-4000-8000-000000000000',revision:1})).status,409);
   assert.equal((await invoke('GET',{id:'../bad'})).status,400);
