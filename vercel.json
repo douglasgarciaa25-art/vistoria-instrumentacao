@@ -55,6 +55,10 @@
     {
       "src": "*.css",
       "use": "@vercel/static"
+    },
+    {
+      "src": "team-merge.mjs",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
