@@ -259,3 +259,15 @@ test('modo campo mantém botões do visualizador de fotos legíveis e com toque 
  assert.match(css,/@media\(max-width:750px\)\{\.photo-viewer button\{min-height:48px;font-size:14px;line-height:1\.4;padding:12px 14px\}/);
  assert.match(css,/\.photo-viewer \.actions button\{white-space:normal\}/);
 });
+
+test('pastas e arrastar preservam a identidade e impedem exclusão de área ocupada',()=>{
+ const h=readFileSync('history.js','utf8'),css=readFileSync('layout.css','utf8');
+ assert.doesNotThrow(()=>new vm.Script(h));
+ assert.match(h,/async function vistoriaMoveArea\(id,destination\)/);
+ assert.ok(h.includes('vistoriaMoveArea(id,target)'));
+ assert.ok(h.includes("if(historyItems.some(r=>vistoriaAreaKey(vistoriaReportArea(r.document))===key))throw Error"));
+ assert.ok(h.includes("store.put({...latest,updated:new Date().toISOString(),document:next})"));
+ for(const name of ['data-review-report','data-open-report','data-finalize-report','data-move-report-area','data-duplicate-report','data-remove-report'])assert.ok(h.includes(name));
+ assert.ok(h.includes('class="report-more"'));
+ assert.ok(css.includes('#historyList{display:flex;flex-direction:column'));
+});

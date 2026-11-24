@@ -47,7 +47,7 @@ function vistoriaReportArea(doc){
 function vistoriaAreaCatalog(rows=historyItems,custom){
  let saved=custom;
  if(!saved){try{saved=JSON.parse(localStorage.getItem(VISTORIA_AREA_KEY)||'[]')}catch{saved=[]}}
- const names=[...(Array.isArray(saved)?saved:[]),...rows.flatMap(r=>[vistoriaReportArea(r.document),...(r.document?.records||[]).map(p=>p.area)])];
+ const names=[...(Array.isArray(saved)?saved:[]),...rows.flatMap(r=>[vistoriaReportArea(r.document),])];
  const unique=new Map();for(const value of names){const name=vistoriaAreaName(value),key=vistoriaAreaKey(name);if(key&&!unique.has(key))unique.set(key,name);}
  return [...unique.values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
 }
@@ -72,13 +72,27 @@ function vistoriaCreateArea(){
  const value=prompt('Nome da nova área (ex.: Britagem, Moagem, Flotação):');if(value===null)return;
  try{const name=vistoriaRememberArea(value);renderHistory();refreshVistoriaCloudStatuses();notify('Área disponível: '+name);}catch(e){notify(e.message);}
 }
-async function vistoriaMoveArea(id){
+async function vistoriaDeleteArea(key){
+ if(!key)return;
+ return guarded(async()=>{
+  await persistCurrent();
+  const name=vistoriaAreaCatalog().find(a=>vistoriaAreaKey(a)===key);
+  if(!name)return;
+  if(historyItems.some(r=>vistoriaAreaKey(vistoriaReportArea(r.document))===key))throw Error('Mova todas as vistorias desta área antes de excluir. Confira também as finalizadas.');
+  if(!confirm('Excluir a área vazia '+name+'? Nenhuma vistoria será excluída.'))return;
+  let saved=JSON.parse(localStorage.getItem(VISTORIA_AREA_KEY)||'[]');
+  if(!Array.isArray(saved))saved=[];
+  localStorage.setItem(VISTORIA_AREA_KEY,JSON.stringify(saved.filter(a=>vistoriaAreaKey(a)!==key)));
+  vistoriaAreaOpen.delete(key);renderHistory();refreshVistoriaCloudStatuses();notify('Área excluída neste aparelho.');
+ });
+}
+async function vistoriaMoveArea(id,destination){
  return guarded(async()=>{
   await persistCurrent();
   const previous=await requestResult(db.transaction('reports').objectStore('reports').get(id));
   if(!previous)throw Error('Sincronize a vistoria antes de mover.');
   const current=vistoriaReportArea(previous.document),names=vistoriaAreaCatalog();
-  const value=prompt('Área de destino (escolha uma existente ou digite uma nova):\n'+names.join(' · '),current);
+  const value=destination===undefined?prompt('Área de destino (escolha uma existente ou digite uma nova):\n'+names.join(' · '),current):destination;
   if(value===null)return;
   const area=vistoriaRememberArea(value);
   if(vistoriaAreaKey(area)===vistoriaAreaKey(current)&&previous.document.meta.reportArea)return;
@@ -179,7 +193,7 @@ async function setVistoriaFinalized(id){
  });
 }
 async function refreshHistory(){const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());historyItems=rows.sort((a,b)=>b.updated.localeCompare(a.updated));renderHistory();vistoriaRefreshAreaOptions();refreshVistoriaCloudStatuses()}
-function renderHistory(){const query=$('historySearch').value.trim().toLocaleLowerCase('pt-BR');const rows=historyItems.filter(r=>vistoriaVisible(r.document,$('showFinalizedReports')?.checked)).filter(r=>matchesFilters(r.document)).filter(r=>[r.document.meta.title,r.document.meta.number,r.document.meta.workOrder,r.document.meta.date,vistoriaReportArea(r.document),...r.document.records.flatMap(v=>[v.tag,v.area,v.pointWorkOrder,v.completionBy,v.owner])].join(' ').toLocaleLowerCase('pt-BR').includes(query));const host=$('historyList');for(const d of host.querySelectorAll('details[data-area-group]'))vistoriaAreaOpen.set(d.dataset.areaGroup,d.open);const catalog=vistoriaAreaCatalog();const groups=vistoriaGroupRows(rows,catalog);const card=r=>{const d=r.document;return `<div class="entry"><h3>${esc(d.meta.number?d.meta.number+' · ':'')}${esc(d.meta.title||'Relatório de vistoria')}</h3>${vistoriaStatusHtml(d)}<p>${esc(datefmt(d.meta.date))} · ${d.records.length} ponto(s)${r.id===activeReportId?' · <b>Em edição</b>':''}</p><p class="muted">${esc(d.records.map(v=>v.tag).slice(0,5).join(' · '))}</p><div class="actions"><button type="button" data-review-report="${esc(r.id)}">Ver relatório</button><button type="button" class="secondary" data-open-report="${esc(r.id)}">Abrir / editar</button><button type="button" class="secondary vistoria-finalize-action" data-finalize-report="${esc(r.id)}">${vistoriaStatusAction(d)}</button><button type="button" class="secondary" data-move-report-area="${esc(r.id)}">Mover para área</button><button type="button" class="secondary" data-duplicate-report="${esc(r.id)}">Duplicar vistoria</button><button type="button" class="danger" data-remove-report="${esc(r.id)}">Mover para lixeira</button></div></div>`};host.innerHTML=groups.length?groups.map(([key,group])=>`<details class="vistoria-area-group" data-area-group="${esc(key)}" ${query||vistoriaAreaOpen.get(key)!==false?'open':''}><summary><span>${esc(group.name)}</span><small>${group.rows.length} vistoria(s)</small></summary><div class="vistoria-area-body">${group.rows.map(card).join('')||'<p class="muted">Nenhuma vistoria visível nesta área.</p>'}</div></details>`).join(''):`<p class="empty">${query?'Nenhum formulário encontrado.':'Seus formulários aparecerão aqui ao preencher a vistoria.'}</p>`;vistoriaRefreshAreaOptions()}
+function renderHistory(){const query=$('historySearch').value.trim().toLocaleLowerCase('pt-BR');const rows=historyItems.filter(r=>vistoriaVisible(r.document,$('showFinalizedReports')?.checked)).filter(r=>matchesFilters(r.document)).filter(r=>[r.document.meta.title,r.document.meta.number,r.document.meta.workOrder,r.document.meta.date,vistoriaReportArea(r.document),...r.document.records.flatMap(v=>[v.tag,v.area,v.pointWorkOrder,v.completionBy,v.owner])].join(' ').toLocaleLowerCase('pt-BR').includes(query));const host=$('historyList');for(const d of host.querySelectorAll('details[data-area-group]'))vistoriaAreaOpen.set(d.dataset.areaGroup,d.open);const catalog=vistoriaAreaCatalog();const groups=vistoriaGroupRows(rows,catalog);const card=r=>{const d=r.document;return `<div class="entry" data-area-report-id="${esc(r.id)}"><span class="area-drag-handle" draggable="true" title="Arraste para outra área" aria-hidden="true">⠿</span><h3>${esc(d.meta.title||'Relatório de vistoria')}</h3><p class="report-reference">${esc(d.meta.number||'')}</p>${vistoriaStatusHtml(d)}<p>${esc(datefmt(d.meta.date))} · ${d.records.length} ponto(s)${r.id===activeReportId?' · <b>Em edição</b>':''}</p><p class="muted">${esc(d.records.map(v=>v.tag).slice(0,5).join(' · '))}</p><div class="actions"><button type="button" data-review-report="${esc(r.id)}">Ver relatório</button><button type="button" class="secondary" data-open-report="${esc(r.id)}">Abrir / editar</button><button type="button" class="secondary vistoria-finalize-action" data-finalize-report="${esc(r.id)}">${vistoriaStatusAction(d)}</button><details class="report-more"><summary>Mais opções</summary><div class="report-more-actions"><button type="button" class="secondary" data-move-report-area="${esc(r.id)}">Mover para área</button><button type="button" class="secondary" data-duplicate-report="${esc(r.id)}">Duplicar vistoria</button><button type="button" class="danger" data-remove-report="${esc(r.id)}">Mover para lixeira</button></div></details></div></div>`};host.innerHTML=groups.length?groups.map(([key,group])=>`<details class="vistoria-area-group" data-area-group="${esc(key)}" ${query||vistoriaAreaOpen.get(key)!==false?'open':''}><summary><span>${esc(group.name)}</span><small>${group.rows.length} vistoria(s)</small></summary><div class="vistoria-area-body">${key?`<div class="area-folder-actions"><button type="button" class="danger" data-delete-area="${esc(key)}">Excluir área</button></div>`:''}${group.rows.map(card).join('')||'<p class="muted">Nenhuma vistoria visível nesta área.</p>'}</div></details>`).join(''):`<p class="empty">${query?'Nenhum formulário encontrado.':'Seus formulários aparecerão aqui ao preencher a vistoria.'}</p>`;vistoriaRefreshAreaOptions()}
 function blankReport(){records=[];reset();['reportArea','finalizedAt','number','workOrder','objective','conclusion','revision','approver','approvalDate','homologator','homologDate','revisionNote'].forEach(k=>$(k).value='');$('date').value=today();activeReportId=newId();render()}
 async function guarded(action){if(busy||historyBusy)return notify('Aguarde a operação em andamento.');if(!historyReady)return notify('O armazenamento ainda não está disponível.');historyBusy=true;try{await action()}catch(e){notify('Não foi possível concluir: '+e.message)}finally{historyBusy=false}}
 async function createNew(){await guarded(async()=>{await persistCurrent();blankReport();await persistCurrent();notify('Nova vistoria aberta. A anterior permanece na lista.');($('identification')||$('meta')).scrollIntoView({behavior:'smooth'})})}
@@ -191,6 +205,30 @@ const areaTools=document.createElement('div');areaTools.className='vistoria-area
 const createAreaButton=document.createElement('button');createAreaButton.type='button';createAreaButton.className='secondary';createAreaButton.textContent='+ Criar área';createAreaButton.onclick=vistoriaCreateArea;
 const areaHint=document.createElement('small');areaHint.className='muted';areaHint.textContent='Áreas vazias ficam neste aparelho; áreas atribuídas acompanham a sincronização.';
 areaTools.append(createAreaButton,areaHint);$('historyList').before(areaTools);
+const areaHistory=$('historyList');
+areaHistory.addEventListener('click',ev=>{const b=ev.target.closest('[data-delete-area]');if(!b)return;ev.preventDefault();ev.stopImmediatePropagation();vistoriaDeleteArea(b.dataset.deleteArea)},true);
+let draggedAreaReport=null;
+function clearAreaDrag(){draggedAreaReport=null;areaHistory.querySelectorAll('.area-drop-target').forEach(el=>el.classList.remove('area-drop-target'))}
+areaHistory.addEventListener('dragstart',ev=>{
+ const handle=ev.target.closest('.area-drag-handle'),card=handle?.closest('[data-area-report-id]');
+ if(!card||!ev.dataTransfer)return;
+ draggedAreaReport=card.dataset.areaReportId;ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('text/plain',draggedAreaReport);
+});
+areaHistory.addEventListener('dragover',ev=>{
+ const folder=ev.target.closest('details[data-area-group]');
+ if(!draggedAreaReport||!folder?.dataset.areaGroup||!ev.dataTransfer)return;
+ ev.preventDefault();ev.dataTransfer.dropEffect='move';
+ areaHistory.querySelectorAll('.area-drop-target').forEach(el=>{if(el!==folder)el.classList.remove('area-drop-target')});
+ folder.classList.add('area-drop-target');
+});
+areaHistory.addEventListener('dragleave',ev=>{const folder=ev.target.closest('details[data-area-group]');if(folder&&!folder.contains(ev.relatedTarget))folder.classList.remove('area-drop-target')});
+areaHistory.addEventListener('dragend',clearAreaDrag);
+areaHistory.addEventListener('drop',ev=>{
+ const folder=ev.target.closest('details[data-area-group]'),id=draggedAreaReport;
+ if(!id||!folder?.dataset.areaGroup){clearAreaDrag();return;}
+ ev.preventDefault();const target=vistoriaAreaCatalog().find(a=>vistoriaAreaKey(a)===folder.dataset.areaGroup);clearAreaDrag();
+ if(target&&historyItems.some(r=>r.id===id))vistoriaMoveArea(id,target);
+});
 $('historyList').addEventListener('click',ev=>{const b=ev.target.closest('[data-move-report-area]');if(!b)return;ev.preventDefault();ev.stopImmediatePropagation();vistoriaMoveArea(b.dataset.moveReportArea)},true);
 $('reportArea').addEventListener('change',()=>{if($('reportArea').value.trim()){try{$('reportArea').value=vistoriaRememberArea($('reportArea').value)}catch(err){notify(err.message)}}save()});
 $('historyList').addEventListener('click',e=>{const b=e.target.closest('[data-finalize-report]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();setVistoriaFinalized(b.dataset.finalizeReport)},true);

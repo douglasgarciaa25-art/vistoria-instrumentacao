@@ -87,3 +87,46 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .vistoria-area-body{padding:8px 12px 12px}
 .vistoria-area-body>.entry{margin:8px 0}
 @media(max-width:750px){.vistoria-area-tools button{width:100%}.vistoria-area-body{padding:6px 8px 8px}}
+
+/* Histórico por área: largura de trabalho, pastas independentes e ações progressivas. */
+@media(min-width:1000px){
+ main{max-width:1550px;padding-inline:32px}
+ header,.app-nav{padding-inline:max(32px,calc((100vw - 1550px)/2))}
+ #view-home .welcome{padding:22px 28px}
+ #view-home .welcome h2{font-size:30px}
+ #view-home .welcome .actions{margin-top:14px}
+}
+#historyList{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+#historyList .vistoria-area-group{margin:0;background:#f8f6fb}
+#historyList .vistoria-area-group>summary{background:#f0ebf6;padding:12px 16px;min-height:48px}
+#historyList .vistoria-area-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;padding:12px;align-items:start}
+#historyList .area-folder-actions{grid-column:1/-1;display:flex;justify-content:flex-end}
+#historyList .area-folder-actions button{font-size:12px;min-height:36px;padding:8px 12px}
+#historyList .entry{margin:0;background:white;padding:16px;min-width:0;border-left:3px solid #d8cce8}
+#historyList .entry:has([data-status-kind="pending"]){border-left-color:#c83f3f}
+#historyList .entry:has([data-status-kind="progress"]){border-left-color:#d6a21d}
+#historyList .entry:has([data-status-kind="done"]){border-left-color:#27894a}
+#historyList .entry h3{font-size:16px;line-height:1.4;margin:5px 0}
+#historyList .entry .report-reference{font-size:11px;overflow-wrap:anywhere;margin:3px 0}
+#historyList .entry p{margin-block:5px}
+#historyList .select-report{margin:0 30px 7px 0;min-height:28px}
+#historyList .actions{align-items:flex-start;gap:8px;margin-top:12px}
+#historyList .actions button{font-size:12px;min-height:42px;padding:9px 12px}
+#historyList [data-open-report]{background:#eee8f6;color:#40265f}
+#historyList .report-more{flex:1 1 100%;min-width:0;margin-top:2px}
+#historyList .report-more>summary{cursor:pointer;color:#5a4774;font-size:13px;font-weight:650;padding:9px 0}
+#historyList .report-more-actions{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:4px}
+#historyList .area-drag-handle{position:absolute;right:12px;top:11px;cursor:grab;font-size:24px;color:#6f5b89;line-height:1;user-select:none}
+#historyList .area-drag-handle:active{cursor:grabbing}
+#historyList .area-drop-target{outline:3px solid #7652a1;outline-offset:-3px;background:#f0e8fa}
+#historyList .empty{width:100%;box-sizing:border-box}
+#historyPanel .selection-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+#historyPanel .selection-bar .actions{margin:0}
+@media(max-width:750px){
+ #historyList .vistoria-area-body{grid-template-columns:minmax(0,1fr);padding:9px}
+ #historyList .actions [data-open-report]{flex-basis:auto}
+ #historyList .actions button,#historyList .area-folder-actions button{min-height:44px}
+ #historyList .area-drag-handle{display:none}
+ #historyList .select-report{min-height:40px;margin-right:0}
+ #historyList .report-more>summary{min-height:44px;box-sizing:border-box}
+}
