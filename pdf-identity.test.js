@@ -69,3 +69,26 @@ test('exportação individual completa associa o ID real, sem confundir PDF de p
  assert.match(exporter,/exportReportDocuments\(\[document\],\[activeReportId\]\)/);
  assert.match(src,/document\.exportPointNumber\)return/);
 });
+
+test('PDF encontra vistoria na lixeira pelo ID ou referência, nunca por título genérico',()=>{
+ const a=row('a','Relatório','RV-2026-A'),b=row('b','Relatório','RV-2026-B');
+ assert.equal(ctx.vistoriaPdfTrashMatch({reference:'RV-2026-A'},'outro','pdf',[a,b]).id,'a');
+ assert.equal(ctx.vistoriaPdfTrashMatch({reference:'RV-2026-A'},'b','pdf',[a,b]).id,'b');
+ assert.equal(ctx.vistoriaPdfTrashMatch({title:'Relatório',reference:''},'outro','pdf',[a,b]),null);
+ assert.throws(()=>ctx.vistoriaPdfTrashMatch({reference:'RV-2026-A'},'outro','pdf',[a,row('c','Relatório','RV-2026-A')]),/Mais de uma/);
+});
+test('lixeira da equipe não pode ser restaurada pela via local',()=>{
+ assert.equal(ctx.vistoriaPdfTeamTrash({teamTrash:true},true,false),true);
+ assert.equal(ctx.vistoriaPdfTeamTrash(null,{account:'team',revision:3},false),true);
+ assert.equal(ctx.vistoriaPdfTeamTrash(null,true,true),true);
+ assert.equal(ctx.vistoriaPdfTeamTrash({},true,false),false);
+ assert.match(src,/await window\.VistoriaTeamTrash\.restore\(restoreId\)/);
+ assert.match(src,/if\(vistoriaPdfTeamTrash\(row,marker\.result,window\.VistoriaTeamTrash\?\.known\(id\)\)\)return/);
+});
+test('restauração explícita preserva o ID e o documento e limpa o marcador atomicamente',()=>{
+ assert.match(src,/restored=\{id,updated:new Date\(\)\.toISOString\(\),document:row\.document\}/);
+ assert.match(src,/reports\.add\(restored\);trash\.delete\(id\);draft\.delete\('deleted-report:'\+id\)/);
+ assert.match(src,/const recoverDeleted=marker===true&&!teamTrash/);
+ assert.match(src,/recoverDeleted&&!packet&&!legacy/);
+ assert.match(src,/if\(recoverDeleted\)draft\.delete\('deleted-report:'\+id\)/);
+});
