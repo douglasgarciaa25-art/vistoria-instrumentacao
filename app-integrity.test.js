@@ -271,3 +271,27 @@ test('pastas e arrastar preservam a identidade e impedem exclusão de área ocup
  assert.ok(h.includes('class="report-more"'));
  assert.ok(css.includes('#historyList{display:flex;flex-direction:column'));
 });
+
+test('Mais opções mantém estado por ID e não recria a lista em sincronizações idênticas',()=>{
+ const source=readFileSync('history.js','utf8');
+ const snippet=source.slice(source.indexOf('const vistoriaMoreOpen=new Set();'),source.indexOf('function vistoriaAreaName'));
+ const ctx=vm.createContext({});
+ vm.runInContext(snippet+';globalThis.replaceHistory=vistoriaReplaceHistoryMarkup;',ctx);
+ const makeMenu=(id,open=false)=>({open,closest:()=>({dataset:{areaReportId:id}})});
+ let menus=[],writes=0;
+ const host={querySelectorAll:()=>menus,set innerHTML(value){writes++;menus=value==='filtered'?[makeMenu('B')]:[makeMenu('A'),makeMenu('B')]}};
+ ctx.replaceHistory(host,'original');
+ menus[0].open=true;
+ const original=menus[0];
+ ctx.replaceHistory(host,'original');
+ assert.equal(writes,1);assert.equal(menus[0],original);assert.equal(menus[0].open,true);
+ ctx.replaceHistory(host,'updated');
+ assert.equal(menus[0].open,true);assert.equal(menus[1].open,false);
+ ctx.replaceHistory(host,'filtered');
+ ctx.replaceHistory(host,'returned');
+ assert.equal(menus[0].open,true);
+ menus[0].open=false;
+ ctx.replaceHistory(host,'final');
+ assert.equal(menus[0].open,false);
+ assert.match(source,/vistoriaReplaceHistoryMarkup\(host,markup\)/);
+});

@@ -1,4 +1,4 @@
-const CACHE='vistoria-shell-v70-area-layout';
+const CACHE='vistoria-shell-v71-menu-state';
 importScripts('/background-sync.js');
 const FILES=['/background-sync.js','/point-identity.js','/point-trash.js','/management-tools.js','/voice-dictation.js','/trash-actions.js','/export-current.js','/point-actions.js','/pdf-import.js','/analysis-progress.js','/descritivo-core.js','/descritivo-guiado.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/photo-order.js','/enhancements.js','/layout.css','/cloud-dashboard.css','/layout.js','/google-drive-sync.js','/team-merge.mjs','/','/index.html','/history.js','/form-wizard.js','/pdf-export.js','/improvements.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/icon-192.png','/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES))));
