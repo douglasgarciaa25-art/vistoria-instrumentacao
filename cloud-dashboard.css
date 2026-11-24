@@ -114,3 +114,7 @@
  .cloud-dashboard .cloud-reports-disclosure>.cloud-reports-summary{padding:13px 15px;min-height:58px;font-size:13px}
  .cloud-dashboard .cloud-reports-disclosure>.cloud-report-list{grid-template-columns:1fr;margin:10px;gap:10px}
 }
+
+.cloud-dashboard .cloud-reports-disclosure>.cloud-report-list{grid-template-columns:minmax(0,1fr)}
+.cloud-area-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:760px){.cloud-area-body{grid-template-columns:minmax(0,1fr)}}
