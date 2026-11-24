@@ -36,6 +36,7 @@ export default async function handler(req,res){
  const filter=base+'?report_id=eq.'+encodeURIComponent(id);
  const old=(await teamDb(filter))[0];
  if(req.method==='GET'){
+ if(req.query?.state==='1')return old?reply(200,{report_id:id,revision:old.revision,deleted_at:old.deleted_at||null}):reply(404,{error:'Vistoria não encontrada'});
  if(!old||(old.deleted_at&&!(m.role==='admin'&&req.query?.history==='1')))return reply(404,{error:'Vistoria não encontrada'});
  if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,actor_name,drive_file_id&order=occurred_at.desc');const pointHistory=await teamDb('vistoria_point_audit?report_id=eq.'+encodeURIComponent(id)+'&select=point_id,action,revision,occurred_at,actor_subject,actor_name,tag_snapshot,work_order_snapshot,previous_status,current_status&order=occurred_at.desc&limit=500');const members=await teamDb('vistoria_members?select=google_subject,email');const names=new Map(members.map(v=>[v.google_subject,v.email]));return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,actor_email:names.get(event.actor_subject)||null,available:!!drive_file_id})),pointHistory:pointHistory.map(event=>({...event,actor_email:names.get(event.actor_subject)||null}))});}
  let fileId=old.drive_file_id;let selectedRevision=old.revision;
@@ -50,6 +51,7 @@ export default async function handler(req,res){
  if(req.method==='DELETE'){
  if(m.role!=='admin')return reply(403,{error:'Somente administrador pode excluir'});
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
+ if(req.body?.revision!==undefined&&Number(req.body.revision)!==old.revision)return reply(409,{error:'Revisão alterada'});
  const revision=await teamDb('rpc/vistoria_change_report_state',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_expected_revision:old.revision,p_action:'delete'})});
  if(!Number.isSafeInteger(revision)||revision<1)return reply(409,{error:'Revisão alterada'});
  return reply(200,{ok:true,revision});

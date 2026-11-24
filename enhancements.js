@@ -29,7 +29,7 @@
  }finally{button.disabled=$('trashCount').textContent==='0'}
  });
  trash.addEventListener('toggle',()=>{if(trash.open)window.refreshTrash().catch(e=>notify(e.message))});
- $('trashList').onclick=e=>{const id=e.target.dataset.restoreTrash;if(!id)return;guarded(async()=>{const row=await requestResult(db.transaction('trash').objectStore('trash').get(id));if(!row)return;const t=db.transaction(['trash','reports'],'readwrite');t.objectStore('reports').put({id:newId(),updated:new Date().toISOString(),document:row.document});t.objectStore('trash').delete(id);await transactionDone(t);await refreshHistory();await window.refreshTrash();notify('Formulário restaurado. Abra-o em Suas vistorias.')})};
+ $('trashList').onclick=e=>{const id=e.target.dataset.restoreTrash;if(!id)return;if(window.VistoriaTeamTrash?.known(id)){if(confirm('Restaurar esta vistoria em todos os aparelhos da equipe?'))window.VistoriaTeamTrash.restore(id).catch(e=>notify(e.message));return;}guarded(async()=>{const row=await requestResult(db.transaction('trash').objectStore('trash').get(id));if(!row)return;const t=db.transaction(['trash','reports','draft'],'readwrite');t.objectStore('reports').put({id,updated:new Date().toISOString(),document:row.document});t.objectStore('trash').delete(id);t.objectStore('draft').delete('deleted-report:'+id);await transactionDone(t);await refreshHistory();await window.refreshTrash();notify('Formulário restaurado. Abra-o em Suas vistorias.')})};
  async function cloudStatus(){
   const drive=window.VistoriaGoogleDrive?.getState();
   $('cloudProtection').textContent=drive?.enabled?

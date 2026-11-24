@@ -8,7 +8,11 @@
  dialog.addEventListener('cancel',e=>{e.preventDefault();finish(false)});
  function ask(message){if(decision)return Promise.resolve(false);$('trashConfirmText').textContent=message;dialog.showModal();return new Promise(resolve=>{decision=resolve})}
  async function move(id){
-  if(!await ask('Mover esta vistoria e suas fotos para a lixeira? Você poderá restaurá-la.'))return;
+  if(window.VistoriaTeamTrash?.known(id)){
+   if(!await ask('Mover esta vistoria e suas fotos para a lixeira em todos os aparelhos da equipe? Você poderá restaurá-la como administrador.'))return;
+   return window.VistoriaTeamTrash.move(id);
+  }
+  if(!await ask('Mover esta vistoria e suas fotos para a lixeira deste aparelho? Você poderá restaurá-la.'))return;
   await guarded(async()=>{
    clearTimeout(saveTimer);saveTimer=null;
    const old=await requestResult(db.transaction('reports').objectStore('reports').get(id));

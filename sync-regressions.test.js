@@ -172,3 +172,13 @@ test('renovação transacional preserva ID, rascunho, originais e edição conco
  r=await run({otherDraft:true});assert.equal(r.result,false);assert.equal(r.draft.get('current').reportId,'outra');
  r=await run({active:false});assert.equal(r.result,true);assert.deepEqual(r.reports.get(id).document,next);assert.equal(r.filled,null);
 });
+
+test('lixeira da equipe só aplica remoção confirmada pelo servidor e preserva o mesmo ID',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/state\.report_id===row\.id&&state\.deleted_at/);
+ assert.match(src,/trash\.put\(\{\.\.\.latest,deletedAt:item\.deleted_at/);
+ assert.match(src,/draft\.put\(true,'deleted-report:'\+id\)/);
+ assert.match(src,/trash\.delete\(id\);draft\.delete\('deleted-report:'\+id\)/);
+ assert.match(file('trash-actions.js'),/VistoriaTeamTrash\.move\(id\)/);
+ assert.match(file('enhancements.js'),/VistoriaTeamTrash\.restore\(id\)/);
+});
