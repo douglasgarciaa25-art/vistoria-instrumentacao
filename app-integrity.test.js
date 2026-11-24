@@ -349,3 +349,20 @@ test('filtro de finalizadas preserva registros e classifica automaticamente pont
  assert.equal(JSON.stringify(mixed),original);
  assert.equal(JSON.stringify(docs),before);
 });
+
+test('conferência antes de salvar mostra valores atuais sem modificar campos ou perder zeros da OS',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ const body=source.slice(source.indexOf('function wizardReviewRows('),source.indexOf('function renderReview('));
+ const rows=new Function(body+';return wizardReviewRows;')();
+ const fields={tag:' C240 BA01 ',area:'Britagem',pointWorkOrder:'000123',status:'Corrigido',action:'<verificar>'};
+ const original=JSON.stringify(fields);
+ assert.deepEqual(rows(id=>fields[id]),[['TAG','C240 BA01'],['Área','Britagem'],['OS do ponto','000123'],['Situação','Corrigido'],['Ação','<verificar>']]);
+ assert.equal(JSON.stringify(fields),original);
+ fields.status='Pendente';fields.pointWorkOrder='';
+ assert.equal(rows(id=>fields[id])[2][1],'Não informado');
+ assert.equal(rows(id=>fields[id])[3][1],'Pendente');
+ assert.match(source,/review.hidden=current!==steps.length-1/);
+ assert.match(source,/dd.textContent=value/);
+ assert.match(source,/button.addEventListener\('click',\(\)=>setStep\(index,true\)\)/);
+ assert.match(source,/renderReview\(\);\s+back.disabled/);
+});
