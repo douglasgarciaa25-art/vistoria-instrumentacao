@@ -46,7 +46,7 @@ export default async function handler(req,res){
  if(bytes.length>3000000)return reply(200,{segmented:true,total:Math.ceil(bytes.length/750000),revision:selectedRevision,owner:old.owner_subject});
  return reply(200,{document,revision:selectedRevision,owner:old.owner_subject});
  }
- if(old&&old.owner_subject!==m.google_subject&&m.role!=='admin')return reply(403,{error:'Somente o autor ou administrador pode editar'});
+ // A equipe aprovada pode revisar; a criação mantém o autor autenticado e exclusão/restauração continuam administrativas.
  if(req.method==='DELETE'){
  if(m.role!=='admin')return reply(403,{error:'Somente administrador pode excluir'});
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
@@ -88,7 +88,7 @@ export default async function handler(req,res){
  catch(e){return reply(400,{error:'Não foi possível validar os identificadores dos pontos'});}
  const file=await createPrivateReport(id,doc);
  // CAS + auditoria do relatório e dos pontos numa única transação PostgreSQL.
- const revision=await teamDb('rpc/vistoria_commit_report',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_owner_subject:old?.owner_subject||m.google_subject,p_expected_revision:old?.revision||0,p_drive_file_id:file,p_events:events})});
+ const revision=await teamDb(old&&old.owner_subject!==m.google_subject&&m.role!=='admin'?'rpc/vistoria_commit_collaborative_report':'rpc/vistoria_commit_report',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_owner_subject:old?.owner_subject||m.google_subject,p_expected_revision:old?.revision||0,p_drive_file_id:file,p_events:events})});
  if(!Number.isSafeInteger(revision)||revision<1)return reply(409,{error:'Revisão alterada durante o envio'});
  if(req.body?.action==='upload-finish'){try{await teamDb('vistoria_upload_parts?owner_subject=eq.'+encodeURIComponent(m.google_subject)+'&report_id=eq.'+encodeURIComponent(id)+'&upload_id=eq.'+encodeURIComponent(req.body.upload_id),{method:'DELETE'});}catch{}}
  return reply(200,{revision});
