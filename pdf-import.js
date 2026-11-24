@@ -129,6 +129,38 @@ function vistoriaPdfLegacyFields(events,identity){
  return {meta,records};
 }
 
+// A lixeira é consultada por ID/referência exatos; nunca pelo título genérico.
+function vistoriaPdfTrashMatch(identity,id,src,rows){
+ const exact=rows.filter(r=>r.id===id);
+ if(exact.length===1)return exact[0];
+ const matches=rows.filter(r=>r.document?.meta?.sourcePdf===src||(identity.reference&&r.document?.meta?.number===identity.reference));
+ if(matches.length>1)throw Error('Mais de uma vistoria corresponde ao PDF na lixeira. Escolha o registro correto na lixeira.');
+ return matches[0]||null;
+}
+function vistoriaPdfTeamTrash(row,marker,known){
+ return !!(known||row?.teamTrash||marker&&typeof marker==='object');
+}
+// Chamado sob o bloqueio do importador, sem executar outro guarded() aninhado.
+async function vistoriaPdfRestoreLocal(id){
+ const tx=db.transaction(['reports','trash','draft'],'readwrite'),done=transactionDone(tx);
+ const reports=tx.objectStore('reports'),trash=tx.objectStore('trash'),draft=tx.objectStore('draft');
+ let restored=null;
+ const live=reports.get(id);
+ live.onsuccess=()=>{
+  if(live.result){restored=live.result;return;}
+  const old=trash.get(id);
+  old.onsuccess=()=>{
+   const row=old.result;if(!row)return;
+   const marker=draft.get('deleted-report:'+id);
+   marker.onsuccess=()=>{
+    if(vistoriaPdfTeamTrash(row,marker.result,window.VistoriaTeamTrash?.known(id)))return;
+    restored={id,updated:new Date().toISOString(),document:row.document};
+    reports.add(restored);trash.delete(id);draft.delete('deleted-report:'+id);
+   };
+  };
+ };
+ await done;return restored;
+}
 /* Keep the original PDF bytes with an editable continuation report. */
 (()=>{
  const extra=['sourcePdf','sourcePdfName','sourcePdfRecovered'];metaKeys.push(...extra);
@@ -175,23 +207,48 @@ function vistoriaPdfLegacyFields(events,identity){
    notify('PDF já importado. Continuação existente aberta, sem duplicar.');return;
   }
   const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());
-  const marker=await requestResult(db.transaction('draft').objectStore('draft').get('deleted-report:'+id));
-  if(marker||trashed.some(r=>r.id===id||r.document?.meta?.sourcePdf===src||(identity.reference&&r.document?.meta?.number===identity.reference)))throw Error('Esta vistoria ou PDF está na lixeira. Restaure o registro existente antes de importar.');
+  const trashedRow=vistoriaPdfTrashMatch(identity,id,src,trashed);
+  const restoreId=trashedRow?.id||id;
+  const marker=await requestResult(db.transaction('draft').objectStore('draft').get('deleted-report:'+restoreId));
+  const teamTrash=vistoriaPdfTeamTrash(trashedRow,marker,window.VistoriaTeamTrash?.known(restoreId));
+  if((trashedRow||marker)&&teamTrash){
+   if(!confirm('Esta vistoria está na lixeira da equipe. Restaurar o registro original em todos os aparelhos? É necessária uma conta de administrador.'))return;
+   if(!window.VistoriaTeamTrash?.restore)throw Error('Conecte-se à equipe para restaurar a vistoria.');
+   await window.VistoriaTeamTrash.restore(restoreId);
+   const restored=(await readRows()).find(r=>r.id===restoreId);
+   if(!restored){notify('Restauração solicitada à equipe. Sincronize a nuvem e importe novamente; nenhuma cópia foi criada.');return;}
+   reset();activeReportId=restored.id;fill(restored.document);window.openSavedPointEditor?.();
+   await persistCurrent();window.document.querySelector('[data-view="editor"]').click();
+   notify('Vistoria original restaurada da equipe, sem duplicar.');return;
+  }
+  if(trashedRow){
+   if(!confirm('Esta vistoria está na lixeira deste aparelho. Restaurar o registro existente, com todos os campos e fotos salvos?'))return;
+   const restored=await vistoriaPdfRestoreLocal(restoreId);
+   if(!restored)throw Error('A situação da lixeira mudou. Atualize a lista e tente novamente.');
+   reset();activeReportId=restored.id;fill(restored.document);window.openSavedPointEditor?.();
+   await persistCurrent();await window.refreshTrash?.();window.document.querySelector('[data-view="editor"]').click();
+   notify('Vistoria restaurada da lixeira com o mesmo ID.');return;
+  }
+  // Uma exclusão local definitiva pode ser revertida por importação explícita de
+  // um PDF que contenha dados recuperáveis, mas nunca por download automático.
+  const recoverDeleted=marker===true&&!teamTrash;
   let legacy=null;
   if(!packet&&identity.native&&!/^Vistorias reunidas/i.test(identity.title)&&!/^Vistorias-reunidas-/i.test(file.name)){try{legacy=vistoriaPdfLegacyFields(vistoriaPdfLegacyEvents(pdf),identity);}catch{}}
+  if(marker&&!recoverDeleted)throw Error('Registro excluído da equipe. Restaure pela nuvem antes de importar.');
+  if(recoverDeleted&&!packet&&!legacy)throw Error('O registro foi apagado e o PDF não contém campos recuperáveis. Nenhuma cópia foi criada.');
   const message=packet?'Restaurar todos os campos e fotos salvos neste PDF, com o ID original? A recuperação não será publicada automaticamente.':legacy?'Recuperar os campos reconhecidos neste PDF antigo? Confira todos os dados e fotos antes de compartilhar. O PDF original será preservado; campos não reconhecidos ficam vazios.':'Registro editável original não localizado. Importar o PDF como referência local? Não foi possível recuperar os campos automaticamente.';
-  if(!confirm(message))return;
+  if(!confirm((recoverDeleted?'A vistoria foi apagada da lixeira local. Recuperar pelo PDF usando o mesmo identificador?\n\n':'')+message))return;
   const meta=Object.fromEntries(metaKeys.map(k=>[k,'']));meta.title='Continuação — '+(identity.title||file.name.replace(/\.pdf$/i,''));meta.sourcePdf=src;meta.sourcePdfName=file.name;
   const record=Object.fromEntries(itemKeys.map(k=>[k,'']));Object.assign(record,{tag:'PDF IMPORTADO',area:'A confirmar',problem:'Relato inicial preservado no PDF original: '+file.name+'. Preencha a TAG e a área e registre novas descobertas em Andamento da análise.',priority:'Média',status:'Em acompanhamento',photos:[]});
   const document=packet?packet.document:legacy?{version:1,meta:{...meta,...legacy.meta,sourcePdfRecovered:'legacy'},records:legacy.records.map(r=>({...Object.fromEntries(itemKeys.map(k=>[k,''])),...r}))}:{version:1,meta,records:[record]};
   if(!valid(document))throw Error('Não foi possível validar os campos recuperados. O PDF original não foi modificado.');
-  window.VistoriaGoogleDrive?.markPdfLocal(id);
   const transaction=db.transaction(['reports','trash','draft'],'readwrite'),store=transaction.objectStore('reports');
   let inserted=false;
   const check=store.get(id);
-  check.onsuccess=()=>{if(check.result)return;const deleted=transaction.objectStore('draft').get('deleted-report:'+id);deleted.onsuccess=()=>{if(deleted.result)return;const old=transaction.objectStore('trash').get(id);old.onsuccess=()=>{if(old.result)return;store.add({id,updated:new Date().toISOString(),document});inserted=true;};};};
+  check.onsuccess=()=>{if(check.result)return;const draft=transaction.objectStore('draft');const deleted=draft.get('deleted-report:'+id);deleted.onsuccess=()=>{if(deleted.result&&!(recoverDeleted&&deleted.result===true&&!window.VistoriaTeamTrash?.known(id)))return;const old=transaction.objectStore('trash').get(id);old.onsuccess=()=>{if(old.result)return;store.add({id,updated:new Date().toISOString(),document});if(recoverDeleted)draft.delete('deleted-report:'+id);inserted=true;};};};
   await transactionDone(transaction);
   if(!inserted){notify('O registro mudou durante a importação. Atualize a lista e abra a vistoria existente.');await refreshHistory();return;}
+  window.VistoriaGoogleDrive?.markPdfLocal(id);
   reset();activeReportId=id;fill(document);window.openSavedPointEditor();await persistCurrent();
   window.document.querySelector('[data-view="editor"]').click();notify(packet?'Vistoria restaurada com campos e fotos originais.':legacy?'Campos do PDF antigo recuperados. Confira os dados e fotos com o original.':'PDF preservado como referência; preencha os campos não recuperados.');
  });input.value=''};
