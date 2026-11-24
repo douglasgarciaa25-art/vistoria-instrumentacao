@@ -77,7 +77,7 @@ test('sincronização da equipe permite envio de alteração em vistoria aberta 
  assert.match(src,/if\(!await activeMatchesSaved\(item\.report_id,hash\)\)\{teamDeferred\+\+;continue;\}/);
  assert.match(src,/reportRequest\('POST',item\.report_id,\{document:row\.document,revision:previous\.revision\}\)/);
  assert.match(src,/Sincronização parcial/);
- assert.match(src,/Atualizar da nuvem \(preservar cópia local\)/);
+ assert.match(src,/Atualizar da nuvem \(mesmo ID\)/);
  assert.match(src,/\(cópia local preservada\)/);
 });
 test('guarda de edição ativa bloqueia alterações não salvas mas não bloqueia relatório fechado',async()=>{
