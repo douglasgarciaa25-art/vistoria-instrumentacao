@@ -126,3 +126,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Mudança incremental: ao navegar entre etapas, o título da etapa recebe foco de teclado e leitor de tela, sem alterar os dados preenchidos.
 - Rolagem respeita a preferência do sistema por movimento reduzido; validação utiliza a mesma lista de campos essenciais exibida no contador.
 - Teste sintético de regressão incluído. Conferência visual e com leitor de tela Android real permanece pendente.
+
+## Assistente — conferência antes de salvar (24/11/2026)
+
+- Na última etapa, resumo dos valores atuais de TAG, área, OS do ponto, situação e ação, com atalhos para editar identificação, condição e ação.
+- Resumo somente de leitura, sem duplicar campos, alterar registros ou modificar salvamento, fotos e sincronização.
+- Teste de regressão para valores atuais, zeros iniciais de OS e texto exibido com segurança; homologação visual Android ainda pendente.

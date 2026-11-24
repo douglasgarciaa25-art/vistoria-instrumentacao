@@ -65,6 +65,12 @@
   '#form .wizard-footer p{grid-column:1/-1;grid-row:1;font-size:11px;line-height:1.45;color:#747082;margin:0}',
   '#form>.fields{row-gap:15px}',
   '#form .photo .thumbs{margin-top:12px}',
+  '#form .wizard-review[hidden]{display:none!important}',
+  '#form .wizard-review{margin:12px 0;padding:12px;border:1px solid #e5dfec;border-radius:12px;background:#faf8fc}',
+  '#form .wizard-review h4{margin:0 0 8px;font-size:14px;color:#321653}',
+  '#form .wizard-review dl{margin:0;display:grid;grid-template-columns:minmax(76px,auto) 1fr;gap:6px 12px;font-size:13px}',
+  '#form .wizard-review dt{font-weight:650;color:#59476b}#form .wizard-review dd{margin:0;overflow-wrap:anywhere}',
+  '#form .wizard-review .actions{margin:12px 0 0;gap:6px}#form .wizard-review button{min-height:44px;font-size:12px}',
   '@media(min-width:760px){#form .wizard-steps{grid-template-columns:repeat(3,minmax(0,1fr))}}',
   '#identification .wizard-meta-toggle{width:100%;text-align:left;justify-content:flex-start;line-height:1.4;font-size:12px;min-height:46px}',
   '#identification #meta{margin-top:15px}',
@@ -114,6 +120,25 @@
   +'<p id="wizardHint">As alterações permanecem no rascunho.</p>'
   +'<button type="button" id="wizardNext">Avançar</button>';
  form.append(footer);
+ const review=document.createElement('section');
+ review.className='wizard-review';review.hidden=true;review.setAttribute('aria-labelledby','wizardReviewHeading');
+ review.innerHTML='<h4 id="wizardReviewHeading">Confira antes de salvar</h4><dl></dl><div class="actions"></div>';
+ photo.before(review);
+ for(const [index,label] of [[0,'Editar identificação'],[1,'Editar condição'],[3,'Editar ação']]){
+  const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=label;
+  button.addEventListener('click',()=>setStep(index,true));review.querySelector('.actions').append(button);
+ }
+ function wizardReviewRows(read){
+  return [['TAG','tag'],['Área','area'],['OS do ponto','pointWorkOrder'],['Situação','status'],['Ação','action']].map(([label,id])=>[label,String(read(id)??'').trim()||'Não informado']);
+ }
+ function renderReview(){
+  review.hidden=current!==steps.length-1;
+  if(review.hidden)return;
+  const nodes=wizardReviewRows(id=>document.getElementById(id)?.value).flatMap(([label,value])=>{
+   const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;return [dt,dd];
+  });
+  review.querySelector('dl').replaceChildren(...nodes);
+ }
  const back=footer.querySelector('#wizardBack');
  const next=footer.querySelector('#wizardNext');
  const expanded=steps.map(()=>false);
@@ -212,6 +237,7 @@
   more.hidden=!hasOptions;
   more.setAttribute('aria-expanded',String(expanded[current]));
   more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+' opções: '+steps[current].more;
+  renderReview();
   back.disabled=current===0;
   next.hidden=current===steps.length-1;
   footer.querySelector('#wizardHint').textContent=current===steps.length-1
