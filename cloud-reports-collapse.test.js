@@ -25,7 +25,7 @@ test('cartões e operações não são excluídos da interface',()=>{
  assert.match(cloud,/button\(row,'Criar cópia local'/);
  assert.match(cloud,/button\(menu,'Histórico de revisões'/);
  assert.match(cloud,/button\(menu,'Enviar revisão em segundo plano'/);
- assert.match(cloud,/button\(menu,'Excluir da equipe'/);
+ assert.match(cloud,/button\(menu,'Mover para lixeira em todos os aparelhos'/);
  assert.match(cloud,/const osPanel=document\.createElement\('details'\)/);
  assert.match(cloud,/const techDetails=document\.createElement\('details'\)/);
 });

@@ -502,16 +502,22 @@
         if(!sessionOK()||!editorOK())return;
         // Não substituir o rascunho de outra vistoria aberto em outra aba.
         if(activeReportId===id&&current.result?.reportId&&current.result.reportId!==id)return;
-        if(archive)draft.put(archive,'team-conflict:'+account+':'+id+':'+crypto.randomUUID());
-        // A live server revision restores the same ID; preserve the trashed version separately.
-        const deleted=trash.get(id);
-        deleted.onsuccess=()=>{
-          if(deleted.result)draft.put(deleted.result,'team-trash-archive:'+account+':'+id+':'+crypto.randomUUID());
-          trash.delete(id);draft.delete('deleted-report:'+id);
+        const marker=draft.get('deleted-report:'+id);
+        marker.onsuccess=()=>{
+          // A legacy local deletion is never undone by a routine cloud download.
+          if(marker.result&&!canRestoreTeamTrash(marker.result,item,account))return;
+          if(!sessionOK()||!editorOK())return;
+          const deleted=trash.get(id);
+          deleted.onsuccess=()=>{
+            if(!sessionOK()||!editorOK())return;
+            if(archive)draft.put(archive,'team-conflict:'+account+':'+id+':'+crypto.randomUUID());
+            if(deleted.result)draft.put(deleted.result,'team-trash-archive:'+account+':'+id+':'+crypto.randomUUID());
+            trash.delete(id);draft.delete('deleted-report:'+id);
+            store.put({id,updated:item.updated_at||new Date().toISOString(),document});
+            if(current.result?.reportId===id||activeReportId===id)draft.put({...structuredClone(document),reportId:id},'current');
+            changed=true;
+          };
         };
-        store.put({id,updated:item.updated_at||new Date().toISOString(),document});
-        if(current.result?.reportId===id||activeReportId===id)draft.put({...structuredClone(document),reportId:id},'current');
-        changed=true;
       };
     };
     await done;
@@ -522,6 +528,22 @@
       const saved=$('saveState');if(saved)saved.textContent='Vistoria atualizada automaticamente da nuvem.';
     }
     return true;
+  }
+  function canRestoreTeamTrash(marker,item,account){
+    return !!marker&&marker.account===account&&Number.isSafeInteger(marker.revision)&&Number(item.revision)>marker.revision;
+  }
+  async function markTeamTrash(id,account,revision){
+    const tx=db.transaction(['reports','trash','draft'],'readwrite'),done=txDone(tx);
+    const store=tx.objectStore('reports'),trash=tx.objectStore('trash'),draft=tx.objectStore('draft');
+    const current=store.get(id);
+    current.onsuccess=()=>{
+      // Existing live records are moved atomically by applyTeamTrash.
+      if(current.result)return;
+      draft.put({account,revision:Number(revision)},'deleted-report:'+id);
+      const old=trash.get(id);
+      old.onsuccess=()=>{if(old.result)trash.put({...old.result,teamTrash:true,teamRevision:Number(revision)});};
+    };
+    await done;
   }
   // Never infer deletion from a missing listing: require an authenticated tombstone.
   async function applyTeamTrash(item,row,member){
@@ -543,7 +565,7 @@
         if(!sessionOK()||!editorOK())return;
         if(current.result?.reportId===id&&JSON.stringify(current.result.records)!==JSON.stringify(latest.document.records))return;
         trash.put({...latest,deletedAt:item.deleted_at,teamTrash:true,teamRevision:item.revision});
-        draft.put(true,'deleted-report:'+id);
+        draft.put({account,revision:Number(item.revision)},'deleted-report:'+id);
         store.delete(id);
         if(current.result?.reportId===id)draft.delete('current');
         changed=true;closed=activeReportId===id;
@@ -563,8 +585,9 @@
       if(member?.status!=='approved'||member.role!=='admin')throw Error('Somente o administrador pode mover uma vistoria compartilhada para a lixeira da equipe.');
       await persistCurrent();
       const state=await teamState(id);
-      if(!state.deleted_at)await reportRequest('DELETE',id,{revision:state.revision});
-      await syncTeam();await showTeam();
+      const result=state.deleted_at?state:await reportRequest('DELETE',id,{revision:state.revision});
+      await markTeamTrash(id,member.google_subject,result.revision);
+      await syncTeam();await showTeam();await window.refreshTrash?.();
       notify('Vistoria movida para a lixeira da equipe. Os aparelhos conectados receberão a alteração.');
     },
     async restore(id){
@@ -573,7 +596,9 @@
       if(member?.status!=='approved'||member.role!=='admin')throw Error('Somente o administrador pode restaurar uma vistoria compartilhada.');
       const state=await teamState(id);
       if(state.deleted_at)await reportRequest('POST',id,{action:'restore',revision:state.revision});
-      await syncTeam();await showTeam();
+      const tx=db.transaction('draft','readwrite'),done=txDone(tx);
+      tx.objectStore('draft').delete('deleted-report:'+id);await done;
+      await syncTeam();await showTeam();await window.refreshTrash?.();
       notify('Restauração da equipe confirmada. A vistoria retornará com o mesmo ID.');
     }
   };
@@ -617,6 +642,12 @@
       // A revisão recebida deve atualizar também a vistoria que está aberta.
       for(const item of remote){
         if(queueMember?.google_subject!==member.google_subject||!validToken())break;
+        const marker=await idbReq(db.transaction('draft').objectStore('draft').get('deleted-report:'+item.report_id));
+        if(marker&&!canRestoreTeamTrash(marker,item,member.google_subject)){
+          teamDeferred++;
+          conflictFields.push(item.report_id+': na lixeira local; confirme a remoção da equipe ou restaure manualmente');
+          continue;
+        }
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
         const localHash=row?await digest(row.document):null;

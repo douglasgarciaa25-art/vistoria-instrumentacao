@@ -159,7 +159,7 @@ test('renovação transacional preserva ID, rascunho, originais e edição conco
      if(changed)reports.set(id,{id,document:{meta:{title:'Outra edição'},records:[]}});
      return tx;
    }};
-   const context={db,txDone:t=>t.promise,activeReportId:active?id:'outra',accessToken:'token',queueMember:member,validToken:()=>true,saveTimer:dirty?1:null,historyBusy:false,busy:0,historyReady:true,data:()=>old,digest:async d=>JSON.stringify(d),activeMatchesSaved:async()=>!dirty,persistQueue:Promise.resolve(),reset(){},fill(d){filled=d;},$:()=>null,structuredClone,crypto:{randomUUID:()=> 'archive-001'}};
+   const context={db,txDone:t=>t.promise,activeReportId:active?id:'outra',accessToken:'token',queueMember:member,validToken:()=>true,saveTimer:dirty?1:null,historyBusy:false,busy:0,historyReady:true,data:()=>old,digest:async d=>JSON.stringify(d),activeMatchesSaved:async()=>!dirty,persistQueue:Promise.resolve(),reset(){},fill(d){filled=d;},$:()=>null,structuredClone,crypto:{randomUUID:()=> 'archive-001'},canRestoreTeamTrash:()=>false};
    const replace=vm.runInNewContext('('+found[0].trim()+')',context);
    const result=await replace({report_id:id,updated_at:'2026-11-24T00:00:00Z'},row,next,member,archive);
    return {result,reports,draft,filled};
@@ -177,8 +177,19 @@ test('lixeira da equipe só aplica remoção confirmada pelo servidor e preserva
  const src=file('google-drive-sync.js');
  assert.match(src,/state\.report_id===row\.id&&state\.deleted_at/);
  assert.match(src,/trash\.put\(\{\.\.\.latest,deletedAt:item\.deleted_at/);
- assert.match(src,/draft\.put\(true,'deleted-report:'\+id\)/);
+ assert.match(src,/draft\.put\(\{account,revision:Number\(item\.revision\)\},'deleted-report:'\+id\)/);
  assert.match(src,/trash\.delete\(id\);draft\.delete\('deleted-report:'\+id\)/);
  assert.match(file('trash-actions.js'),/VistoriaTeamTrash\.move\(id\)/);
  assert.match(file('enhancements.js'),/VistoriaTeamTrash\.restore\(id\)/);
+});
+
+test('uma exclusão local antiga não é revertida por download automático',async()=>{
+ const vm=await import('node:vm'),src=file('google-drive-sync.js');
+ const fn=src.match(/  function canRestoreTeamTrash\(marker,item,account\)\{[\s\S]*?\n  \}/);
+ const canRestore=vm.runInNewContext('('+fn[0].trim()+')');
+ assert.equal(canRestore(true,{revision:3},'admin'),false);
+ assert.equal(canRestore({account:'admin',revision:3},{revision:3},'admin'),false);
+ assert.equal(canRestore({account:'admin',revision:3},{revision:4},'other'),false);
+ assert.equal(canRestore({account:'admin',revision:3},{revision:4},'admin'),true);
+ assert.match(src,/if\(marker.result&&!canRestoreTeamTrash\(marker.result,item,account\)\)return/);
 });
