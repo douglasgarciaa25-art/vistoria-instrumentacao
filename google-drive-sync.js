@@ -222,12 +222,12 @@
     } catch(e) { logError(e); }
   }
   function validate(row) { return typeof row?.id==='string' && !!row.document?.meta && Array.isArray(row.document.records) && (typeof valid!=='function'||valid(row.document)) && (typeof checkPending!=='function'||checkPending(row.document)); }
-  async function sync() {
+  async function sync(receiveOnly=false) {
     if (!enabled || running) return;
     if (!navigator.onLine) { display('Offline: vistorias preservadas no aparelho.'); return; }
     if (!validToken()) { enabled=false; $('gdrive-connect').textContent='Reconectar Google Drive'; display('Autorização expirada. Toque em Reconectar; seus registros continuam salvos.',true); return; }
     if (typeof historyReady==='undefined'||!historyReady) return;
-    if (historyBusy || busy) { display('Aguardando conclusão do preenchimento antes de sincronizar.'); return; }
+    if ((historyBusy || busy)&&receiveOnly!==true) { display('Aguardando conclusão do preenchimento antes de sincronizar.'); return; }
     running=true;
     let sent=0,received=0,conflicts=0;
     try {
@@ -258,6 +258,7 @@
         await putReport({id,updated:packet.savedAt||new Date().toISOString(),document:packet.document});
         syncMap[id]=remote.appProperties.hash||await digest(packet.document);saveMap();received++;
       }
+      if(receiveOnly===true){display('Busca de originais no Drive concluída.');return;}
       local=await reports();
       for (const row of local) {
         if (!validate(row)||isTeamReport(row.id)) continue;
@@ -624,7 +625,7 @@
       if(status)status.textContent=archived?'Atualizada · versão local anterior preservada para revisão':'Local atualizado · Rev. '+revision;
     }
   }
-  async function syncTeam(){
+  async function syncTeam(receiveOnly=false){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
     let teamSent=0,teamReceived=0,teamConflicts=0,teamDeferred=0;
@@ -665,6 +666,7 @@
         }
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
+        if(receiveOnly===true&&row)continue;
         const localHash=row?await digest(row.document):null;
         if(row&&previous?.revision===item.revision&&localHash===previous.hash)continue;
         // Uma fila ainda em transmissão pode carregar a revisão anterior: aguardar recibo.
@@ -735,6 +737,7 @@
         markTeamRenewed(item.report_id,d.revision);
         if(typeof refreshHistory==='function')await refreshHistory();
       }
+      if(receiveOnly===true){await refreshHistory();return;}
       if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
         const remoteIds=new Set(remote.map(x=>x.report_id));
         for(const item of local){
@@ -1161,5 +1164,5 @@
     if(!response.ok)throw Error(payload.error||'Revisão técnica indisponível no momento.');
     return payload;
   }
-  window.VistoriaGoogleDrive={sync,disconnect,reviewTechnical,getState:()=>({enabled,folderId,lastStatus,hadErrors})};
+  window.VistoriaGoogleDrive={sync,disconnect,reviewTechnical,markPdfLocal:rememberLocalCopy,receiveForPdf:async()=>{await syncTeam(true);await sync(true);},getState:()=>({enabled,folderId,lastStatus,hadErrors})};
 })();

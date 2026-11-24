@@ -19,13 +19,18 @@ function vistoriaPdfMatch(identity,rows){
  const matches=rows.filter(r=>!r.document?.meta?.sourcePdf&&normalize(r.document?.meta?.title)===title);
  return matches.length===1?matches[0]:null;
 }
+async function vistoriaPdfRecoveryId(identity,bytes){
+ const key=identity.native&&identity.reference?new TextEncoder().encode('vistoria-reference:'+identity.reference):bytes;
+ const hash=new Uint8Array(await crypto.subtle.digest('SHA-256',key));
+ return 'pdf-'+Array.from(hash,b=>b.toString(16).padStart(2,'0')).join('');
+}
 /* Keep the original PDF bytes with an editable continuation report. */
 (()=>{
  const extra=['sourcePdf','sourcePdfName'];metaKeys.push(...extra);
  for(const key of extra){const input=document.createElement('input');input.type='hidden';input.id=key;($('identification')||$('meta')).append(input)}
  const label=document.createElement('label');label.className='filebtn secondary';label.textContent='Importar vistoria em PDF';
  const input=document.createElement('input');input.type='file';input.accept='.pdf,application/pdf';input.hidden=true;input.id='importInspectionPdf';label.append(input);$('historySearch').before(label);
- const note=document.createElement('p');note.className='muted';note.textContent='PDF nativo: reabre a vistoria salva, sem duplicar. Sincronize a nuvem ou restaure a cópia JSON se ela não estiver neste dispositivo. PDF externo: preservado como original separado, sem converter textos e fotos.';label.after(note);
+ const note=document.createElement('p');note.className='muted';note.textContent='O aplicativo procura a vistoria original no aparelho e na nuvem. Se não encontrar, você poderá preservar o PDF e criar uma continuação local, sem substituir a vistoria original nem publicar outra automaticamente.';label.after(note);
  const source=document.createElement('div');source.className='photo';source.hidden=true;
  const name=document.createElement('p');const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Baixar PDF original';source.append(name,button);($('identification')||$('meta')).append(source);
  function update(){source.hidden=!$('sourcePdf').value;name.textContent='Documento original: '+$('sourcePdfName').value}
@@ -40,21 +45,42 @@ function vistoriaPdfMatch(identity,rows){
   if(!pdf.getPageCount())throw Error('O PDF não contém páginas.');
   await persistCurrent();
   const identity=vistoriaPdfIdentity(pdf,file.name);
-  const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());
-  const existing=vistoriaPdfMatch(identity,rows);
+  const readRows=()=>requestResult(db.transaction('reports').objectStore('reports').getAll());
+  let rows=await readRows(),existing=vistoriaPdfMatch(identity,rows);
+  if(!existing&&identity.native&&window.VistoriaGoogleDrive?.receiveForPdf){
+   notify('Procurando a vistoria original na nuvem…');
+   await window.VistoriaGoogleDrive.receiveForPdf();
+   rows=await readRows();existing=vistoriaPdfMatch(identity,rows);
+  }
   if(existing){
    if(!identity.reference&&!confirm('Existe uma vistoria com este título: '+(existing.document.meta.number||existing.document.meta.title)+'. Abrir o registro salvo em vez de importar uma cópia?'))return;
    reset();activeReportId=existing.id;fill(existing.document);window.openSavedPointEditor?.();
    window.document.querySelector('[data-view="editor"]').click();
    notify('Vistoria existente aberta. O PDF não criou outro registro.');return;
   }
-  if(identity.native)throw Error('PDF de vistoria sem registro original identificado. Sincronize a nuvem ou restaure a cópia editável JSON e abra a vistoria existente. Nenhuma duplicata foi criada.');
-  if(!confirm('Este PDF não tem identificação de vistoria salva. Importar como documento externo separado? O original ficará disponível para download, sem ser concatenado ao relatório.'))return;
+  const id=await vistoriaPdfRecoveryId(identity,bytes);
   const src=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Falha na leitura do arquivo.'));reader.readAsDataURL(new Blob([bytes],{type:'application/pdf'}))});
-  const meta=Object.fromEntries(metaKeys.map(k=>[k,'']));meta.title='Continuação — '+file.name.replace(/\.pdf$/i,'');meta.sourcePdf=src;meta.sourcePdfName=file.name;
+  const recovered=rows.find(r=>r.id===id||r.document?.meta?.sourcePdf===src);
+  if(recovered){
+   reset();activeReportId=recovered.id;fill(recovered.document);window.openSavedPointEditor?.();
+   window.document.querySelector('[data-view="editor"]').click();
+   notify('PDF já importado. Continuação existente aberta, sem duplicar.');return;
+  }
+  const trashed=await requestResult(db.transaction('trash').objectStore('trash').getAll());
+  const marker=await requestResult(db.transaction('draft').objectStore('draft').get('deleted-report:'+id));
+  if(marker||trashed.some(r=>r.id===id||r.document?.meta?.sourcePdf===src||(identity.reference&&r.document?.meta?.number===identity.reference)))throw Error('Esta vistoria ou PDF está na lixeira. Restaure o registro existente antes de importar.');
+  const message=identity.native?'Registro editável original não localizado. Deseja preservar este PDF e criar uma continuação somente local? Os pontos e fotos anteriores permanecerão no PDF original; não serão convertidos em campos editáveis. A continuação não será publicada automaticamente.':'Importar como documento externo separado? O original ficará disponível para download, sem ser concatenado ao relatório. A continuação será inicialmente local.';
+  if(!confirm(message))return;
+  const meta=Object.fromEntries(metaKeys.map(k=>[k,'']));meta.title='Continuação — '+(identity.title&&!/^Continua[cç][aã]o\s*[-—]/i.test(identity.title)?identity.title:file.name.replace(/\.pdf$/i,''));meta.sourcePdf=src;meta.sourcePdfName=file.name;
   const record=Object.fromEntries(itemKeys.map(k=>[k,'']));Object.assign(record,{tag:'PDF IMPORTADO',area:'A confirmar',problem:'Relato inicial preservado no PDF original: '+file.name+'. Preencha a TAG e a área e registre novas descobertas em Andamento da análise.',priority:'Média',status:'Em acompanhamento',photos:[]});
-  const document={version:1,meta,records:[record]},id=newId();
-  const transaction=db.transaction('reports','readwrite');transaction.objectStore('reports').put({id,updated:new Date().toISOString(),document});await transactionDone(transaction);
+  const document={version:1,meta,records:[record]};
+  window.VistoriaGoogleDrive?.markPdfLocal(id);
+  const transaction=db.transaction(['reports','trash','draft'],'readwrite'),store=transaction.objectStore('reports');
+  let inserted=false;
+  const check=store.get(id);
+  check.onsuccess=()=>{if(check.result)return;const deleted=transaction.objectStore('draft').get('deleted-report:'+id);deleted.onsuccess=()=>{if(deleted.result)return;const old=transaction.objectStore('trash').get(id);old.onsuccess=()=>{if(old.result)return;store.add({id,updated:new Date().toISOString(),document});inserted=true;};};};
+  await transactionDone(transaction);
+  if(!inserted){notify('O registro mudou durante a importação. Atualize a lista e abra a vistoria existente.');await refreshHistory();return;}
   reset();activeReportId=id;fill(document);window.openSavedPointEditor();await persistCurrent();
   window.document.querySelector('[data-view="editor"]').click();notify('PDF importado. Informe a TAG, a área e a data da vistoria; acrescente os novos andamentos.');
  });input.value=''};
