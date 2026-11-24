@@ -1,5 +1,5 @@
 // Conciliação conservadora de três vias. Nunca publica ou elimina dados em conflito.
-export function mergeReport(base, local, remote) {
+export function mergeReport(base, local, remote, resolutions = new Map()) {
  const missing=Symbol('missing'), conflicts=[];
  const isObject=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
  const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k)?o[k]:missing;
@@ -34,7 +34,13 @@ export function mergeReport(base, local, remote) {
    for(const k of keys){const v=walk(own(b,k),own(l,k),own(r,k),[...path,k]);if(v!==missing)entries.push([k,v]);}
    return Object.fromEntries(entries);
   }
-  return fail(path,l===missing||r===missing?'delete-edit':'same-field');
+  const reason=l===missing||r===missing?'delete-edit':'same-field';
+  const choice=resolutions.get(JSON.stringify(path));
+  if(choice==='local')return l;
+  if(choice==='remote')return r;
+  const describe=v=>v===missing?'Ausente':typeof v==='string'&&!/^data:|^blob:/.test(v)?v.slice(0,500):Array.isArray(v)?v.length+' item(ns)':isObject(v)?'Registro':typeof v==='string'?'Anexo':String(v);
+  conflicts.push({path:[...path],reason,local:describe(l),remote:describe(r)});
+  return missing;
  }
  if(![base,local,remote].every(d=>isObject(d)&&isObject(d.meta)&&ids(d.records)))return {document:null,conflicts:[{path:[],reason:'invalid-base-or-point-identity'}]};
  const document=walk(base,local,remote,[]);
