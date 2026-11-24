@@ -1,5 +1,5 @@
 /* Relatório A4 com paginação, fotos proporcionais e cabeçalho em todas as páginas. */
-async function exportReportDocuments(documents){
+async function exportReportDocuments(documents,ids=[]){
  const button=$('pdf');button.disabled=true;button.textContent='Preparando relatório…';
  try{
  const {PDFDocument,StandardFonts,rgb,degrees}=PDFLib,doc=await PDFDocument.create();
@@ -38,7 +38,7 @@ async function exportReportDocuments(documents){
  if(m.sourcePdf){
   try{
    const original=await PDFDocument.load(m.sourcePdf);
-   if(vistoriaPdfIdentity(original,m.sourcePdfName).native)throw Error('Vistoria importada anteriormente como continuação: reabra a vistoria original e transfira os andamentos antes de exportar. O original permanece salvo.');
+   if(vistoriaPdfIdentity(original,m.sourcePdfName).native&&m.sourcePdfRecovered!=='legacy')throw Error('Vistoria importada anteriormente como continuação: reabra a vistoria original e transfira os andamentos antes de exportar. O original permanece salvo.');
    // An external source is retained in the editable record, not appended to its PDF.
   }catch(e){if(String(e.message).startsWith('Vistoria importada anteriormente'))throw e;sourcePdfFailed=true;sourcePdfWarnings++}
  }
@@ -85,6 +85,7 @@ async function exportReportDocuments(documents){
  doc.setTitle(clean(documents.length>1?'Vistorias reunidas - '+documents.length+' relatórios':first.title||'Relatório de vistoria técnica'));
  doc.setSubject('VISTORIA-REF-V1:'+encodeURIComponent(documents.length===1?String(first.number||''):''));
  doc.setAuthor(clean(documents.length>1?'Instrumentação e automação':first.author||''));
+ if(documents.length===1)vistoriaPdfEmbed(doc,documents[0],ids[0]);
  download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify(sourcePdfWarnings?'PDF gerado com aviso: '+sourcePdfWarnings+' arquivo(s) de origem indisponível(is). Revise antes do envio.':'PDF gerado. Confira os downloads.');
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };
@@ -102,5 +103,5 @@ function reportConsistencyWarnings(document){
  }
  return warnings;
 }
-$('pdf').onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();const document=structuredClone(data());const warnings=reportConsistencyWarnings(document);if(warnings.length&&!window.confirm('Revisão técnica antes de gerar PDF:\n\n'+warnings.join('\n')+'\n\nOs dados originais serão preservados. Deseja gerar mesmo assim?'))return;return exportReportDocuments([document])});
-$('pdfAll').onclick=()=>guarded(async()=>{await persistCurrent();const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());const docs=rows.sort((a,b)=>(a.document.meta.date||'').localeCompare(b.document.meta.date||'')||a.updated.localeCompare(b.updated)).map(r=>r.document);if(!docs.length)return notify('Nenhum formulário salvo para exportar.');const b=$('pdfAll');b.disabled=true;b.textContent='Gerando PDF completo…';try{await exportReportDocuments(docs)}finally{b.disabled=false;b.textContent='Baixar todos em um PDF'}});
+$('pdf').onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();const document=structuredClone(data());const warnings=reportConsistencyWarnings(document);if(warnings.length&&!window.confirm('Revisão técnica antes de gerar PDF:\n\n'+warnings.join('\n')+'\n\nOs dados originais serão preservados. Deseja gerar mesmo assim?'))return;return exportReportDocuments([document],[activeReportId])});
+$('pdfAll').onclick=()=>guarded(async()=>{await persistCurrent();const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());const sorted=rows.sort((a,b)=>(a.document.meta.date||'').localeCompare(b.document.meta.date||'')||a.updated.localeCompare(b.updated)),docs=sorted.map(r=>r.document);if(!docs.length)return notify('Nenhum formulário salvo para exportar.');const b=$('pdfAll');b.disabled=true;b.textContent='Gerando PDF completo…';try{await exportReportDocuments(docs,sorted.map(r=>r.id))}finally{b.disabled=false;b.textContent='Baixar todos em um PDF'}});

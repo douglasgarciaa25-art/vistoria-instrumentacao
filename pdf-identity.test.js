@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const src=readFileSync('pdf-import.js','utf8');
-const ctx=vm.createContext({crypto:globalThis.crypto,TextEncoder});
+const ctx=vm.createContext({crypto:globalThis.crypto,TextEncoder,TextDecoder,structuredClone,Uint8Array,btoa});
 vm.runInContext(src.slice(0,src.indexOf('/* Keep the original')),ctx);
 const pdf=(title,subject='')=>({getTitle:()=>title,getSubject:()=>subject});
 const row=(id,title,number,sourcePdf='')=>({id,document:{meta:{title,number,sourcePdf}}});
@@ -48,4 +48,24 @@ test('busca automática consulta nuvem antes de oferecer continuação e evita p
  assert.match(src,/deleted-report:/);
  assert.match(sync,/receiveForPdf:async\(\)=>\{await syncTeam\(true\);await sync\(true\);\}/);
  assert.match(sync,/if\(receiveOnly===true\)\{await refreshHistory\(\);return;\}/);
+});
+
+test('campos de PDF legado recuperam cabeçalho, pontos, andamento e conclusão',()=>{
+ const events=[{size:16,text:'Relatório técnico'},{size:7,text:'DATA DA VISTORIA'},{size:10,text:'19/11/2026'},{size:7,text:'CÓDIGO / REFERÊNCIA'},{size:10,text:'RV-2026-ABC'},{size:8,text:'OBJETIVO DO LEVANTAMENTO'},{size:10,text:'Avaliar os mancais'},{size:12,text:'2.1 Levantamento de campo'},{size:14,text:'MC4510 | Moagem'},{size:9,text:'PRIORIDADE: ALTA'},{size:7,text:'SITUAÇÃO'},{size:10,text:'Em acompanhamento'},{size:8,text:'CONDIÇÃO ENCONTRADA'},{size:10,text:'Oscilação de sinal'},{size:8,text:'ANDAMENTO DA ANÁLISE'},{size:10,text:'Teste na remota'},{size:8,text:'ANDAMENTO DA ANÁLISE (CONT.)'},{size:10,text:'Sensor validado'},{photo:'data:image/jpeg;base64,AAAA'},{size:9,text:'Foto 1.1 - Sensor'},{size:12,text:'3. Conclusão / observações finais'},{size:10,text:'Verificar cabo'},{size:12,text:'Controle do documento'},{size:7,text:'APROVAÇÃO REGISTRADA'},{size:10,text:'Responsável'}];
+ const d=ctx.vistoriaPdfLegacyFields(events,{title:'',reference:''});
+ assert.equal(d.meta.date,'2026-11-19');assert.equal(d.meta.objective,'Avaliar os mancais');
+ assert.equal(d.records[0].tag,'MC4510');assert.equal(d.records[0].area,'Moagem');assert.equal(d.records[0].priority,'Alta');
+ assert.equal(d.records[0].analysisHistory,'Teste na remota Sensor validado');assert.equal(d.records[0].photos[0].caption,'Sensor');
+ assert.equal(d.meta.conclusion,'Verificar cabo');assert.equal(d.meta.approver,'Responsável');
+});
+test('PDF editável inclui fotografia, referência e todos os campos de uma vistoria completa',async()=>{
+ vm.runInContext(readFileSync('pdf-lib.min.js','utf8'),ctx);
+ const result=await vm.runInContext("(async()=>{const p=await PDFLib.PDFDocument.create();p.addPage();const original={version:1,meta:{number:'RV-2026-ABC',title:'Teste',author:'Técnico'},records:[{tag:'MC4510',analysisHistory:'teste',photos:[{src:'data:image/jpeg;base64,AAAA',caption:'Sensor'}]}]};vistoriaPdfEmbed(p,original,'original-id');const restored=vistoriaPdfReadEditable(await PDFLib.PDFDocument.load(await p.save()));return {original,restored};})()",ctx);
+ assert.equal(result.restored.id,'original-id');assert.equal(JSON.stringify(result.original),JSON.stringify(result.restored.document));
+});
+test('exportação individual completa associa o ID real, sem confundir PDF de ponto',()=>{
+ const exporter=readFileSync('pdf-export.js','utf8');
+ assert.match(exporter,/vistoriaPdfEmbed\(doc,documents\[0\],ids\[0\]\)/);
+ assert.match(exporter,/exportReportDocuments\(\[document\],\[activeReportId\]\)/);
+ assert.match(src,/document\.exportPointNumber\)return/);
 });
