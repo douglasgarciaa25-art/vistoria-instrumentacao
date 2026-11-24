@@ -220,3 +220,32 @@ test('cópias locais não são confundidas com lixeira compartilhada',()=>{
  assert.match(src,/copies\.delete\(item\.report_id\)/);
  assert.match(file('trash-actions.js'),/window\.VistoriaLocalTrash=\{move:moveLocal\}/);
 });
+
+test('status geral distingue pendências, acompanhamento, pronta e finalizada',async()=>{
+ const vm=await import('node:vm'),src=file('history.js'),code=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('function refreshVistoriaCloudStatuses'));
+ const ctx=vm.createContext({});vm.runInContext(code,ctx);
+ const d=(statuses,finalizedAt='',pending)=>({meta:{finalizedAt},records:statuses.map(status=>({status})),pending});
+ assert.equal(ctx.vistoriaReportStatus(d(['Pendente','Corrigido'],'2026-11-24')).kind,'pending');
+ assert.equal(ctx.vistoriaReportStatus(d(['Em acompanhamento','Corrigido'])).kind,'progress');
+ assert.equal(ctx.vistoriaReportStatus(d(['Corrigido','Sem pendência'])).label,'Pronta para finalizar');
+ const done=d(['Corrigido','Sem pendência'],'2026-11-24');
+ assert.equal(ctx.vistoriaReportStatus(done).kind,'done');
+ assert.equal(ctx.vistoriaVisible(done,false),false);
+ assert.equal(ctx.vistoriaVisible(done,true),true);
+ assert.equal(ctx.vistoriaStatusAction(done),'Reabrir vistoria');
+ assert.equal(ctx.vistoriaVisible(d(['Pendente'],'2026-11-24'),false),true);
+ assert.equal(ctx.vistoriaVisible(d(['Corrigido'],'2026-11-24',{editing:null,fields:{tag:'novo'}}),false),true);
+ assert.equal(ctx.vistoriaReportStatus(undefined).kind,'unknown');
+});
+test('finalização é persistida no mesmo relatório, sem alterar pontos, e filtros são locais',()=>{
+ const src=file('history.js'),cloud=file('google-drive-sync.js'),html=file('index.html');
+ assert.match(src,/meta:\{\.\.\.latest\.document\.meta,finalizedAt:stamp\}/);
+ assert.match(src,/store\.put\(\{\.\.\.latest,updated:new Date\(\)\.toISOString\(\),document:next\}\)/);
+ assert.match(src,/if\(!reopen&&\(!vistoriaAllPointsClosed/);
+ assert.match(src,/showFinalizedReports/);
+ assert.match(src,/await refreshHistory\(\);savedEvent\(\)/);
+ assert.match(cloud,/vistoriaVisible\(current,showFinalized\.checked\)/);
+ assert.match(cloud,/finalize\.onclick=\(\)=>setVistoriaFinalized\(item\.report_id\)/);
+ assert.match(html,/"finalizedAt"\]\.includes\(k\)/);
+ assert.match(file('layout.css'),/\.vistoria-status-dot\{/);
+});

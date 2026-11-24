@@ -61,3 +61,16 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 
 /* Modo campo: ações do visualizador de fotos com leitura e toque confortáveis. */
 @media(max-width:750px){.photo-viewer button{min-height:48px;font-size:14px;line-height:1.4;padding:12px 14px}.photo-viewer .actions{gap:10px}.photo-viewer .actions button{white-space:normal}}
+
+/* Situação geral: bolinha compacta, texto legível e filtro sem exclusão de dados. */
+.vistoria-status{display:inline-flex;align-items:center;gap:7px;width:max-content;max-width:100%;font-size:13px;font-weight:650;line-height:1.4;color:#53505b;margin:3px 0 5px}
+.vistoria-status-dot{display:inline-block;flex:0 0 11px;width:11px;height:11px;border-radius:50%;background:#85818d}
+.vistoria-status[data-status-kind="pending"]{color:#a22424}
+.vistoria-status[data-status-kind="pending"] .vistoria-status-dot{background:#d53737}
+.vistoria-status[data-status-kind="progress"]{color:#785400}
+.vistoria-status[data-status-kind="progress"] .vistoria-status-dot{background:#e5b21b;border:1px solid #a77b00;box-sizing:border-box}
+.vistoria-status[data-status-kind="done"]{color:#216739}
+.vistoria-status[data-status-kind="done"] .vistoria-status-dot{background:#279747}
+.vistoria-finalized-filter{display:flex!important;align-items:center;gap:8px;font-size:14px;font-weight:650;color:#51436a;min-height:40px;margin:4px 0 8px}
+.vistoria-finalized-filter input[type=checkbox]{width:18px!important;height:18px;min-height:0;margin:0;flex:none;accent-color:#351463}
+.vistoria-finalize-action{white-space:normal;min-height:44px}
