@@ -37,3 +37,18 @@ test('painel recolhível é responsivo e atualizado também offline',()=>{
  assert.match(sw,/'\/cloud-dashboard\.css'/);
  assert.match(sw,/'\/google-drive-sync\.js'/);
 });
+test('pastas e menus da nuvem iniciam fechados e preservam estado na atualização',()=>{
+ assert.match(cloud,/d\.open=disclosureState\.areas\.get\(key\)===true/);
+ assert.match(cloud,/menu\.open=disclosureState\.menus\.get\(item\.report_id\)===true/);
+ assert.match(cloud,/captureCloudReportDisclosures\(target\);const box=/);
+ assert.match(cloud,/listDisclosure\.open=disclosureState\.list/);
+ assert.doesNotMatch(cloud,/oldGroups\.get\(key\)!==false/);
+ const snippet=cloud.slice(cloud.indexOf('const cloudReportDisclosureStates=new Map();'),cloud.indexOf('async function showReports(member,box,status)'));
+ const helpers=new Function(snippet+';return {cloudDisclosureState,captureCloudReportDisclosures};')();
+ const a=helpers.cloudDisclosureState('A');
+ assert.equal(a.list,false);assert.equal(a.areas.get('britagem')===true,false);
+ const section={dataset:{disclosureSubject:'A'},querySelector:()=>({open:true}),querySelectorAll:selector=>selector.includes('data-cloud-area')?[{dataset:{cloudArea:'britagem'},open:true},{dataset:{cloudArea:'moagem'},open:false}]:[{dataset:{reportId:'r1'},querySelector:()=>({open:true})}]};
+ helpers.captureCloudReportDisclosures({querySelector:()=>section});
+ assert.equal(a.list,true);assert.equal(a.areas.get('britagem'),true);assert.equal(a.areas.get('moagem'),false);assert.equal(a.menus.get('r1'),true);
+ assert.equal(helpers.cloudDisclosureState('B').areas.get('britagem')===true,false);
+});

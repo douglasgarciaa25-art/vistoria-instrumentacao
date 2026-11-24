@@ -794,8 +794,24 @@
     for(const e of closures){draw('OS: '+(e.work_order_snapshot||'Nao informada')+' | TAG: '+(e.tag_snapshot||'Nao informada'));draw('Tecnico cadastrado: '+(e.actor_name||'Nao registrado'));draw('Conta autenticada: '+(e.actor_email||'Nao registrada'));draw('Baixa: '+new Date(e.occurred_at).toLocaleString('pt-BR')+' | Revisao: '+e.revision);draw('Identificador permanente: '+e.point_id);y-=10;}
     const bytes=await pdf.save();download(new Blob([bytes],{type:'application/pdf'}),'Comprovante-baixas-'+reportId.slice(0,45)+'.pdf');
   }
+  const cloudReportDisclosureStates=new Map();
+  function cloudDisclosureState(subject){
+    if(!cloudReportDisclosureStates.has(subject))cloudReportDisclosureStates.set(subject,{list:false,areas:new Map(),menus:new Map()});
+    return cloudReportDisclosureStates.get(subject);
+  }
+  function captureCloudReportDisclosures(root){
+    const section=root?.querySelector('.cloud-team-reports[data-disclosure-subject]');
+    if(!section)return;
+    const state=cloudDisclosureState(section.dataset.disclosureSubject);
+    const list=section.querySelector('.cloud-reports-disclosure');
+    if(list)state.list=list.open;
+    for(const folder of section.querySelectorAll('details[data-cloud-area]'))state.areas.set(folder.dataset.cloudArea,folder.open);
+    for(const card of section.querySelectorAll('.cloud-report-card[data-report-id]')){
+      const menu=card.querySelector('.cloud-report-menu');if(menu)state.menus.set(card.dataset.reportId,menu.open);
+    }
+  }
   async function showReports(member,box,status){
-    const section=document.createElement('section');section.className='cloud-team-reports';box.append(section);
+    const section=document.createElement('section');section.className='cloud-team-reports';section.dataset.disclosureSubject=member.google_subject;const disclosureState=cloudDisclosureState(member.google_subject);box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As revisões da equipe renovam automaticamente a vistoria neste aparelho, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
     const autoKey='vistoria-team-auto:'+member.google_subject;
     const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
@@ -900,13 +916,13 @@
      const listDisclosure=document.createElement('details');listDisclosure.className='cloud-disclosure cloud-reports-disclosure';
      const listSummary=document.createElement('summary');listSummary.className='cloud-reports-summary';
      const summaryTitle=document.createElement('span');summaryTitle.className='cloud-reports-summary-title';summaryTitle.textContent='Mostrar vistorias';
-     listSummary.append(summaryTitle,count);listDisclosure.append(listSummary);section.append(listDisclosure);
+     listSummary.append(summaryTitle,count);listDisclosure.append(listSummary);section.append(listDisclosure);listDisclosure.open=disclosureState.list;summaryTitle.textContent=listDisclosure.open?'Ocultar vistorias':'Mostrar vistorias';
      listDisclosure.addEventListener('toggle',()=>{summaryTitle.textContent=listDisclosure.open?'Ocultar vistorias':'Mostrar vistorias';});
      const finalFilter=document.createElement('label');finalFilter.className='vistoria-finalized-filter';const showFinalized=document.createElement('input');showFinalized.type='checkbox';finalFilter.append(showFinalized,document.createTextNode(' Mostrar finalizadas'));listDisclosure.append(finalFilter);const createArea=document.createElement('button');createArea.type='button';createArea.className='secondary';createArea.textContent='+ Criar área';createArea.onclick=vistoriaCreateArea;listDisclosure.append(createArea);
      const entries=[];const filter=()=>{const q=search.value.trim().toLocaleLowerCase('pt-BR');let visible=0;for(const e of entries){const current=historyItems.find(r=>r.id===e.row.dataset.reportId)?.document;const match=vistoriaVisible(current,showFinalized.checked)&&(!verifiedReports||verifiedReports.has(e.row.dataset.reportId))&&e.text.toLocaleLowerCase('pt-BR').includes(q)&&(ownership.value==='all'||ownership.value===(e.mine?'mine':'team'))&&(!area.value||vistoriaAreaKey(vistoriaReportArea(current))===vistoriaAreaKey(area.value));e.row.style.display=match?'grid':'none';if(match)visible++;}const ordered=[...entries].sort((a,b)=>sort.value==='tag'?a.tag.localeCompare(b.tag,'pt-BR'):sort.value==='old'?a.date-b.date:b.date-a.date);const selectedArea=area.value;const options=vistoriaAreaCatalog();area.replaceChildren(...[['','Todas as áreas'],...options.map(n=>[n,n])].map(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;return o}));area.value=options.includes(selectedArea)?selectedArea:'';
-      const oldGroups=new Map([...list.querySelectorAll(':scope > details[data-cloud-area]')].map(d=>[d.dataset.cloudArea,d.open]));
+      for(const d of list.querySelectorAll(':scope > details[data-cloud-area]'))disclosureState.areas.set(d.dataset.cloudArea,d.open);
       const grouped=vistoriaGroupRows(ordered.map(e=>({document:historyItems.find(r=>r.id===e.row.dataset.reportId)?.document,entry:e})),[]);
-      const blocks=grouped.map(([key,group])=>{const d=document.createElement('details');d.className='vistoria-area-group';d.dataset.cloudArea=key;d.open=oldGroups.get(key)!==false||!!q;const summary=document.createElement('summary'),name=document.createElement('span'),n=document.createElement('small');name.textContent=group.name;n.textContent=group.rows.filter(r=>r.entry.row.style.display!=='none').length+' vistoria(s)';summary.append(name,n);const body=document.createElement('div');body.className='vistoria-area-body cloud-area-body';for(const r of group.rows)body.append(r.entry.row);d.append(summary,body);d.hidden=!group.rows.some(r=>r.entry.row.style.display!=='none');return d;});list.replaceChildren(...blocks);count.textContent=visible+' de '+remote.length+' vistorias'+(visible===0?' — nenhuma encontrada':'');};search.oninput=()=>{if(search.value.trim())listDisclosure.open=true;filter();};ownership.onchange=area.onchange=sort.onchange=()=>{listDisclosure.open=true;filter();};const list=document.createElement('div');list.className='cloud-report-list';listDisclosure.append(list);showFinalized.onchange=filter;list.addEventListener('vistoria-status-refresh',filter);
+      const blocks=grouped.map(([key,group])=>{const d=document.createElement('details');d.className='vistoria-area-group';d.dataset.cloudArea=key;d.open=disclosureState.areas.get(key)===true;const summary=document.createElement('summary'),name=document.createElement('span'),n=document.createElement('small');name.textContent=group.name;n.textContent=group.rows.filter(r=>r.entry.row.style.display!=='none').length+' vistoria(s)';summary.append(name,n);const body=document.createElement('div');body.className='vistoria-area-body cloud-area-body';for(const r of group.rows)body.append(r.entry.row);d.append(summary,body);d.hidden=!group.rows.some(r=>r.entry.row.style.display!=='none');return d;});list.replaceChildren(...blocks);count.textContent=visible+' de '+remote.length+' vistorias'+(visible===0?' — nenhuma encontrada':'');};search.oninput=()=>{if(search.value.trim())listDisclosure.open=true;filter();};ownership.onchange=area.onchange=sort.onchange=()=>{listDisclosure.open=true;filter();};const list=document.createElement('div');list.className='cloud-report-list';listDisclosure.append(list);showFinalized.onchange=filter;list.addEventListener('vistoria-status-refresh',filter);
     const button=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await fn()}catch(e){status.textContent=e.message}finally{b.disabled=false}};parent.append(b);};
     for(const item of remote){
       const row=document.createElement('article');row.className='cloud-report-card';row.dataset.reportId=item.report_id;list.append(row);
@@ -920,7 +936,7 @@
       renewal.textContent=archiveKeys.some(k=>typeof k==='string'&&k.startsWith(archivePrefix))?'Versões anteriores preservadas · consultar histórico local':'Renovação automática ativa';
       row.append(renewal);
       entries.push({row,mine:item.owner_subject===member.google_subject,areas:(doc?.records||[]).map(p=>p.area),date:Date.parse(item.updated_at)||0,tag:title.textContent,text:label+' '+JSON.stringify(doc?.meta||{})+' '+(doc?.records||[]).map(p=>[p.pointWorkOrder,p.tag,p.area,p.os,p.order].filter(Boolean).join(' ')).join(' ')});
-      const menu=document.createElement('details');menu.className='cloud-report-menu';const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
+      const menu=document.createElement('details');menu.className='cloud-report-menu';menu.open=disclosureState.menus.get(item.report_id)===true;const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
       // O botão é apenas uma alternativa; o mesmo fluxo roda sozinho.
       button(menu,'Atualizar da nuvem (mesmo ID)',async()=>{
         if(!validToken())throw Error('Conecte sua conta Google novamente.');
@@ -1062,7 +1078,7 @@
     const generation=++teamViewGeneration;
     const target=$('gdrive-team-users'),status=$('gdrive-team-status');
     if(!target||!status)return;
-    const box=document.createElement('div');target.replaceChildren(box);
+    captureCloudReportDisclosures(target);const box=document.createElement('div');target.replaceChildren(box);
     try{
       const {member}=await teamRequest('POST',{action:'request'});
       if(generation!==teamViewGeneration)return;

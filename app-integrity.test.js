@@ -295,3 +295,17 @@ test('Mais opções mantém estado por ID e não recria a lista em sincronizaç�
  assert.equal(menus[0].open,false);
  assert.match(source,/vistoriaReplaceHistoryMarkup\(host,markup\)/);
 });
+
+test('áreas locais iniciam recolhidas e somente a escolha explícita abre a pasta',()=>{
+ const source=readFileSync('history.js','utf8');
+ assert.match(source,/vistoriaAreaOpen\.get\(key\)===true\?'open':''/);
+ assert.doesNotMatch(source,/query\|\|vistoriaAreaOpen/);
+ assert.match(source,/vistoriaAreaOpen\.set\(d\.dataset\.areaGroup,d\.open\)/);
+ const expression=source.match(/vistoriaAreaOpen\.get\(key\)===true\?'open':''/)[0];
+ const evaluate=new Function('vistoriaAreaOpen','key','return '+expression);
+ const state=new Map();
+ assert.equal(evaluate(state,'britagem'),'');
+ state.set('britagem',true);assert.equal(evaluate(state,'britagem'),'open');
+ assert.equal(evaluate(state,'moagem'),'');
+ state.set('britagem',false);assert.equal(evaluate(state,'britagem'),'');
+});
