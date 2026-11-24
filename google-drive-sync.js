@@ -484,6 +484,7 @@
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
     let teamSent=0,teamReceived=0,teamConflicts=0,teamDeferred=0;
+    const conflictFields=[];
     try{
       const {member}=await teamRequest();
       if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();return;}
@@ -528,9 +529,40 @@
         // Uma revisão remota e uma edição local podem ter avançado ao mesmo tempo.
         if(row&&localHash!==previous.hash){
           if(previous.revision!==item.revision){
-            teamConflicts++;
-            const status=$('gdrive-team-status');
-            if(status)status.textContent='Conflito na vistoria '+item.report_id+': versão local preservada. Compare antes de atualizar da nuvem.';
+            // Conciliação conservadora: jamais inventar uma base ou substituir um editor ativo.
+            if(queued.has(item.report_id)||activeReportId===item.report_id){teamDeferred++;continue;}
+            try{
+              const base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);
+              const current=await reportRequest('GET',item.report_id);
+              if(base.revision!==previous.revision||await digest(base.document)!==previous.hash||current.revision!==item.revision)throw Error('Revisão-base não confirmada');
+              const {mergeReport}=await import('./team-merge.mjs');
+              const merged=mergeReport(base.document,row.document,current.document);
+              if(merged.conflicts.length){
+                teamConflicts++;
+                conflictFields.push(item.report_id+': '+merged.conflicts.slice(0,8).map(c=>c.path.join('.')||'identidade/base').join(', '));
+                continue;
+              }
+              if(!validate({id:item.report_id,document:merged.document}))throw Error('Conciliação inválida');
+              const remoteHash=await digest(current.document);
+              if(queueMember?.google_subject!==member.google_subject||!validToken()||activeReportId===item.report_id){teamDeferred++;continue;}
+              const tx=db.transaction('reports','readwrite'),store=tx.objectStore('reports'),done=txDone(tx);
+              const req=store.get(item.report_id);let changed=false;
+              req.onsuccess=()=>{
+                const latest=req.result;
+                const savedBaseline=JSON.parse(localStorage.getItem(key)||'{}')[item.report_id];
+                if(!latest||JSON.stringify(latest.document)!==JSON.stringify(row.document)||savedBaseline?.revision!==previous.revision||savedBaseline?.hash!==previous.hash||activeReportId===item.report_id||queueMember?.google_subject!==member.google_subject||!validToken())return;
+                store.put({id:item.report_id,document:merged.document,updated:new Date().toISOString()});changed=true;
+              };
+              await done;
+              if(!changed){teamDeferred++;continue;}
+              // O hash de referência continua sendo o conteúdo remoto confirmado.
+              // O envio seguinte usa o CAS original para publicar apenas sobre essa revisão.
+              baseline[item.report_id]={revision:current.revision,hash:remoteHash};
+              localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
+              if(typeof refreshHistory==='function')await refreshHistory();
+            }catch(e){
+              teamConflicts++;conflictFields.push(item.report_id+': base ou revisão não confirmada');
+            }
           }
           continue;
         }
@@ -596,7 +628,7 @@
         const moment=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
         status.textContent=(teamConflicts||teamDeferred?'Sincronização parcial':'Equipe sincronizada')+' às '+moment+
           '. Enviadas: '+teamSent+'; recebidas: '+teamReceived+
-          '; conflitos: '+teamConflicts+'; pendentes: '+teamDeferred+'.';
+          '; conflitos: '+teamConflicts+'; pendentes: '+teamDeferred+'.'+(conflictFields.length?' Campos em conflito: '+conflictFields.join(' | ')+'. Versões preservadas.':'');
       }
     }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: sincronização pendente — '+e.message;}
     finally{teamRunning=false;}
@@ -733,8 +765,8 @@
       const menu=document.createElement('details');menu.className='cloud-report-menu';const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
       // Recuperação manual para aparelhos com cópia antiga e sem histórico de revisão compartilhado.
       // Nunca descartar a versão que já existe no aparelho.
-      button(menu,'Atualizar da nuvem (preservar cópia local)',async()=>{
-        if(!confirm('Buscar a revisão mais recente da equipe? Se houver diferenças, a versão atual deste aparelho será preservada como cópia separada.'))return;
+      button(menu,'Atualizar da nuvem (mesmo ID)',async()=>{
+        if(!confirm('Buscar a revisão mais recente da equipe? Alterações locais divergentes serão preservadas, sem criar outra vistoria.'))return;
         if(!validToken())throw Error('Conecte sua conta Google novamente.');
         const account=member.google_subject,token=accessToken;
         if(typeof persistCurrent==='function')await persistCurrent();
@@ -749,13 +781,13 @@
         const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
         if((latest?await digest(latest.document):null)!==originalHash)throw Error('Houve uma edição local durante a consulta; tente novamente.');
         if(active&&!await activeMatchesSaved(item.report_id,originalHash))throw Error('A edição foi alterada durante a consulta; nada foi substituído.');
-        const remoteHash=await digest(received.document),copyId=crypto.randomUUID();
-        const tx=db.transaction(['reports','draft'],'readwrite');
+        const remoteHash=await digest(received.document);
         if(original&&remoteHash!==originalHash){
-          const previous=structuredClone(original.document);
-          previous.meta={...previous.meta,title:(previous.meta.title||'Vistoria')+' (cópia local preservada)'};
-          tx.objectStore('reports').put({id:copyId,updated:new Date().toISOString(),document:previous});
+          await syncTeam();
+          status.textContent='Alterações locais preservadas no mesmo ID. Confira os conflitos e pendências de sincronização.';
+          return;
         }
+        const tx=db.transaction(['reports','draft'],'readwrite');
         tx.objectStore('reports').put({id:item.report_id,updated:received.updated_at||new Date().toISOString(),document:received.document});
         if(active)tx.objectStore('draft').put({...structuredClone(received.document),reportId:item.report_id},'current');
         await txDone(tx);
@@ -766,7 +798,7 @@
         baseline[item.report_id]={revision:received.revision,hash:remoteHash};
         localStorage.setItem(key,JSON.stringify(baseline));
         status.textContent='Revisão '+received.revision+' recebida da equipe.'+
-          (original&&remoteHash!==originalHash?' Versão anterior deste aparelho guardada como cópia em Vistorias salvas.':' Nenhum dado local precisou ser substituído.');
+          ' Nenhum dado local precisou ser substituído.';
       });
       button(menu,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico cadastrado: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);if(event.available)button(details,'Copiar revisão '+event.revision,async()=>{const d=await reportRequest('GET',item.report_id,null,false,false,event.revision);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:structuredClone(d.document)});status.textContent='Revisão recuperada como cópia local, sem substituir o original.';});}for(const event of d.pointHistory||[]){const p=document.createElement('p');const action={created:'Inclusão',edited:'Edição',completed:'Finalização',reopened:'Reabertura',deleted:'Exclusão',restored:'Restauração'}[event.action]||event.action;p.textContent='Equipamento '+(event.tag_snapshot||event.point_id)+' — OS '+(event.work_order_snapshot||'Não informada')+' — '+action+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);}if((d.pointHistory||[]).some(e=>e.action==='completed'))button(details,'Baixar PDF de baixas autenticadas',()=>downloadVerifiedClosures(item.report_id,d.pointHistory));if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
       if(item.owner_subject===member.google_subject)button(menu,'Enviar revisão em segundo plano',async()=>{
