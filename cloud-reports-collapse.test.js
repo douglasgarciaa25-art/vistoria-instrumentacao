@@ -52,3 +52,10 @@ test('pastas e menus da nuvem iniciam fechados e preservam estado na atualizaç�
  assert.equal(a.list,true);assert.equal(a.areas.get('britagem'),true);assert.equal(a.areas.get('moagem'),false);assert.equal(a.menus.get('r1'),true);
  assert.equal(helpers.cloudDisclosureState('B').areas.get('britagem')===true,false);
 });
+
+test('Mostrar finalizadas na nuvem conserva seleção e revela apenas resultados visíveis',()=>{
+ assert.match(cloud,/showFinalized\.checked=disclosureState\.showFinalized/);
+ assert.match(cloud,/disclosureState\.showFinalized=showFinalized\.checked;filter\(\);if\(showFinalized\.checked\)vistoriaRevealFinalizedAreas/);
+ assert.match(cloud,/finalizedLabel\.textContent=vistoriaFinalizedLabel\(finalizedCount,showFinalized\.checked\)/);
+ assert.match(cloud,/const match=matchesFilters&&vistoriaVisible\(current,showFinalized\.checked\)/);
+});

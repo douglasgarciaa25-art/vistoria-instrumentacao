@@ -309,3 +309,17 @@ test('áreas locais iniciam recolhidas e somente a escolha explícita abre a pas
  assert.equal(evaluate(state,'moagem'),'');
  state.set('britagem',false);assert.equal(evaluate(state,'britagem'),'');
 });
+
+test('Mostrar finalizadas revela somente áreas com finalizadas visíveis e informa a quantidade',()=>{
+ const source=readFileSync('history.js','utf8');
+ const snippet=source.slice(source.indexOf('function vistoriaRevealFinalizedAreas'),source.indexOf('function vistoriaVisible'));
+ const {reveal,label}=new Function(snippet+';return {reveal:vistoriaRevealFinalizedAreas,label:vistoriaFinalizedLabel};')();
+ const card=(done,display='')=>({hidden:false,style:{display},querySelector:()=>done?{}:null});
+ const folder=(...cards)=>({open:false,querySelectorAll:()=>cards});
+ const a=folder(card(true)),b=folder(card(false)),c=folder(card(true,'none')),d=folder(card(false));d.open=true;
+ reveal({querySelectorAll:()=>[a,b,c,d]},'details');
+ assert.equal(a.open,true);assert.equal(b.open,false);assert.equal(c.open,false);assert.equal(d.open,true);
+ assert.equal(label(2,true),'Mostrar finalizadas (2)');
+ assert.match(label(0,true),/nenhuma encontrada/);
+ assert.match(source,/if\(\$\('showFinalizedReports'\)\.checked\)vistoriaRevealFinalizedAreas/);
+});
