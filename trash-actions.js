@@ -12,11 +12,14 @@
    if(!await ask('Mover esta vistoria e suas fotos para a lixeira em todos os aparelhos da equipe? Você poderá restaurá-la como administrador.'))return;
    return window.VistoriaTeamTrash.move(id);
   }
-  if(!await ask('Mover esta vistoria e suas fotos para a lixeira deste aparelho? Você poderá restaurá-la.'))return;
+  return moveLocal(id);
+ }
+ async function moveLocal(id){
+  if(!await ask('Mover esta vistoria e suas fotos para a lixeira somente deste aparelho? Você poderá restaurá-la.'))return;
   await guarded(async()=>{
    clearTimeout(saveTimer);saveTimer=null;
    const old=await requestResult(db.transaction('reports').objectStore('reports').get(id));
-   if(!old)return notify('Esta vistoria já foi removida.');
+   if(!old){await refreshHistory();await window.refreshTrash();return notify('Esta vistoria já foi removida.');}
    // Capture unsaved edits without requiring a complete point or valid form.
    const isActive=id===activeReportId;
    const row=isActive?{id,updated:new Date().toISOString(),document:structuredClone(data())}:old;
@@ -33,6 +36,7 @@
    notify('Vistoria movida para a lixeira.');
   });
  }
+ window.VistoriaLocalTrash={move:moveLocal};
  async function erase(id){
   const rows=await requestResult(db.transaction('trash').objectStore('trash').getAll());
   const selected=id?rows.filter(r=>r.id===id):rows;

@@ -193,3 +193,30 @@ test('uma exclusão local antiga não é revertida por download automático',asy
  assert.equal(canRestore({account:'admin',revision:3},{revision:4},'admin'),true);
  assert.match(src,/if\(marker.result&&!canRestoreTeamTrash\(marker.result,item,account\)\)return/);
 });
+
+test('cópia local antiga ausente na equipe oferece apenas a lixeira local',async()=>{
+ const vm=await import('node:vm'),src=file('google-drive-sync.js');
+ const fn=src.match(/async move\(id\)\{[\s\S]*?\n    \},\n    async restore/)[0].replace(/,\n    async restore$/,'');
+ const events=[];
+ let error=Object.assign(Error('Vistoria não encontrada'),{status:404});
+ const context={validToken:()=>true,navigator:{onLine:true},teamRequest:async()=>({member:{status:'approved',role:'member'}}),teamState:async()=>{throw error},reports:async()=>[{id:'copy'}],rememberLocalCopy:id=>events.push(['local',id]),window:{VistoriaLocalTrash:{move:async id=>events.push(['trash',id])}}};
+ const move=vm.runInNewContext('({'+fn+'}).move',context);
+ await move('copy');
+ assert.deepEqual(events,[['local','copy'],['trash','copy']]);
+ events.length=0;
+ error=Object.assign(Error('Vistoria não encontrada'),{status:503});
+ await assert.rejects(move('copy'),/Vistoria não encontrada/);
+ assert.deepEqual(events,[]);
+ error=Object.assign(Error('Vistoria não encontrada'),{status:404});
+ context.reports=async()=>[];
+ await assert.rejects(move('copy'),/Vistoria não encontrada/);
+ assert.deepEqual(events,[]);
+});
+test('cópias locais não são confundidas com lixeira compartilhada',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/known:isSharedTrashReport/);
+ assert.match(src,/isTeamReport\(id\)&&!isLocalCopy\(id\)/);
+ assert.equal((src.match(/rememberLocalCopy\(copyId\)/g)||[]).length,2);
+ assert.match(src,/copies\.delete\(item\.report_id\)/);
+ assert.match(file('trash-actions.js'),/window\.VistoriaLocalTrash=\{move:moveLocal\}/);
+});
