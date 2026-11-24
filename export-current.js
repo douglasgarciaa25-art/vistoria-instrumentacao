@@ -19,7 +19,7 @@
  }
  const allPoints=document.createElement('button');allPoints.id='pdfAllPoints';allPoints.type='button';allPoints.textContent='Baixar PDF com todos os pontos';
  $('pdf').after(allPoints);
- allPoints.onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();const snapshot=structuredClone(data());snapshot.meta.title=(snapshot.meta.title||'Relatório de vistoria técnica')+' — Todos os '+snapshot.records.length+' pontos';await exportReportDocuments([snapshot])});
+ allPoints.onclick=()=>guarded(async()=>{if(!ready())return;await persistCurrent();const snapshot=structuredClone(data());snapshot.meta.title=(snapshot.meta.title||'Relatório de vistoria técnica')+' — Todos os '+snapshot.records.length+' pontos';await exportReportDocuments([snapshot],[activeReportId])});
  const previousRender=render;
  render=function(){previousRender();document.querySelectorAll('#entries [data-edit]').forEach(editButton=>{
   const index=Number(editButton.dataset.edit);const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Baixar PDF do ponto '+(index+1);
