@@ -68,8 +68,8 @@ test('sincronização da equipe recebe revisão da vistoria aberta sem perder o 
  assert.match(src,/async function activeMatchesSaved\(id,savedHash\)/);
  assert.match(src,/if\(active&&!await activeMatchesSaved\(item\.report_id,localHash\)\)/);
  assert.match(src,/db\.transaction\(\['reports','draft'\],'readwrite'\)/);
- assert.match(src,/tx\.objectStore\('draft'\)\.put\(\{\.\.\.structuredClone\(d\.document\),reportId:item\.report_id\},'current'\)/);
- assert.match(src,/reset\(\);fill\(structuredClone\(d\.document\)\)/);
+ assert.match(src,/draft\.put\(\{\.\.\.structuredClone\(document\),reportId:id\},'current'\)/);
+ assert.match(src,/reset\(\);fill\(structuredClone\(document\)\)/);
  assert.doesNotMatch(src,/if\(typeof activeReportId!=='undefined'&&activeReportId===item\.report_id\)continue;/);
 });
 test('sincronização da equipe permite envio de alteração em vistoria aberta já salva',()=>{
@@ -111,14 +111,17 @@ test('Drive pessoal não envia cópia antiga após conflito sem baseline',()=>{
  assert.doesNotMatch(src,/syncMap\[row\.id\]=remoteHash;saveMap\(\);conflicts\+\+/);
 });
 
-test('equipe compara a revisão remota antes de classificar como conflito uma instalação sem baseline',()=>{
+test('equipe renova o mesmo ID e arquiva versão divergente quando não há baseline',()=>{
  const src=file('google-drive-sync.js');
  assert.match(src,/if\(row&&!previous\)\{/);
  assert.match(src,/const received=await reportRequest\('GET',item\.report_id\)/);
  assert.match(src,/if\(receivedHash===localHash\)\{/);
  assert.match(src,/baseline\[item\.report_id\]=\{revision:received\.revision,hash:receivedHash\}/);
  assert.match(src,/if\(!latest\|\|await digest\(latest\.document\)!==localHash\)\{teamDeferred\+\+;continue;\}/);
- assert.match(src,/teamConflicts\+\+;\s*const status=\$\('gdrive-team-status'\)/);
+ assert.match(src,/replaceTeamLocal\(item,row,received\.document,member,archive\)/);
+ assert.match(src,/reason:'missing-baseline'/);
+ assert.match(src,/if\(archive\)draft\.put\(archive,'team-conflict:'/);
+ assert.match(src,/store\.put\(\{id,updated:item\.updated_at/);
  assert.match(src,/Campos em conflito/);
 });
 test('interface móvel separa título e botões de sincronização da equipe',()=>{
@@ -128,4 +131,44 @@ test('interface móvel separa título e botões de sincronização da equipe',()
  assert.match(css,/\.cloud-section-head\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
  assert.match(css,/\.cloud-section-head>div\{grid-column:1\/-1/);
  assert.match(css,/#gdrive-team-local-sync\{grid-column:2\}/);
+});
+
+
+test('renovação automática consulta equipe a cada vinte segundos e usa fluxo único no botão',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'&&validToken\(\)&&navigator\.onLine!==false\)void syncTeam\(\);\},20000\)/);
+ const manual=src.slice(src.indexOf("button(menu,'Atualizar da nuvem (mesmo ID)'"),src.indexOf("button(menu,'Revisar conflitos desta vistoria'"));
+ assert.match(manual,/await syncTeam\(\)/);
+ assert.doesNotMatch(manual,/crypto\.randomUUID|confirm\(|store\.put/);
+});
+
+test('renovação transacional preserva ID, rascunho, originais e edição concorrente',async()=>{
+ const vm=await import('node:vm'),src=file('google-drive-sync.js');
+ const found=src.match(/  async function replaceTeamLocal\(item,original,document,member,archive=null\)\{[\s\S]*?\n  \}/);
+ assert.ok(found);
+ const id='qa-vistoria',old={meta:{title:'Anterior'},records:[]},next={meta:{title:'Nova'},records:[]};
+ const row={id,document:old},member={google_subject:'tech'};
+ async function run({changed=false,active=true,dirty=false,archive=null,otherDraft=false}={}){
+   const reports=new Map([[id,structuredClone(row)]]),draft=new Map([['current',{...structuredClone(old),reportId:otherDraft?'outra':id}]]);
+   let pending=0,settle,filled=null;
+   const db={transaction(names){
+     assert.deepEqual(Array.from(names),['reports','draft']);
+     const promise=new Promise(r=>settle=r);
+     const stores={reports,draft};
+     const tx={promise,objectStore(name){const map=stores[name];return {get(key){const req={};pending++;queueMicrotask(()=>{req.result=map.get(key);req.onsuccess();if(!--pending)settle()});return req;},put(value,key){map.set(key??value.id,structuredClone(value));}}}};
+     if(changed)reports.set(id,{id,document:{meta:{title:'Outra edição'},records:[]}});
+     return tx;
+   }};
+   const context={db,txDone:t=>t.promise,activeReportId:active?id:'outra',accessToken:'token',queueMember:member,validToken:()=>true,saveTimer:dirty?1:null,historyBusy:false,busy:0,historyReady:true,data:()=>old,digest:async d=>JSON.stringify(d),activeMatchesSaved:async()=>!dirty,persistQueue:Promise.resolve(),reset(){},fill(d){filled=d;},$:()=>null,structuredClone,crypto:{randomUUID:()=> 'archive-001'}};
+   const replace=vm.runInNewContext('('+found[0].trim()+')',context);
+   const result=await replace({report_id:id,updated_at:'2026-11-24T00:00:00Z'},row,next,member,archive);
+   return {result,reports,draft,filled};
+ }
+ let r=await run({archive:{local:old,remote:next}});
+ assert.equal(r.result,true);assert.equal(r.reports.size,1);assert.deepEqual(r.reports.get(id).document,next);assert.equal(r.draft.get('current').reportId,id);assert.deepEqual(r.filled,next);
+ assert.deepEqual(r.draft.get('team-conflict:tech:'+id+':archive-001').local,old);
+ r=await run({changed:true});assert.equal(r.result,false);assert.equal(r.reports.get(id).document.meta.title,'Outra edição');
+ r=await run({dirty:true});assert.equal(r.result,false);assert.deepEqual(r.reports.get(id).document,old);
+ r=await run({otherDraft:true});assert.equal(r.result,false);assert.equal(r.draft.get('current').reportId,'outra');
+ r=await run({active:false});assert.equal(r.result,true);assert.deepEqual(r.reports.get(id).document,next);assert.equal(r.filled,null);
 });
