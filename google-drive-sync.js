@@ -606,7 +606,6 @@
       }
       for(const item of remote){
         if(queued.has(item.report_id))continue;
-        if(item.owner_subject!==member.google_subject&&member.role!=='admin')continue;
         if(queueMember?.google_subject!==member.google_subject||!validToken())break;
         const previous=baseline[item.report_id];
         if(!previous||previous.revision!==item.revision)continue;
@@ -801,7 +800,7 @@
           ' Nenhum dado local precisou ser substituído.';
       });
       button(menu,'Histórico de revisões',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const prior=row.querySelector('[data-team-history]');if(prior){prior.remove();return;}const details=document.createElement('div');details.dataset.teamHistory='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent='Revisão '+event.revision+' — '+({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico cadastrado: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);if(event.available)button(details,'Copiar revisão '+event.revision,async()=>{const d=await reportRequest('GET',item.report_id,null,false,false,event.revision);const copyId=crypto.randomUUID();rememberTeamIds([{report_id:copyId}]);await putReport({id:copyId,updated:new Date().toISOString(),document:structuredClone(d.document)});status.textContent='Revisão recuperada como cópia local, sem substituir o original.';});}for(const event of d.pointHistory||[]){const p=document.createElement('p');const action={created:'Inclusão',edited:'Edição',completed:'Finalização',reopened:'Reabertura',deleted:'Exclusão',restored:'Restauração'}[event.action]||event.action;p.textContent='Equipamento '+(event.tag_snapshot||event.point_id)+' — OS '+(event.work_order_snapshot||'Não informada')+' — '+action+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico: '+(event.actor_name||'Não registrado')+' — Conta: '+(event.actor_email||'Não registrada');details.append(p);}if((d.pointHistory||[]).some(e=>e.action==='completed'))button(details,'Baixar PDF de baixas autenticadas',()=>downloadVerifiedClosures(item.report_id,d.pointHistory));if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details)});
-      if(item.owner_subject===member.google_subject)button(menu,'Enviar revisão em segundo plano',async()=>{
+      button(menu,'Enviar revisão em segundo plano',async()=>{
         if(!window.VistoriaBackground||!navigator.serviceWorker)throw Error('Segundo plano indisponível neste navegador.');
         const reg=await navigator.serviceWorker.ready;if(!reg.sync)throw Error('Este navegador não oferece sincronização em segundo plano.');
         const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store'});if(!session.ok||(await session.json()).subject!==member.google_subject)throw Error('Ative Manter conta conectada primeiro.');
@@ -830,11 +829,10 @@
     button(sharePanel,'Compartilhar vistoria local selecionada',async()=>{
       const item=(await reports()).find(x=>x.id===select.value);if(!item)throw Error('Selecione uma vistoria');
       const existing=remote.find(x=>x.report_id===item.id);
-      if(existing&&existing.owner_subject!==member.google_subject&&member.role!=='admin')throw Error('Sem permissão para editar');
       if(existing&&!confirm('Publicar nova revisão da vistoria selecionada?'))return;
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
-      if(existing&&baseline[item.id]?.revision!==existing.revision)throw Error('Existe uma revisão remota diferente. Abra uma cópia e compare antes de publicar.');
+      if(existing&&baseline[item.id]?.revision!==existing.revision)throw Error('Existe uma revisão remota diferente. Sincronize e compare os campos antes de publicar.');
       const d=await reportRequest('POST',item.id,{document:item.document,revision:existing?.revision||0});
       rememberTeamIds([{report_id:item.id}]);
       baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
