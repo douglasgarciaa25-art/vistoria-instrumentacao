@@ -49,6 +49,8 @@
   return false;
  }
  function updatePointSelection(){
+  // Migra pontos antigos antes de filtrar, sem excluir ou recriar registros.
+  window.VistoriaPointIds?.ensure(records,activeReportId);
   const available=new Set(records.map(r=>r.pointId).filter(Boolean));
   for(const id of selectedPoints)if(!available.has(id))selectedPoints.delete(id);
   initialSelectionPending=initialPointSelection(records,selectedPoints,initialSelectionPending);
@@ -78,6 +80,7 @@
   if(selectionDialog.open)renderSelectionDialog();
  }
  function selectableRows(){
+  window.VistoriaPointIds?.ensure(records,activeReportId);
   const q=$('reportSearch').value,status=$('reportStatusFilter').value;
   return records.map((r,i)=>({r,i})).filter(({r})=>r.pointId&&reportPointMatches(r,q,status));
  }
@@ -90,7 +93,7 @@
    const info=document.createElement('small');info.textContent=[r.equipment,r.status,r.priority].filter(Boolean).join(' · ');text.append(title,info);label.append(input,text);list.append(label);
   }
   $('reportSearchCount').textContent=rows.length+' de '+records.length+' pontos disponíveis';
-  if(!rows.length){const message=document.createElement('p');message.className='muted';message.textContent='Nenhum ponto encontrado.';list.append(message)}
+  if(!rows.length){const message=document.createElement('p');message.className='muted';message.textContent=records.length?'Nenhum ponto corresponde aos filtros.':'Nenhum ponto registrado nesta vistoria.';list.append(message);if(records.length&&($('reportSearch').value||$('reportStatusFilter').value)){const resetFilters=document.createElement('button');resetFilters.type='button';resetFilters.className='secondary';resetFilters.textContent='Mostrar todos os pontos';resetFilters.onclick=()=>{$('reportSearch').value='';$('reportStatusFilter').value='';filterReport()};list.append(resetFilters)}}
   $('selectVisiblePoints').disabled=!rows.length;
  }
 
@@ -107,7 +110,7 @@
  }
  $('reportSearch').oninput=filterReport;$('reportStatusFilter').onchange=filterReport;
  $('onlySelectedPoints').onchange=filterReport;
- $('togglePointSelection').onclick=()=>{selectionDialog.showModal();filterReport()};
+ $('togglePointSelection').onclick=()=>{$('reportSearch').value='';$('reportStatusFilter').value='';filterReport();selectionDialog.showModal();renderSelectionDialog()};
  $('closePointSelection').onclick=$('confirmPointSelection').onclick=()=>selectionDialog.close();
  $('selectionDialogList').addEventListener('change',e=>{const id=e.target.dataset.dialogPoint;if(!id)return;initialSelectionPending=false;if(e.target.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();updatePointSelection();$('entries').querySelectorAll('.entry').forEach((entry,i)=>{entry.hidden=!selectedPoints.has(records[i]?.pointId)});emptySelection.hidden=selectedPoints.size>0;$('makeSummary').disabled=!selectedPoints.size});
  function invalidateSummary(){const field=$('summaryText');if(field)field.value='';}

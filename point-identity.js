@@ -27,11 +27,11 @@
  form.onsubmit=function(event){
   ensure(records,activeReportId);
   const index=editing,previousId=index!==null?records[index]?.pointId:null;
-  const size=records.length;
+  const size=records.length,previousRecord=index!==null?records[index]:null;
   const result=oldSubmit.call(this,event);
   if(index===null&&records.length===size+1){
-   records.at(-1).pointId=crypto.randomUUID();
-  }else if(index!==null&&records[index]){
+   if(!records.at(-1).pointId)records.at(-1).pointId=crypto.randomUUID();
+  }else if(index!==null&&records[index]&&records[index]!==previousRecord){
    records[index].pointId=previousId||crypto.randomUUID();
   }
   return result;
