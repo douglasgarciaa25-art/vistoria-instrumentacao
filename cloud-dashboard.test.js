@@ -84,5 +84,16 @@ test('Login aprovado inicia autorização offline uma vez e preserva renovação
  assert.ok(cloud.includes("Liberar acesso à nuvem"));
  assert.ok(cloud.includes("action:'authorize-email',email"));
  assert.ok(cloud.includes("action:'cancel-invitation',email:invitation.email"));
- assert.ok(cloud.includes("Aguardando aprovação"));
+ assert.ok(cloud.includes("🟡 Pendente"));
  });
+
+test('Ações administrativas refletem o status atual',()=>{
+ const source=cloud.slice(cloud.indexOf('function memberStatusActions('),cloud.indexOf('async function showTeam(){'));
+ const actions=new Function(source+';return memberStatusActions;')();
+ assert.deepEqual(actions({role:'technician',status:'pending'}),[['Aprovar','approved'],['Bloquear','blocked']]);
+ assert.deepEqual(actions({role:'technician',status:'approved'}),[['Bloquear','blocked']]);
+ assert.deepEqual(actions({role:'technician',status:'blocked'}),[['Desbloquear','approved']]);
+ assert.deepEqual(actions({role:'admin',status:'approved'}),[]);
+ assert.deepEqual(actions({role:'technician',status:'unknown'}),[]);
+ assert.ok(cloud.includes('adminPanel.open=adminWasOpen'));
+});
