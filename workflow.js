@@ -20,12 +20,16 @@
  function reportPointDetails(r){
   return [['Condição',r.condition],['Diagnóstico / testes',r.analysisDraft],['Histórico de análise',r.analysisHistory],['Impacto',r.impact],['Ação recomendada / realizada',r.action],['Responsável',r.owner],['Prazo',r.deadline],['Serviço realizado',r.completionWork],['Data de conclusão',r.completionDate],['Concluído por',r.completionBy]].filter(([,v])=>String(v??'').trim());
  }
- let filterReportId;
+ let filterReportId, initialSelectionPending=true;
  const selectedPoints=new Set();
  const selectionBar=document.createElement('section');selectionBar.className='report-selection';
- selectionBar.innerHTML='<p id="pointSelectionCount" role="status">Nenhum ponto selecionado</p><div class="actions"><button type="button" class="secondary" id="togglePointSelection">Selecionar pontos</button><button type="button" class="secondary" id="clearPointSelection">Limpar seleção</button></div><input type="checkbox" id="onlySelectedPoints" checked hidden><div class="actions" id="selectionTools" hidden><button type="button" class="secondary" id="selectVisiblePoints">Selecionar visíveis</button></div><button type="button" id="pdfSelectedPoints" disabled>Baixar PDF dos selecionados</button>';
+ selectionBar.innerHTML='<p id="pointSelectionCount" role="status"></p><button type="button" class="secondary" id="togglePointSelection" aria-haspopup="dialog">Selecionar pontos</button><input type="checkbox" id="onlySelectedPoints" checked hidden><button type="button" id="pdfSelectedPoints" disabled>Baixar PDF</button>';
  search.before(selectionBar);
- const emptySelection=document.createElement('p');emptySelection.className='report-empty-selection';emptySelection.textContent='Nenhum ponto selecionado. Toque em Selecionar pontos para montar seu relatório.';$('entries').before(emptySelection);
+ const selectionDialog=document.createElement('dialog');selectionDialog.id='reportSelectionDialog';selectionDialog.className='report-selection-dialog';selectionDialog.setAttribute('aria-labelledby','selectionDialogTitle');
+ selectionDialog.innerHTML='<div class="selection-dialog-head"><h2 id="selectionDialogTitle">Selecionar pontos</h2><button type="button" class="secondary" id="closePointSelection" aria-label="Fechar seleção">Fechar</button></div><div id="selectionDialogFilters"></div><div class="actions" id="selectionTools"><button type="button" class="secondary" id="selectVisiblePoints">Selecionar visíveis</button><button type="button" class="secondary" id="clearPointSelection">Limpar seleção</button></div><div id="selectionDialogList"></div><div class="selection-dialog-footer"><span id="selectionDialogCount" role="status"></span><button type="button" id="confirmPointSelection">Concluir seleção</button></div>';
+ document.body.append(selectionDialog);$('selectionDialogFilters').append(search);
+ const dock=document.createElement('div');dock.className='report-export-dock';dock.append($('pdfSelectedPoints'));
+ const emptySelection=document.createElement('p');emptySelection.className='report-empty-selection';emptySelection.textContent='Escolha os pontos para montar a prévia.';$('entries').before(emptySelection);
  window.VistoriaReportSelection=()=>records.filter(r=>selectedPoints.has(r.pointId));
  function selectedReportSnapshot(doc,ids){
   const indices=doc.records.map((r,i)=>ids.has(r.pointId)?i:-1).filter(i=>i>=0);
@@ -39,10 +43,19 @@
   snapshot.meta.title=(snapshot.meta.title||'Relatório de vistoria técnica')+' — '+indices.length+' ponto(s) selecionado(s)';
   return snapshot;
  }
+ function initialPointSelection(points,ids,pending){
+  if(!pending||!points.length)return pending;
+  if(points.length===1){if(!points[0].pointId)return true;ids.add(points[0].pointId)}
+  return false;
+ }
  function updatePointSelection(){
   const available=new Set(records.map(r=>r.pointId).filter(Boolean));
   for(const id of selectedPoints)if(!available.has(id))selectedPoints.delete(id);
-  $('pointSelectionCount').textContent=selectedPoints.size+' de '+records.length+' ponto(s) selecionado(s)';
+  initialSelectionPending=initialPointSelection(records,selectedPoints,initialSelectionPending);
+  $('pointSelectionCount').textContent=selectedPoints.size+' / '+records.length+' '+(records.length===1?'ponto':'pontos');
+  $('selectionDialogCount').textContent=selectedPoints.size+' selecionado(s)';
+  $('togglePointSelection').textContent=selectedPoints.size?'Alterar seleção':'Selecionar pontos';
+  $('clearPointSelection').disabled=!selectedPoints.size;
   $('pdfSelectedPoints').disabled=!selectedPoints.size;
   $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
    const r=records[i];if(!r)return;
@@ -54,14 +67,33 @@
   });
  }
  function filterReport(){
-  if(filterReportId!==activeReportId){filterReportId=activeReportId;selectedPoints.clear();const summaryField=$('summaryText');if(summaryField)summaryField.value='';$('onlySelectedPoints').checked=true;$('reportSearch').value='';$('reportStatusFilter').value=''}
+  if(filterReportId!==activeReportId){filterReportId=activeReportId;selectedPoints.clear();initialSelectionPending=true;invalidateSummary();$('onlySelectedPoints').checked=true;$('reportSearch').value='';$('reportStatusFilter').value='';if(selectionDialog.open)selectionDialog.close()}
   updatePointSelection();
-  const preview=$('onlySelectedPoints').checked;search.hidden=preview;$('selectionTools').hidden=preview;$('togglePointSelection').textContent=preview?'Selecionar pontos':'Ver relatório selecionado';$('togglePointSelection').setAttribute('aria-expanded',String(!preview));$('clearPointSelection').disabled=!selectedPoints.size;$('view-review').classList.toggle('selecting-points',!preview);
-  const q=preview?'':$('reportSearch').value,status=preview?'':$('reportStatusFilter').value;let count=0;
-  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];const match=!!r&&reportPointMatches(r,q,status)&&(!$('onlySelectedPoints').checked||selectedPoints.has(r.pointId));entry.hidden=!match;if(match)count++});
+  const preview=true;
+  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];entry.hidden=!r||!selectedPoints.has(r.pointId)});
   emptySelection.hidden=!preview||selectedPoints.size>0;
-  $('reportSearchCount').textContent=count+' de '+records.length+' ponto(s) disponíveis para seleção.';
+  emptySelection.textContent=records.length?'Escolha os pontos para montar a prévia.':'Adicione um ponto na aba Vistoria.';
+  $('togglePointSelection').disabled=!records.length;
+  $('makeSummary').disabled=!selectedPoints.size;
+  if(selectionDialog.open)renderSelectionDialog();
  }
+ function selectableRows(){
+  const q=$('reportSearch').value,status=$('reportStatusFilter').value;
+  return records.map((r,i)=>({r,i})).filter(({r})=>r.pointId&&reportPointMatches(r,q,status));
+ }
+ function renderSelectionDialog(){
+  const rows=selectableRows(),list=$('selectionDialogList');list.replaceChildren();
+  for(const {r,i} of rows){
+   const label=document.createElement('label');label.className='selection-dialog-row';
+   const input=document.createElement('input');input.type='checkbox';input.dataset.dialogPoint=r.pointId;input.checked=selectedPoints.has(r.pointId);
+   const text=document.createElement('span');const title=document.createElement('strong');title.textContent='Ponto '+String(i+1).padStart(2,'0')+' · '+(r.tag||'TAG não informada');
+   const info=document.createElement('small');info.textContent=[r.equipment,r.status,r.priority].filter(Boolean).join(' · ');text.append(title,info);label.append(input,text);list.append(label);
+  }
+  $('reportSearchCount').textContent=rows.length+' de '+records.length+' pontos disponíveis';
+  if(!rows.length){const message=document.createElement('p');message.className='muted';message.textContent='Nenhum ponto encontrado.';list.append(message)}
+  $('selectVisiblePoints').disabled=!rows.length;
+ }
+
  function addReportDetails(){
   $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
    const r=records[i],actions=entry.querySelector('.actions');if(!r||!actions||entry.querySelector('.report-point-details'))return;
@@ -75,11 +107,13 @@
  }
  $('reportSearch').oninput=filterReport;$('reportStatusFilter').onchange=filterReport;
  $('onlySelectedPoints').onchange=filterReport;
- $('togglePointSelection').onclick=()=>{$('onlySelectedPoints').checked=!$('onlySelectedPoints').checked;filterReport()};
+ $('togglePointSelection').onclick=()=>{selectionDialog.showModal();filterReport()};
+ $('closePointSelection').onclick=$('confirmPointSelection').onclick=()=>selectionDialog.close();
+ $('selectionDialogList').addEventListener('change',e=>{const id=e.target.dataset.dialogPoint;if(!id)return;initialSelectionPending=false;if(e.target.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();updatePointSelection();$('entries').querySelectorAll('.entry').forEach((entry,i)=>{entry.hidden=!selectedPoints.has(records[i]?.pointId)});emptySelection.hidden=selectedPoints.size>0;$('makeSummary').disabled=!selectedPoints.size});
  function invalidateSummary(){const field=$('summaryText');if(field)field.value='';}
- $('entries').addEventListener('change',e=>{const input=e.target;if(!input.matches('[data-select-point]')||!input.dataset.selectPoint)return;const id=input.dataset.selectPoint;if(input.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
- $('selectVisiblePoints').onclick=()=>{for(const entry of $('entries').querySelectorAll('.entry:not([hidden])')){const id=entry.querySelector('[data-select-point]')?.dataset.selectPoint;if(id)selectedPoints.add(id)}invalidateSummary();filterReport()};
- $('clearPointSelection').onclick=()=>{selectedPoints.clear();$('onlySelectedPoints').checked=true;invalidateSummary();filterReport()};
+ $('entries').addEventListener('change',e=>{const input=e.target;if(!input.matches('[data-select-point]')||!input.dataset.selectPoint)return;const id=input.dataset.selectPoint;initialSelectionPending=false;if(input.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
+ $('selectVisiblePoints').onclick=()=>{initialSelectionPending=false;for(const {r} of selectableRows())selectedPoints.add(r.pointId);invalidateSummary();filterReport()};
+ $('clearPointSelection').onclick=()=>{selectedPoints.clear();$('onlySelectedPoints').checked=true;initialSelectionPending=false;invalidateSummary();filterReport()};
  $('pdfSelectedPoints').onclick=()=>guarded(async()=>{
   const snapshot=selectedReportSnapshot(data(),selectedPoints);
   if(!snapshot)return notify('Selecione pelo menos um ponto já registrado.');
@@ -91,14 +125,31 @@
   try{await exportReportDocuments([snapshot])}finally{filterReport()}
  });
  document.addEventListener('vistoria-saved',filterReport);
- document.addEventListener('DOMContentLoaded',()=>{const formats=document.querySelector('#view-review .report-formats');const actions=formats?.querySelector('.actions');if(actions){for(const id of ['pdf','pdfAllPoints']){const button=$(id);if(button)actions.append(button)}const title=formats.querySelector('summary');if(title)title.textContent='Exportação completa e outros formatos';}const conclusion=$('conclusion')?.closest('label');if(conclusion){const details=document.createElement('details');details.className='advanced report-conclusion';details.innerHTML='<summary>Conclusão / observações gerais</summary>';conclusion.before(details);details.append(conclusion);} });
+ document.addEventListener('DOMContentLoaded',()=>{
+  const report=$('view-review'),review=$('entries').closest('.card'),formats=report.querySelector('.report-formats'),actions=formats?.querySelector('.actions');
+  review.classList.add('report-preview-card');
+  const heading=review.querySelector('h2');if(heading)heading.textContent='Prévia do relatório';
+  const step=review.querySelector('.step');if(step)step.hidden=true;
+  if(actions){for(const id of ['pdf','pdfAllPoints']){const button=$(id);if(button)actions.append(button)}const title=formats.querySelector('summary');if(title)title.textContent='Exportação completa e outros formatos';}
+  const conclusion=$('conclusion')?.closest('label');
+  const extras=document.createElement('details');extras.className='report-extras';extras.innerHTML='<summary>Mais opções</summary>';report.append(extras);
+  if(conclusion){const details=document.createElement('details');details.className='advanced report-conclusion';details.innerHTML='<summary>Conclusão / observações gerais</summary>';const tools=conclusion.nextElementSibling;details.append(conclusion);if(tools?.classList.contains('technical-review'))details.append(tools);extras.append(details);}
+  const ai=document.createElement('details');ai.className='advanced report-ai';ai.innerHTML='<summary>Ferramentas de revisão com IA</summary>';for(const id of ['reportFullReview','reportFullReviewPanel']){const node=$(id);if(node)ai.append(node)}extras.append(ai);
+  const trash=$('deleted-points-panel');if(trash)extras.append(trash);
+  if(formats)extras.append(formats);extras.append(audit);
+  const exec=$('makeSummary').closest('details');exec.classList.add('report-executive');report.insertBefore(exec,extras);
+  report.insertBefore(dock,review);
+  const note=[...review.children].find(el=>el.matches('p.muted')&&el.textContent.startsWith('PDF:'));if(note&&formats)formats.append(note);
+  const nav=document.querySelector('.app-nav');if(nav&&typeof ResizeObserver!=='undefined'){const setOffset=()=>document.documentElement.style.setProperty('--report-nav-height',nav.getBoundingClientRect().height+'px');new ResizeObserver(setOffset).observe(nav);setOffset()}
+  filterReport();
+ });
  // A single viewer serves current records and TAG history, without changing the source files.
  const viewer=document.createElement('dialog');viewer.className='photo-viewer';viewer.innerHTML='<div class="viewer-head"><h2 id="viewerTitle">Fotos da vistoria</h2><button type="button" id="closeViewer" class="secondary">Fechar</button></div><div class="actions"><button type="button" id="viewerSingle">Foto ampliada</button><button type="button" id="viewerCompare" class="secondary">Antes / depois</button><button type="button" id="viewerZoom" class="secondary">Ampliar detalhe</button></div><div id="singlePhoto"><label>Foto<select id="viewerPhoto"></select></label><div class="photo-zoom"><img id="viewerImage" alt=""></div><p id="viewerCaption" class="muted"></p></div><div id="comparePhotos" hidden><p class="muted">Escolha as fotos para comparar. As legendas Antes/Depois sugerem a seleção.</p><div class="compare-grid"><div><label>Antes<select id="viewerBefore"></select></label><img id="beforeImage" alt="Antes da intervenção"></div><div><label>Depois<select id="viewerAfter"></select></label><img id="afterImage" alt="Depois da intervenção"></div></div></div>';document.body.append(viewer);let viewerPhotos=[];
  function displayPhoto(){const p=viewerPhotos[+$('viewerPhoto').value];if(!p)return;$('viewerImage').src=p.src;$('viewerImage').alt=p.caption||'Evidência da vistoria';$('viewerCaption').textContent=p.caption||'Sem legenda';$('viewerImage').classList.remove('zoomed');$('viewerZoom').textContent='Ampliar detalhe'}
  function displayCompare(){for(const [select,img] of [['viewerBefore','beforeImage'],['viewerAfter','afterImage']]){const p=viewerPhotos[+$(select).value];if(p){$(img).src=p.src;$(img).alt=p.caption||'Evidência'}}}
  function openPhotos(list,title){if(!list.length)return notify('Este ponto não possui fotos.');viewerPhotos=list;$('viewerTitle').textContent=title||'Fotos da vistoria';const options=list.map((p,i)=>'<option value="'+i+'">Foto '+(i+1)+' — '+esc(p.caption||'Sem legenda')+'</option>').join('');for(const id of ['viewerPhoto','viewerBefore','viewerAfter'])$(id).innerHTML=options;$('viewerBefore').value=Math.max(0,list.findIndex(p=>/^\[Antes\]/.test(p.caption)));const after=list.findIndex(p=>/^\[Depois\]/.test(p.caption));$('viewerAfter').value=after<0?Math.min(1,list.length-1):after;$('viewerCompare').disabled=list.length<2;$('singlePhoto').hidden=false;$('comparePhotos').hidden=true;$('viewerZoom').hidden=false;displayPhoto();displayCompare();viewer.showModal()}
  $('viewerPhoto').onchange=displayPhoto;$('viewerBefore').onchange=displayCompare;$('viewerAfter').onchange=displayCompare;$('closeViewer').onclick=()=>viewer.close();$('viewerSingle').onclick=()=>{$('singlePhoto').hidden=false;$('comparePhotos').hidden=true;$('viewerZoom').hidden=false};$('viewerCompare').onclick=()=>{$('singlePhoto').hidden=true;$('comparePhotos').hidden=false;$('viewerZoom').hidden=true};$('viewerZoom').onclick=()=>{const zoom=$('viewerImage').classList.toggle('zoomed');$('viewerZoom').textContent=zoom?'Ajustar à tela':'Ampliar detalhe'};
- function photoButtons(){$('entries').querySelectorAll('.entry').forEach((entry,i)=>{if(!records[i].photos.length)return;const b=document.createElement('button');b.type='button';b.className='secondary';b.dataset.viewPhotos=i;b.textContent='Ver fotos / comparar';entry.querySelector('.actions').append(b)})}
+ function photoButtons(){$('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];if(!r)return;const actions=entry.querySelector('.actions');if(!actions)return;if(r.photos.length){const b=document.createElement('button');b.type='button';b.className='secondary';b.dataset.viewPhotos=i;b.textContent='Ver fotos / comparar';actions.append(b)}const menu=document.createElement('details');menu.className='report-point-actions';const label=document.createElement('summary');label.textContent='Ações do ponto';actions.before(menu);menu.append(label,actions)})}
  $('entries').addEventListener('click',e=>{if(e.target.dataset.viewPhotos!==undefined){const r=records[+e.target.dataset.viewPhotos];if(r)openPhotos(r.photos,r.tag)}});
  const originalRender=render;render=function(){originalRender();filterReport();addReportDetails();photoButtons()};filterReport();addReportDetails();photoButtons();
  const historyPhotos=$('tagHistoryList');if(historyPhotos)historyPhotos.addEventListener('click',e=>{if(e.target.tagName!=='IMG')return;const entry=e.target.closest('.entry');openPhotos([...entry.querySelectorAll('figure')].map(f=>({src:f.querySelector('img').src,caption:f.querySelector('figcaption').textContent})),entry.querySelector('h3').textContent)});
