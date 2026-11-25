@@ -13,6 +13,7 @@
   const STORE = 'vistoria-google-drive';
   const CLIENT_KEY = STORE + ':clientId';
   const CONNECTED_KEY = STORE + ':connectionWanted';
+  const PERSISTENCE_ATTEMPT_KEY = STORE + ':persistenceAttempt';
   const FOLDER_KEY = STORE + ':folderId';
   const SYNC_KEY = STORE + ':syncMap';
   let accessToken = '', expiresAt = 0, googleAccount = '', running = false;
@@ -366,8 +367,11 @@
         enabled=true;folderId='';photosId='';pdfsId='';
         syncScope='';syncMap={};photoSynced={};
         $('gdrive-disconnect').hidden=false;
+        $('gdrive-connect').textContent='Google Drive conectado';
         display('Conectado ao Google Drive. Preparando pasta na raiz…');
         sessionMessage('Drive conectado nesta sessão. Para continuar conectado depois de fechar o aplicativo, toque em “Manter conta conectada” e autorize o acesso offline uma vez.');
+        // Solicite autorização offline uma vez por aba, somente para membros aprovados.
+        if(await tryAutomaticPersistence())return;
         await sync();
         await showTeam();
         await syncTeam();
@@ -398,6 +402,7 @@
         accessToken=result.access_token;
         expiresAt=Date.now()+Number(result.expires_in||3600)*1000;
         enabled=true;
+        try{sessionStorage.removeItem(PERSISTENCE_ATTEMPT_KEY);}catch{}
         $('gdrive-connect').textContent='Google Drive conectado';
         $('gdrive-disconnect').hidden=false;
         sessionMessage('Conexão automática ativa: a autorização é renovada enquanto a sessão persistente for válida (até 30 dias).');
@@ -414,6 +419,15 @@
     })();
     return sessionCheck;
   }
+  async function tryAutomaticPersistence(){
+    try{
+      if(sessionStorage.getItem(PERSISTENCE_ATTEMPT_KEY))return false;
+      const {member}=await teamRequest('POST',{action:'request'});
+      if(member?.status!=='approved')return false;
+      sessionStorage.setItem(PERSISTENCE_ATTEMPT_KEY,'1');
+      return await enablePersistent();
+    }catch{return false;}
+  }
   async function enablePersistent(){
     try{
       assertReady();
@@ -422,17 +436,20 @@
       const d=await r.json().catch(()=>({}));
       if(!r.ok||!d.url)throw Error(d.error||'Autorização indisponível');
       location.assign(d.url);
-    }catch(e){display(e.message,true);sessionMessage('Falha ao ativar conexão automática: '+e.message);}
+      return true;
+    }catch(e){display(e.message,true);sessionMessage('Falha ao ativar conexão automática: '+e.message);return false;}
   }
   function disconnect() {
     const token=accessToken;
     const disconnectingSubject=queueMember?.google_subject;
     queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
     localStorage.removeItem(CONNECTED_KEY);
+    try{sessionStorage.removeItem(PERSISTENCE_ATTEMPT_KEY);}catch{}
     if(disconnectingSubject)void window.VistoriaBackground?.clearFor(disconnectingSubject).catch(()=>{});
     void fetch('/api/personal-session',{method:'DELETE',cache:'no-store',credentials:'same-origin'}).catch(()=>{});
     accessToken='';expiresAt=0;enabled=false;clearTimeout(scheduled);
     $('gdrive-disconnect').hidden=true;
+    $('gdrive-connect').textContent='Conectar Google';
     googleAccount='';folderId='';photosId='';pdfsId='';syncScope='';syncMap={};photoSynced={};remoteItems=[];
     ++teamViewGeneration;$('gdrive-team-users')?.replaceChildren();if($('gdrive-team-status'))$('gdrive-team-status').textContent='Conta desconectada';
     if(token&&window.google?.accounts?.oauth2)window.google.accounts.oauth2.revoke(token,()=>{});
