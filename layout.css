@@ -130,3 +130,14 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
  #historyList .select-report{min-height:40px;margin-right:0}
  #historyList .report-more>summary{min-height:44px;box-sizing:border-box}
 }
+
+/* Leitura técnica do relatório: filtro visual sem alterar registros ou exportação. */
+#view-review .report-filters{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;align-items:end}
+#view-review .report-filters input,#view-review .report-filters select{min-height:48px}
+#view-review #entries>.entry[hidden]{display:none!important}
+#view-review .report-point-details{margin:12px 0;border:1px solid #ded8e7;border-radius:10px;background:#faf9fc;overflow:hidden}
+#view-review .report-point-details>summary{min-height:48px;box-sizing:border-box;padding:14px;color:#45325e;font-weight:700;cursor:pointer}
+#view-review .report-point-details dl{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin:0;padding:12px 14px;border-top:1px solid #ded8e7}
+#view-review .report-point-details dt{font-size:12px;font-weight:700;color:#5a4774}
+#view-review .report-point-details dd{margin:0 0 8px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}
+@media(max-width:750px){#view-review .report-filters{grid-template-columns:minmax(0,1fr);gap:8px}}
