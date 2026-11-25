@@ -367,10 +367,10 @@ test('arquivos obrigatórios do cache offline são publicados pelo Vercel',()=>{
 });
 
 
-test('resumo para superior mantém geração, cópia e compartilhamento',()=>{
+test('resumo para liderança mantém geração, cópia e compartilhamento',()=>{
  const source=readFileSync('field-tools.js','utf8');
- assert.ok(source.includes('<summary>Resumo para superior</summary>'));
- assert.ok(source.includes('Cole na conversa com seu superior.'));
+ assert.ok(source.includes('<summary>Resumo para liderança</summary>'));
+ assert.ok(source.includes('Cole na conversa com sua liderança.'));
  assert.ok(!source.includes('Resumo para o chefe'));
  for(const id of ['makeSummary','copySummary','shareSummary'])assert.ok(source.includes(id));
 });
