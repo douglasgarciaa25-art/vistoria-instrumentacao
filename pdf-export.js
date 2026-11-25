@@ -72,7 +72,9 @@ async function exportReportDocuments(documents,ids=[]){
  const reserve=headingHeight+30+Math.min(captionHeight,140);
  const naturalHeight=Math.min(records.length===1?300:380,CW*img.height/img.width);
  if(y-55-reserve<Math.min(naturalHeight,180))newPage();
- const maxHeight=Math.max(1,Math.min(naturalHeight,y-55-reserve));
+ const finalPhoto=i===records.length-1&&j===r.photos.length-1&&!m.conclusion;
+ const controlReserve=finalPhoto&&y-55-reserve-140>=Math.min(naturalHeight,160)?140:0;
+ const maxHeight=Math.max(1,Math.min(naturalHeight,y-55-reserve-controlReserve));
  const scale=Math.min(CW/img.width,maxHeight/img.height),w=img.width*scale,h=img.height*scale;
  if(j===0)heading('REGISTRO FOTOGRÁFICO',h+20);
  page.drawImage(img,{x:M+(CW-w)/2,y:y-h-5,width:w,height:h});y-=h+15;
@@ -80,7 +82,7 @@ async function exportReportDocuments(documents,ids=[]){
  }}
  }
  if(m.conclusion){heading('3. Conclusão / observações finais');paragraph(m.conclusion)}
- need(125);heading('Controle do documento',88);grid([['Elaboração',m.author],['Data',datefmt(m.date)]]);need(57);y-=12;page.drawLine({start:{x:M,y},end:{x:M+CW*.65,y},thickness:.7,color:line});y-=12;draw('Assinatura do responsável técnico',M,y,9,bold);y-=12;paragraph(m.author||'Nome a preencher',9,muted);paragraph('Campo para assinatura manual. Não constitui assinatura digital.',8,muted);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
+ need(130);heading('Controle do documento',88);paragraph('Elaboração: '+(m.author||'Não informado')+' | Data: '+datefmt(m.date),9,muted);need(65);y-=12;page.drawLine({start:{x:M,y},end:{x:M+CW*.65,y},thickness:.7,color:line});y-=12;draw('Assinatura do responsável técnico',M,y,9,bold);y-=12;paragraph(m.author||'Nome a preencher',9,muted);paragraph('Campo para assinatura manual. Não constitui assinatura digital.',8,muted);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
  }
  const pages=doc.getPages();pages.forEach((p,i)=>{p.drawLine({start:{x:M,y:39},end:{x:W-M,y:39},thickness:.5,color:line});p.drawText('CMOC Brasil | Levantamento de instrumentação e automação',{x:M,y:25,size:8,font:regular,color:muted});const s=(i+1)+' / '+pages.length;p.drawText(s,{x:W-M-regular.widthOfTextAtSize(s,8),y:25,size:8,font:regular,color:muted})});
  const first=documents[0].meta;
