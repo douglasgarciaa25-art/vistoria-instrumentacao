@@ -129,3 +129,24 @@ test('motor offline preserva fatos, identificadores e incerteza',async()=>{
  ['precisa verificar a celula de carga','É necessário verificar a célula de carga.']
  ])assert.equal(revise(input),expected,input);
 });
+
+test('relatório: filtros de TAG, OS e situação preservam índices e dados',()=>{
+ const s=readFileSync('workflow.js','utf8');
+ const code=s.slice(s.indexOf('function reportPointMatches('),s.indexOf('let filterReportId;'));
+ const {matches,details}=new Function(code+';return {matches:reportPointMatches,details:reportPointDetails};')();
+ const rows=[{tag:'C240 BA01',pointWorkOrder:'000123',status:'Corrigido',action:'Calibração',impact:'<teste>',completionWork:'Executado'},{tag:'C215 BA02',status:'Pendente'},{tag:'C270',status:'Sem pendência'},{tag:'C221',status:'Em acompanhamento'}];
+ const original=JSON.stringify(rows);
+ assert.deepEqual(rows.map((r,i)=>matches(r,'','finalizados')?i:-1),[0,-1,2,-1]);
+ assert.equal(matches(rows[0],'000123','finalizados'),true);
+ assert.equal(matches(rows[0],'000123','Pendente'),false);
+ assert.equal(matches(rows[0],'CALIBRAÇÃO',''),true);
+ assert.equal(matches(rows[3],'','Em acompanhamento'),true);
+ assert.ok(details(rows[0]).some(([k,v])=>k==='Impacto'&&v==='<teste>'));
+ assert.ok(details(rows[0]).some(([k,v])=>k==='Serviço realizado'&&v==='Executado'));
+ assert.deepEqual(details(rows[1]),[]);
+ assert.equal(JSON.stringify(rows),original);
+ assert.match(s,/dd.textContent=String\(value\)/);
+ assert.match(s,/entry.hidden=!match/);
+ assert.match(s,/filterReportId!==activeReportId/);
+ assert.match(s,/originalRender\(\);filterReport\(\);addReportDetails\(\);photoButtons\(\)/);
+});
