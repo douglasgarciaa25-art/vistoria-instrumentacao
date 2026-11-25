@@ -365,3 +365,12 @@ test('arquivos obrigatórios do cache offline são publicados pelo Vercel',()=>{
  const html=readFileSync('index.html','utf8');
  for(const [,src] of html.matchAll(/<script[^>]*src=["']([^"']+)["']/g))assert.ok(files.includes('/'+src.replace(/^\//,'')),src+' deve estar no cache');
 });
+
+
+test('resumo para superior mantém geração, cópia e compartilhamento',()=>{
+ const source=readFileSync('field-tools.js','utf8');
+ assert.ok(source.includes('<summary>Resumo para superior</summary>'));
+ assert.ok(source.includes('Cole na conversa com seu superior.'));
+ assert.ok(!source.includes('Resumo para o chefe'));
+ for(const id of ['makeSummary','copySummary','shareSummary'])assert.ok(source.includes(id));
+});
