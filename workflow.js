@@ -56,7 +56,7 @@
   $('selectionDialogCount').textContent=selectedPoints.size+' selecionado(s)';
   $('togglePointSelection').textContent=selectedPoints.size?'Alterar seleção':'Selecionar pontos';
   $('clearPointSelection').disabled=!selectedPoints.size;
-  $('pdfSelectedPoints').disabled=!selectedPoints.size;
+  $('pdfSelectedPoints').disabled=!selectedPoints.size;const previewControl=$('previewSelectedPdf');if(previewControl)previewControl.disabled=!selectedPoints.size;
   $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
    const r=records[i];if(!r)return;
    let input=entry.querySelector('[data-select-point]');
