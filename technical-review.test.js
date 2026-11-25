@@ -165,3 +165,22 @@ test('indicadores da vistoria contam situações reais e conclusão sem alterar 
  assert.match(s,/reportManagementStats\(records\)/);
  assert.match(s,/function update\(\)\{updateReportSummary\(\)/);
 });
+
+
+test('PDF parcial contém somente IDs selecionados, fotos e números originais, sem alterar a vistoria',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ const body=source.slice(source.indexOf('function selectedReportSnapshot('),source.indexOf('function updatePointSelection('));
+ const snapshot=new Function(body+';return selectedReportSnapshot;')();
+ const doc={meta:{title:'Vistoria',workOrder:'000123',sourcePdf:'PDF completo',sourcePdfName:'original.pdf',conclusion:'Conclusão geral'},records:[{pointId:'point-001',tag:'A',photos:[{src:'a'}]},{pointId:'point-002',tag:'B',photos:[{src:'b'}]},{pointId:'point-003',tag:'C',photos:[{src:'c'}]}],pending:{fields:{tag:'Rascunho'}}};
+ const before=JSON.stringify(doc);
+ const partial=snapshot(doc,new Set(['point-003','point-001','missing']));
+ assert.deepEqual(partial.records.map(r=>r.tag),['A','C']);
+ assert.deepEqual(partial.exportPointNumbers,[1,3]);
+ assert.deepEqual(partial.records.map(r=>r.photos[0].src),['a','c']);
+ assert.equal(partial.meta.workOrder,'000123');assert.equal(partial.meta.sourcePdf,'');assert.equal(partial.meta.conclusion,'');assert.equal(partial.pending,undefined);
+ assert.equal(snapshot(doc,new Set()),null);
+ partial.records[0].tag='alterado';assert.equal(JSON.stringify(doc),before);
+ assert.match(source,/selectedPoints.clear\(\);\$\('onlySelectedPoints'\).checked=false/);
+ assert.match(source,/await exportReportDocuments\(\[snapshot\]\)/);
+ assert.match(readFileSync('pdf-export.js','utf8'),/reportDocument.exportPointNumbers\?\.\[i\]/);
+});
