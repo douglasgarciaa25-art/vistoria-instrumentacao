@@ -217,3 +217,5 @@ test('diálogo e opções recolhíveis mantêm os controles existentes',()=>{
  const source=readFileSync('workflow.js','utf8');const css=readFileSync('layout.css','utf8');
  assert.match(source,/selectionDialog.showModal\(\)/);assert.match(source,/selectionDialogList/);assert.match(source,/details.append\(tools\)/);assert.match(source,/extras.append\(trash\)/);assert.match(source,/extras.append\(audit\)/);assert.match(source,/report.insertBefore\(dock,review\)/);assert.match(css,/report-export-dock\{position:sticky/);
 });
+
+ test('prévia real reutiliza o PDF serializado e preserva opções na auditoria',()=>{const pdf=readFileSync('pdf-export.js','utf8'),flow=readFileSync('workflow.js','utf8');assert.match(pdf,/const pdfBlob=new Blob\(\[await doc.save\(\)\]/);assert.match(pdf,/options.preview\?previewGeneratedPdf:download/);assert.match(pdf,/save.onclick=\(\)=>download\(blob,name\)/);assert.match(flow,/return exportPdf\(documents,ids,options\)/);assert.match(flow,/exportReportDocuments\(\[snapshot\],\[\],\{preview:true\}\)/);});
