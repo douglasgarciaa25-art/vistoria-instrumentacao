@@ -18,6 +18,21 @@
  metricsDisclosure.open=!window.matchMedia('(max-width:750px)').matches;
  const editor=document.createElement('div');editor.id='view-editor';editor.className='app-view';editor.innerHTML='<div class="view-heading"><div><p class="eyebrow">LEVANTAMENTO EM CAMPO</p><h2>Minha vistoria</h2><p>Identifique o relatório e adicione os pontos inspecionados.</p></div><button type="button" class="secondary" data-go="review">Revisar relatório '+icon('arrow')+'</button></div><div class="editor-steps"><a href="#identification">1. Identificação</a><a href="#form">2. Pontos e fotos</a><button type="button" data-go="review">3. Revisão</button></div>';
  const report=document.createElement('div');report.id='view-review';report.className='app-view';report.innerHTML='<div class="view-heading"><div><p class="eyebrow">REVISÃO & ENTREGA</p><h2>Pronto para compartilhar</h2><p>Confira os registros, complete a conclusão e baixe o documento.</p></div><button type="button" class="secondary" data-go="editor">'+icon('plus')+'Adicionar ponto</button></div><div class="report-strip"><span id="currentReference">Vistoria em edição</span><strong><span id="count">0</span> pontos registrados</strong></div>';
+ const reportSummary=document.createElement('section');reportSummary.className='card report-management-summary';reportSummary.setAttribute('aria-labelledby','reportManagementTitle');
+ reportSummary.innerHTML='<h3 id="reportManagementTitle">Acompanhamento da vistoria</h3><div class="report-management-grid"><div><small>Total de pontos</small><strong id="reportTotal">0</strong></div><div data-kind="done"><small>Finalizados</small><strong id="reportDone">0</strong></div><div data-kind="progress"><small>Em acompanhamento</small><strong id="reportProgress">0</strong></div><div data-kind="pending"><small>Pendentes</small><strong id="reportPending">0</strong></div></div><label for="reportCompletion">Índice de conclusão <strong id="reportCompletionText">—</strong></label><progress id="reportCompletion" max="100" value="0"></progress><p class="muted" id="reportOtherStatus" hidden></p><p class="muted" id="reportManagementHint">Indicadores de todos os pontos registrados nesta vistoria, independentemente dos filtros.</p>';
+ report.append(reportSummary);
+ function reportManagementStats(points){
+  const total=points.length,done=points.filter(r=>['Corrigido','Sem pendência'].includes(r.status)).length,progress=points.filter(r=>r.status==='Em acompanhamento').length,pending=points.filter(r=>r.status==='Pendente').length;
+  return {total,done,progress,pending,other:total-done-progress-pending,rate:total?Math.round(done/total*1000)/10:null};
+ }
+ function updateReportSummary(){
+  const stats=reportManagementStats(records);
+  for(const [id,key] of [['reportTotal','total'],['reportDone','done'],['reportProgress','progress'],['reportPending','pending']])$(id).textContent=stats[key];
+  $('reportCompletion').value=stats.rate??0;
+  $('reportCompletionText').textContent=stats.rate===null?'Sem pontos':stats.rate.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+  $('reportOtherStatus').hidden=!stats.other;
+  $('reportOtherStatus').textContent=stats.other?stats.other+' ponto(s) com situação não classificada.':'';
+ }
  const storage=document.createElement('div');storage.id='view-cloud';storage.className='app-view';storage.innerHTML='<div class="view-heading"><div><p class="eyebrow">GOOGLE DRIVE</p><h2>Vistorias na nuvem Google</h2><p>Organize suas vistorias, acompanhe a equipe e sincronize com segurança.</p></div></div>';
  cloud.id='googleCloudHost';
  meta.id='identification';home.append(history);editor.append(meta,$('form'));report.append(review);const extras=document.createElement('details');extras.className='card cloud-extras';const extrasTitle=document.createElement('summary');extrasTitle.textContent='Backup e instalação do aplicativo';extras.append(extrasTitle,backup,install);storage.append(cloud,extras);oldLayout.remove();main.prepend(home,editor,report,storage);
@@ -43,7 +58,7 @@
  ['newReport','clear'].forEach(id=>$(id).addEventListener('click',()=>{if(historyReady&&!busy)show('editor',true)}));
  history.addEventListener('click',e=>{const b=e.target.closest('[data-open-report],[data-duplicate-report]');if(b&&historyReady&&!busy&&!historyBusy)show('editor',true)},true);
  $('entries').addEventListener('click',e=>{if(e.target.closest('[data-edit],[data-duplicate-item]'))show('editor',true)},true);
- function update(){const docs=historyItems.map(r=>r.document),points=docs.flatMap(d=>d.records);$('metricReports').textContent=docs.length;$('metricPoints').textContent=points.length;$('metricPending').textContent=points.filter(r=>['Pendente','Em acompanhamento'].includes(r.status)).length;$('count').textContent=records.length;const label=$('number').value||'Vistoria em edição';$('activeLabel').textContent=label;$('currentReference').textContent=label;
+ function update(){updateReportSummary();const docs=historyItems.map(r=>r.document),points=docs.flatMap(d=>d.records);$('metricReports').textContent=docs.length;$('metricPoints').textContent=points.length;$('metricPending').textContent=points.filter(r=>['Pendente','Em acompanhamento'].includes(r.status)).length;$('count').textContent=records.length;const label=$('number').value||'Vistoria em edição';$('activeLabel').textContent=label;$('currentReference').textContent=label;
  document.querySelectorAll('.badge').forEach(b=>{b.dataset.tone=/Crítica|Alta/.test(b.textContent)?'urgent':/Corrigido|Sem pendência/.test(b.textContent)?'good':'neutral'})}
  for(const el of [$('historyList'),$('entries')])new MutationObserver(update).observe(el,{childList:true,subtree:true});$('number').addEventListener('input',update);
  function connection(){$('connectionBadge').textContent=navigator.onLine?'Online':'Offline';$('connectionBadge').classList.toggle('offline',!navigator.onLine)}addEventListener('online',connection);addEventListener('offline',connection);connection();show('home');
