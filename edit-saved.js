@@ -19,7 +19,7 @@
   // Current records always come from the live form, never the saved snapshot.
   addGroup('Vistoria aberta · '+($('number').value||'Sem referência'),records,activeReportId,true);
   for(const row of others){
-   const meta=row.document.meta||{},points=structuredClone(row.document.records);
+   const meta=row.document.meta||{},points=row.document.records.map(r=>({pointId:r.pointId,tag:r.tag,area:r.area,status:r.status}));
    window.VistoriaPointIds?.ensure(points,row.id);
    addGroup([meta.title||'Vistoria',meta.number,meta.workOrder?'OS '+meta.workOrder:'',meta.date].filter(Boolean).join(' · '),points,row.id,false);
   }
