@@ -298,6 +298,7 @@
  reset=function(){const result=oldReset.apply(this,arguments);expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
  const oldFill=fill;
  fill=function(){const result=oldFill.apply(this,arguments);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
+ document.addEventListener('vistoria-point-editor-opened',()=>{expanded.fill(false);revealFilledOptions();setStep(0)});
  document.getElementById('savedPointPicker')?.addEventListener('change',()=>{
   revealFilledOptions();setStep(0);
  });
