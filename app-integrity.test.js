@@ -372,3 +372,11 @@ test('Android PDF preview uses local renderer, scrollable pages, zoom and origin
  for(const expression of [/import\('\/pdf-renderer-v4\.js'\)/,/workerSrc='\/pdf-worker-v4\.js'/,/getDocument\(\{data:bytes,isEvalSupported:false/,/page\.render\(/,/IntersectionObserver/,/for\(let n=1;n<=pdf\.numPages;n\+\+\)/,/setZoom/,/download\(blob,name\)/,/URL\.revokeObjectURL\(url\)/,/loading\.destroy\(\)/])assert.match(source,expression);
  const sw=readFileSync('sw.js','utf8');assert.match(sw,/pdf-renderer-v4\.js/);assert.match(sw,/pdf-worker-v4\.js/);
 });
+
+ test('busca de fotos usa seletor nativo de imagens sem forçar câmera e preserva evidências de conclusão',()=>{
+ const html=readFileSync('index.html','utf8'),field=readFileSync('field-tools.js','utf8');
+ const gallery=html.match(/<input[^>]*id="photos"[^>]*>/)[0],after=field.match(/<input[^>]*id="completionPhoto"[^>]*>/)[0];
+ for(const picker of [gallery,after]){assert.match(picker,/accept="image\/\*"/);assert.match(picker,/\bmultiple\b/);assert.doesNotMatch(picker,/\bcapture\b/);}
+ for(const [source,id] of [[html,'camera'],[field,'completionCamera']])assert.match(source.match(new RegExp('<input[^>]*id="'+id+'"[^>]*>'))[0],/capture="environment"/);
+ assert.match(html,/Google Fotos/);assert.match(html,/async function importSelectedPhotos/);assert.match(html,/if\(photos\.length>=8\)/);assert.match(html,/catch\{failed\+\+\}/);assert.match(html,/thumbs\(\);save\(\)/);assert.match(field,/importSelectedPhotos\(e,'\[Depois\] Correção realizada'\)/);
+ });
