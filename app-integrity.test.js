@@ -365,3 +365,11 @@ test('arquivos obrigatórios do cache offline são publicados pelo Vercel',()=>{
  const html=readFileSync('index.html','utf8');
  for(const [,src] of html.matchAll(/<script[^>]*src=["']([^"']+)["']/g))assert.ok(files.includes('/'+src.replace(/^\//,'')),src+' deve estar no cache');
 });
+
+
+test('Android PDF preview uses local renderer, scrollable pages, zoom and original file actions',()=>{
+ const source=readFileSync('pdf-export.js','utf8').split('/* Relatório A4')[0];
+ assert.doesNotMatch(source,/createElement\(['"]iframe['"]\)/);
+ for(const expression of [/import\('\/pdf-renderer-v4\.js'\)/,/workerSrc='\/pdf-worker-v4\.js'/,/getDocument\(\{data:bytes,isEvalSupported:false/,/page\.render\(/,/IntersectionObserver/,/for\(let n=1;n<=pdf\.numPages;n\+\+\)/,/setZoom/,/download\(blob,name\)/,/URL\.revokeObjectURL\(url\)/,/loading\.destroy\(\)/])assert.match(source,expression);
+ const sw=readFileSync('sw.js','utf8');assert.match(sw,/pdf-renderer-v4\.js/);assert.match(sw,/pdf-worker-v4\.js/);
+});
