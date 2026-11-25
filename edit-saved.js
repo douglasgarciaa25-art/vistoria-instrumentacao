@@ -3,26 +3,42 @@
  const picker=document.createElement('label');picker.className='wide';const pickerTitle=document.createElement('span');picker.append(pickerTitle);
  const select=document.createElement('select');select.id='savedPointPicker';picker.append(select);
  const hint=document.createElement('small');hint.className='muted';hint.textContent='Selecione um ponto de qualquer vistoria salva neste aparelho. O aplicativo abre a vistoria correspondente.';picker.append(hint);$('formTitle').after(picker);
- const choices=new Map();
+ let choices=new Map(),pickerSignature='',pickerFocused=false;
+ select.addEventListener('focus',()=>{pickerFocused=true});
+ select.addEventListener('blur',()=>{pickerFocused=false;setTimeout(()=>refreshPicker(),200)});
  function pointLabel(r){return String(r.tag||'').trim()||'TAG não informada';}
  function otherSavedReports(items,currentId){return items.filter(row=>row.id!==currentId&&Array.isArray(row.document?.records)&&row.document.records.length);}
  function refreshPicker(){
-  const others=otherSavedReports(historyItems,activeReportId);
+  // Android may close or jump its native picker when its options are rebuilt.
+  // Keep a stable snapshot while it is focused and only change DOM when options change.
+  if(pickerFocused)return;
+  window.VistoriaPointIds?.ensure(records,activeReportId);
+  const others=otherSavedReports(historyItems,activeReportId).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   const total=records.length+others.reduce((sum,row)=>sum+row.document.records.length,0);
-  picker.hidden=!total;pickerTitle.textContent='Ponto salvo para editar ('+total+' '+(total===1?'ponto':'pontos')+' em '+(others.length+(records.length?1:0))+' vistoria(s))';
-  choices.clear();select.replaceChildren();
-  const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Selecione um ponto salvo';select.append(placeholder);
+  const title='Ponto salvo para editar ('+total+' '+(total===1?'ponto':'pontos')+' em '+(others.length+(records.length?1:0))+' vistoria(s))';
+  if(picker.hidden!==!total)picker.hidden=!total;
+  if(pickerTitle.textContent!==title)pickerTitle.textContent=title;
+  const nextChoices=new Map();
   function addPoints(points,reportId,current,reference){
-   points.forEach((r,i)=>{const option=document.createElement('option');const key=current?String(i):'saved:'+choices.size;const tag=pointLabel(r);option.value=key;option.textContent=tag;choices.set(key,{reportId,pointId:r.pointId,index:i,current,tag,reference,area:r.area,status:r.status});select.append(option)});
+   points.forEach((r,i)=>{const key=JSON.stringify([reportId,r.pointId||'index:'+i]);const tag=pointLabel(r);nextChoices.set(key,{reportId,pointId:r.pointId,index:i,current,tag,reference,area:r.area,status:r.status})});
   }
-  // Current records always come from the live form, never the saved snapshot.
   addPoints(records,activeReportId,true,$('number').value||'Vistoria aberta');
   for(const row of others){
    const meta=row.document.meta||{},points=row.document.records.map(r=>({pointId:r.pointId,tag:r.tag,area:r.area,status:r.status}));
    window.VistoriaPointIds?.ensure(points,row.id);
    addPoints(points,row.id,false,[meta.number,meta.workOrder?'OS '+meta.workOrder:'',meta.date].filter(Boolean).join(' · ')||'Vistoria salva');
   }
-  select.value=editing===null?'':String(editing);
+  const ordered=[...nextChoices].sort((a,b)=>a[1].tag.localeCompare(b[1].tag,'pt-BR',{numeric:true})||a[0].localeCompare(b[0]));
+  const signature=JSON.stringify(ordered.map(([key,p])=>[key,p.tag]));
+  choices=nextChoices;
+  if(signature!==pickerSignature){
+   const fragment=document.createDocumentFragment();
+   const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Selecione um ponto salvo';fragment.append(placeholder);
+   for(const [key,p] of ordered){const option=document.createElement('option');option.value=key;option.textContent=p.tag;fragment.append(option)}
+   select.replaceChildren(fragment);pickerSignature=signature;
+  }
+  const selected=editing===null?'':([...choices].find(([,p])=>p.current&&p.index===editing)?.[0]||'');
+  if(select.value!==selected)select.value=selected;
  }
  function hasPendingDraft(){
   const defaults={condition:'',priority:'Média',status:'Pendente'};
@@ -51,7 +67,7 @@
    refreshPicker();document.dispatchEvent(new CustomEvent('vistoria-point-editor-opened'));
   });
  }
- select.onchange=async()=>{const target=choices.get(select.value);if(!target)return;if(busy||historyBusy){refreshPicker();notify('Aguarde a operação em andamento.');return}if([...choices.values()].filter(p=>p.tag===target.tag).length>1&&!confirm('Existem registros com a mesma TAG. Abrir '+target.tag+'?\n'+[target.reference,target.area,target.status,'Ponto '+(target.index+1)].filter(Boolean).join(' · '))){refreshPicker();return}if(target.current){openPoint(target.index);return}select.disabled=true;try{await openSavedReportPoint(target)}finally{select.disabled=false;refreshPicker()}};
+ select.onchange=async()=>{const target=choices.get(select.value);pickerFocused=false;select.blur();if(!target){refreshPicker();return;}if(busy||historyBusy){refreshPicker();notify('Aguarde a operação em andamento.');return}if([...choices.values()].filter(p=>p.tag===target.tag).length>1&&!confirm('Existem registros com a mesma TAG. Abrir '+target.tag+'?\n'+[target.reference,target.area,target.status,'Ponto '+(target.index+1)].filter(Boolean).join(' · '))){refreshPicker();return}if(target.reportId===activeReportId){window.VistoriaPointIds?.ensure(records,activeReportId);const i=pointIndex(records,target);if(i<0){refreshPicker();return notify('O ponto foi alterado. Selecione novamente.')}openPoint(i);return}select.disabled=true;try{await openSavedReportPoint(target)}finally{select.disabled=false;refreshPicker()}};
  const originalRender=render;render=function(){originalRender();refreshPicker()};
  const originalReset=reset;reset=function(){originalReset();refreshPicker()};
  const originalFill=fill;fill=function(d){originalFill(d);refreshPicker()};
