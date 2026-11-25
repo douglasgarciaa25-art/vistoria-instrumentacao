@@ -33,7 +33,7 @@
  const externalPreview=document.createElement('div');externalPreview.id='externalSelectedPoints';$('entries').after(externalPreview);
  function selectionSources(){
   window.VistoriaPointIds?.ensure(records,activeReportId);
-  const current={id:activeReportId,meta:{number:$('number').value,workOrder:$('workOrder').value},records,current:true};
+  const current={id:activeReportId,meta:{number:$('number').value,workOrder:$('workOrder').value,date:$('date').value},records,current:true};
   const others=historyItems.filter(row=>row.id!==activeReportId&&Array.isArray(row.document?.records)&&row.document.records.length).map(row=>{
    const points=row.document.records.map(r=>({...r}));
    window.VistoriaPointIds?.ensure(points,row.id);
@@ -97,6 +97,7 @@
   $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];entry.hidden=!r||!selectedPoints.has(r.pointId)});
   emptySelection.hidden=!preview||selectedPoints.size>0;
   const total=allSelectionRows().length;
+  const noRecords=$('entries').querySelector('.empty');if(noRecords)noRecords.hidden=selectedPoints.size>0;
   emptySelection.textContent=total?'Escolha os pontos para montar a prévia.':'Adicione ou sincronize pontos de vistoria.';
   $('togglePointSelection').disabled=!total;
   renderExternalPreview();
@@ -127,14 +128,14 @@
  }
 
  function renderExternalPreview(){
-  externalPreview.replaceChildren();
+  const opened=new Set([...externalPreview.querySelectorAll('details[open]')].map(el=>el.dataset.selectionKey));externalPreview.replaceChildren();
   for(const {r,i,source,key} of selectedRows()){
    if(source.current)continue;
    const card=document.createElement('article');card.className='entry';
    const title=document.createElement('h3');title.textContent=r.tag||'TAG não informada';card.append(title);
    const ref=document.createElement('p');ref.className='muted';ref.textContent=[source.meta.number,r.area,r.status,'Ponto '+(i+1)].filter(Boolean).join(' · ');card.append(ref);
    const problem=document.createElement('p');problem.textContent=r.problem||'Condição não informada';card.append(problem);
-   const detail=document.createElement('details');detail.className='report-point-details';const label=document.createElement('summary');label.textContent='Ver detalhes técnicos';detail.append(label);
+   const detail=document.createElement('details');detail.className='report-point-details';detail.dataset.selectionKey=key;detail.open=opened.has(key);const label=document.createElement('summary');label.textContent='Ver detalhes técnicos';detail.append(label);
    const dl=document.createElement('dl');for(const [name,value] of reportPointDetails(r)){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=String(value);dl.append(dt,dd)}detail.append(dl);card.append(detail);
    if(r.photos?.length){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Ver fotos / comparar';button.onclick=()=>openPhotos(r.photos,r.tag);card.append(button)}
    externalPreview.append(card);
