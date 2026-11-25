@@ -252,7 +252,7 @@ test('seleção filtrada substitui pontos de outras situações e todos inclui o
  controls.reportStatusFilter.value='';apply(selectedPoints,rows());assert.equal(selectedPoints.size,4);
  controls.reportSearch.value='B';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-002']);assert.equal(JSON.stringify(records),before);
  assert.match(source,/selectAllReportPoints/);assert.match(source,/fora do filtro/);
- const editor=readFileSync('edit-saved.js','utf8');assert.match(editor,/addGroup\('Vistoria aberta[^\n]*,records,activeReportId,true\)/);assert.doesNotMatch(editor,/VistoriaReportSelection|reportStatusFilter|selectedPoints/);
+ const editor=readFileSync('edit-saved.js','utf8');assert.match(editor,/addPoints\(records,activeReportId,true,/);assert.doesNotMatch(editor,/VistoriaReportSelection|reportStatusFilter|selectedPoints/);
 });
 
 test('editor oferece pontos de todas as vistorias salvas, sem misturar IDs nem ignorar rascunhos',()=>{
@@ -263,6 +263,12 @@ test('editor oferece pontos de todas as vistorias salvas, sem misturar IDs nem i
  const items=[{id:'current',document:{records:[{tag:'A'}]}},{id:'another',document:{records:[{tag:'B'}]}},{id:'empty',document:{records:[]}}];
  assert.deepEqual(reports(items,'current').map(r=>r.id),['another']);
  const points=[{pointId:'point-001',tag:'X'},{pointId:'point-002',tag:'X'}];assert.equal(find(points,{pointId:'point-002'}),1);assert.equal(find(points,{pointId:'missing'}),-1);assert.equal(find(points,{}),-1);
- assert.match(source,/createElement\('optgroup'\)/);assert.match(source,/await persistCurrent\(\);[\s\S]*?objectStore\('reports'\)\.get\(target.reportId\)/);
+ assert.match(source,/select.append\(option\)/);assert.doesNotMatch(source,/createElement\('optgroup'\)/);assert.match(source,/await persistCurrent\(\);[\s\S]*?objectStore\('reports'\)\.get\(target.reportId\)/);
  assert.match(source,/reset\(\);activeReportId=row.id;fill\(doc\);\s*if\(hasPendingDraft\(\)\)/);assert.match(source,/if\(editing!==i\)notify/);assert.match(source,/document.addEventListener\('vistoria-saved',refreshPicker\)/);
+});
+
+test('seletor de edição exibe somente TAG e mantém identidade de registros repetidos',()=>{
+ const source=readFileSync('edit-saved.js','utf8');const code=source.slice(source.indexOf('function pointLabel('),source.indexOf('function otherSavedReports('));const label=new Function(code+';return pointLabel;')();
+ assert.equal(label({tag:'C260 BA01',area:'BV',status:'Pendente'}),'C260 BA01');assert.equal(label({tag:'  MC4530_FI015  '}),'MC4530_FI015');assert.equal(label({}),'TAG não informada');
+ assert.match(source,/option.textContent=tag/);assert.match(source,/choices.set\(key,\{reportId,pointId:r.pointId,index:i,current,tag/);assert.match(source,/Existem registros com a mesma TAG/);
 });
