@@ -10,9 +10,36 @@
  $('planCount').textContent=actionRows.length+' pendência(s) encontrada(s)';$('planList').innerHTML=actionRows.map(({record:r,ref},i)=>'<article class="entry"><div class="plan-title"><h3>'+esc(r.tag)+' · '+esc(r.area)+'</h3><span class="badge">'+esc(r.priority)+'</span></div><p>'+esc(r.problem)+'</p><p><b>Ação:</b> '+esc(r.action||'A definir')+'</p><p class="'+(late(r)?'deadline-alert':'muted')+'">'+esc(r.owner||'Responsável a definir')+' · '+(r.deadline?(late(r)?'Vencido: ':'Prazo: ')+esc(datefmt(r.deadline)):'Sem prazo')+'</p><p class="muted">'+esc(ref)+' · '+esc(r.status)+'</p><button type="button" class="secondary" data-plan-open="'+i+'">Abrir ponto para tratar</button></article>').join('')||'<p class="empty">Nenhuma pendência com estes filtros.</p>'}
  ['planOwner','planPriority','planDeadline'].forEach(id=>$(id).addEventListener('input',refreshPlan));plan.addEventListener('toggle',()=>{if(plan.open)refreshPlan()});
  $('planList').onclick=e=>{const i=e.target.dataset.planOpen;if(i===undefined)return;const target=actionRows[+i];if(!target)return;guarded(async()=>{await persistCurrent();const row=await requestResult(db.transaction('reports').objectStore('reports').get(target.id));if(!row)return notify('Esta vistoria não está mais no histórico.');reset();activeReportId=row.id;fill(row.document);await persistCurrent();document.querySelector('[data-view="review"]').click();const button=$('entries').querySelector('[data-edit="'+target.index+'"]');if(button)button.click()})};
- const search=document.createElement('div');search.className='report-search';search.innerHTML='<label>Buscar ponto neste relatório<input type="search" id="reportSearch" placeholder="TAG, área, equipamento ou problema"></label><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
- function filterReport(){const q=normalize($('reportSearch').value);let count=0;$('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i],match=!q||normalize([r.tag,r.area,r.equipment,r.problem].join(' ')).includes(q);entry.hidden=!match;if(match)count++});$('reportSearchCount').textContent=q?count+' de '+records.length+' ponto(s) exibido(s). A busca não altera o PDF.':''}
- $('reportSearch').oninput=filterReport;
+ const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><label>Buscar ponto neste relatório<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
+ function reportPointMatches(r,query,status){
+  const normalized=String(query||'').trim().toLocaleLowerCase('pt-BR');
+  const closed=['Corrigido','Sem pendência'].includes(r.status);
+  const statusMatches=!status||(status==='finalizados'?closed:r.status===status);
+  return statusMatches&&(!normalized||[r.tag,r.pointWorkOrder,r.area,r.equipment,r.problem,r.action].join(' ').toLocaleLowerCase('pt-BR').includes(normalized));
+ }
+ function reportPointDetails(r){
+  return [['Condição',r.condition],['Diagnóstico / testes',r.analysisDraft],['Histórico de análise',r.analysisHistory],['Impacto',r.impact],['Ação recomendada / realizada',r.action],['Responsável',r.owner],['Prazo',r.deadline],['Serviço realizado',r.completionWork],['Data de conclusão',r.completionDate],['Concluído por',r.completionBy]].filter(([,v])=>String(v??'').trim());
+ }
+ let filterReportId;
+ function filterReport(){
+  if(filterReportId!==activeReportId){filterReportId=activeReportId;$('reportSearch').value='';$('reportStatusFilter').value=''}
+  const q=$('reportSearch').value,status=$('reportStatusFilter').value;let count=0;
+  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];const match=!!r&&reportPointMatches(r,q,status);entry.hidden=!match;if(match)count++});
+  const closed=records.filter(r=>['Corrigido','Sem pendência'].includes(r.status)).length;
+  $('reportSearchCount').textContent=count+' de '+records.length+' ponto(s) exibido(s) · '+closed+' finalizado(s).'+(q||status?' O filtro não altera o PDF.':'');
+ }
+ function addReportDetails(){
+  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
+   const r=records[i],actions=entry.querySelector('.actions');if(!r||!actions||entry.querySelector('.report-point-details'))return;
+   const rows=reportPointDetails(r);if(!rows.length)return;
+   const details=document.createElement('details');details.className='report-point-details';
+   const summary=document.createElement('summary');summary.textContent='Ver detalhes técnicos';details.append(summary);
+   const dl=document.createElement('dl');
+   for(const [label,value] of rows){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=String(value);dl.append(dt,dd)}
+   details.append(dl);entry.insertBefore(details,actions);
+  });
+ }
+ $('reportSearch').oninput=filterReport;$('reportStatusFilter').onchange=filterReport;
  // A single viewer serves current records and TAG history, without changing the source files.
  const viewer=document.createElement('dialog');viewer.className='photo-viewer';viewer.innerHTML='<div class="viewer-head"><h2 id="viewerTitle">Fotos da vistoria</h2><button type="button" id="closeViewer" class="secondary">Fechar</button></div><div class="actions"><button type="button" id="viewerSingle">Foto ampliada</button><button type="button" id="viewerCompare" class="secondary">Antes / depois</button><button type="button" id="viewerZoom" class="secondary">Ampliar detalhe</button></div><div id="singlePhoto"><label>Foto<select id="viewerPhoto"></select></label><div class="photo-zoom"><img id="viewerImage" alt=""></div><p id="viewerCaption" class="muted"></p></div><div id="comparePhotos" hidden><p class="muted">Escolha as fotos para comparar. As legendas Antes/Depois sugerem a seleção.</p><div class="compare-grid"><div><label>Antes<select id="viewerBefore"></select></label><img id="beforeImage" alt="Antes da intervenção"></div><div><label>Depois<select id="viewerAfter"></select></label><img id="afterImage" alt="Depois da intervenção"></div></div></div>';document.body.append(viewer);let viewerPhotos=[];
  function displayPhoto(){const p=viewerPhotos[+$('viewerPhoto').value];if(!p)return;$('viewerImage').src=p.src;$('viewerImage').alt=p.caption||'Evidência da vistoria';$('viewerCaption').textContent=p.caption||'Sem legenda';$('viewerImage').classList.remove('zoomed');$('viewerZoom').textContent='Ampliar detalhe'}
@@ -21,7 +48,7 @@
  $('viewerPhoto').onchange=displayPhoto;$('viewerBefore').onchange=displayCompare;$('viewerAfter').onchange=displayCompare;$('closeViewer').onclick=()=>viewer.close();$('viewerSingle').onclick=()=>{$('singlePhoto').hidden=false;$('comparePhotos').hidden=true;$('viewerZoom').hidden=false};$('viewerCompare').onclick=()=>{$('singlePhoto').hidden=true;$('comparePhotos').hidden=false;$('viewerZoom').hidden=true};$('viewerZoom').onclick=()=>{const zoom=$('viewerImage').classList.toggle('zoomed');$('viewerZoom').textContent=zoom?'Ajustar à tela':'Ampliar detalhe'};
  function photoButtons(){$('entries').querySelectorAll('.entry').forEach((entry,i)=>{if(!records[i].photos.length)return;const b=document.createElement('button');b.type='button';b.className='secondary';b.dataset.viewPhotos=i;b.textContent='Ver fotos / comparar';entry.querySelector('.actions').append(b)})}
  $('entries').addEventListener('click',e=>{if(e.target.dataset.viewPhotos!==undefined){const r=records[+e.target.dataset.viewPhotos];if(r)openPhotos(r.photos,r.tag)}});
- const originalRender=render;render=function(){originalRender();filterReport();photoButtons()};filterReport();photoButtons();
+ const originalRender=render;render=function(){originalRender();filterReport();addReportDetails();photoButtons()};filterReport();addReportDetails();photoButtons();
  const historyPhotos=$('tagHistoryList');if(historyPhotos)historyPhotos.addEventListener('click',e=>{if(e.target.tagName!=='IMG')return;const entry=e.target.closest('.entry');openPhotos([...entry.querySelectorAll('figure')].map(f=>({src:f.querySelector('img').src,caption:f.querySelector('figcaption').textContent})),entry.querySelector('h3').textContent)});
  document.addEventListener('vistoria-saved',()=>{if(plan.open)refreshPlan()});refreshPlan();
  // Export review uses the actual documents passed to the PDF exporter, including bulk exports.
