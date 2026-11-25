@@ -180,7 +180,28 @@ test('PDF parcial contém somente IDs selecionados, fotos e números originais, 
  assert.equal(partial.meta.workOrder,'000123');assert.equal(partial.meta.sourcePdf,'');assert.equal(partial.meta.conclusion,'');assert.equal(partial.pending,undefined);
  assert.equal(snapshot(doc,new Set()),null);
  partial.records[0].tag='alterado';assert.equal(JSON.stringify(doc),before);
- assert.match(source,/selectedPoints.clear\(\);\$\('onlySelectedPoints'\).checked=false/);
+ assert.match(source,/selectedPoints.clear\(\);\$\('onlySelectedPoints'\).checked=true/);
  assert.match(source,/await exportReportDocuments\(\[snapshot\]\)/);
  assert.match(readFileSync('pdf-export.js','utf8'),/reportDocument.exportPointNumbers\?\.\[i\]/);
+});
+
+
+test('prévia inicia vazia e exibe somente os pontos marcados; seleção permanece acessível',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ assert.match(source,/id="onlySelectedPoints" checked hidden/);
+ assert.match(source,/search.hidden=preview/);
+ assert.match(source,/const q=preview\?'':/);
+ assert.match(source,/selectedPoints.has\(r.pointId\)/);
+ assert.match(source,/emptySelection.hidden=!preview\|\|selectedPoints.size>0/);
+ assert.match(source,/\$\('togglePointSelection'\).onclick=/);
+ assert.match(source,/selectedReportSnapshot\(data\(\),selectedPoints\)/);
+});
+
+test('resumo executivo exclui pontos não selecionados e não inclui conclusão geral em seleção parcial',()=>{
+ const source=readFileSync('field-tools.js','utf8');
+ const body=source.slice(source.indexOf(" $('makeSummary').onclick="),source.indexOf("\n $('copySummary').onclick="));
+ const records=[{tag:'A',status:'Pendente',priority:'Alta',problem:'Falha A',action:'Corrigir A'},{tag:'B',status:'Corrigido',problem:'Falha B',completionWork:'Corrigido B'}];
+ const output={value:''},button={};
+ const generate=new Function('$','data','records','window','datefmt','notify',body+";return $('makeSummary').onclick;")(id=>id==='makeSummary'?button:output,()=>({meta:{date:'2026-11-24',conclusion:'Conclusão geral'}}),records,{VistoriaReportSelection:()=>[records[0]]},v=>v,()=>{});
+ generate();assert.match(output.value,/RESUMO EXECUTIVO/);assert.match(output.value,/Falha A/);assert.doesNotMatch(output.value,/Falha B|Corrigido B|Conclusão geral/);
 });
