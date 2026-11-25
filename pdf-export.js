@@ -54,7 +54,7 @@ async function exportReportDocuments(documents,ids=[]){
  const pending=records.filter(r=>r.status==='Pendente'||r.status==='Em acompanhamento').length;
  paragraph(records.length+' ponto(s) registrado(s)  |  '+pending+' em acompanhamento ou pendente(s)',9,muted);
  for(let i=0;i<records.length;i++){
- const r=records[i];need(165);heading('2.'+(reportDocument.exportPointNumber||i+1)+' Levantamento de campo');
+ const r=records[i];need(165);heading('2.'+(reportDocument.exportPointNumbers?.[i]||reportDocument.exportPointNumber||i+1)+' Levantamento de campo');
  for(const t of wrap(r.tag+' | '+r.area,14,CW,bold)){need(21);draw(t,M,y,14,bold);y-=20}y-=5;
  const pc={Crítica:rgb(.67,.15,.15),Alta:rgb(.72,.30,.08),'Média':rgb(.47,.35,.08),Baixa:green}[r.priority]||muted;
  need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
@@ -65,7 +65,7 @@ async function exportReportDocuments(documents,ids=[]){
  if(r.photos?.length){for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j];let img;
  try{img=/^data:image\/png;base64,/i.test(p.src)?await doc.embedPng(p.src):await doc.embedJpg(p.src)}catch{detail('Foto '+(j+1),'Imagem não incorporada ao PDF. Confira o original.');continue}
- const caption='Foto '+(reportDocument.exportPointNumber||i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
+ const caption='Foto '+(reportDocument.exportPointNumbers?.[i]||reportDocument.exportPointNumber||i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
  const captionLines=wrap(caption,9,CW),captionHeight=captionLines.length*14;
  // Reserve space for the heading, caption and footer before sizing the photo.
  const headingHeight=j===0?35:0;
