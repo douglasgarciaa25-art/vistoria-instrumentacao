@@ -10,7 +10,7 @@
  $('planCount').textContent=actionRows.length+' pendência(s) encontrada(s)';$('planList').innerHTML=actionRows.map(({record:r,ref},i)=>'<article class="entry"><div class="plan-title"><h3>'+esc(r.tag)+' · '+esc(r.area)+'</h3><span class="badge">'+esc(r.priority)+'</span></div><p>'+esc(r.problem)+'</p><p><b>Ação:</b> '+esc(r.action||'A definir')+'</p><p class="'+(late(r)?'deadline-alert':'muted')+'">'+esc(r.owner||'Responsável a definir')+' · '+(r.deadline?(late(r)?'Vencido: ':'Prazo: ')+esc(datefmt(r.deadline)):'Sem prazo')+'</p><p class="muted">'+esc(ref)+' · '+esc(r.status)+'</p><button type="button" class="secondary" data-plan-open="'+i+'">Abrir ponto para tratar</button></article>').join('')||'<p class="empty">Nenhuma pendência com estes filtros.</p>'}
  ['planOwner','planPriority','planDeadline'].forEach(id=>$(id).addEventListener('input',refreshPlan));plan.addEventListener('toggle',()=>{if(plan.open)refreshPlan()});
  $('planList').onclick=e=>{const i=e.target.dataset.planOpen;if(i===undefined)return;const target=actionRows[+i];if(!target)return;guarded(async()=>{await persistCurrent();const row=await requestResult(db.transaction('reports').objectStore('reports').get(target.id));if(!row)return notify('Esta vistoria não está mais no histórico.');reset();activeReportId=row.id;fill(row.document);await persistCurrent();document.querySelector('[data-view="review"]').click();const button=$('entries').querySelector('[data-edit="'+target.index+'"]');if(button)button.click()})};
- const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><label>Buscar ponto neste relatório<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
+ const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><label>Buscar ponto neste relatório<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option><option value="selecionados">Somente selecionados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
  function reportPointMatches(r,query,status){
   const normalized=String(query||'').trim().toLocaleLowerCase('pt-BR');
   const closed=['Corrigido','Sem pendência'].includes(r.status);
@@ -26,7 +26,7 @@
  selectionBar.innerHTML='<p id="pointSelectionCount" role="status"></p><button type="button" class="secondary" id="togglePointSelection" aria-haspopup="dialog">Selecionar pontos</button><input type="checkbox" id="onlySelectedPoints" checked hidden><button type="button" id="pdfSelectedPoints" disabled>Baixar PDF</button>';
  search.before(selectionBar);
  const selectionDialog=document.createElement('dialog');selectionDialog.id='reportSelectionDialog';selectionDialog.className='report-selection-dialog';selectionDialog.setAttribute('aria-labelledby','selectionDialogTitle');
- selectionDialog.innerHTML='<div class="selection-dialog-head"><h2 id="selectionDialogTitle">Selecionar pontos</h2><button type="button" class="secondary" id="closePointSelection" aria-label="Fechar seleção">Fechar</button></div><div id="selectionDialogFilters"></div><div class="actions" id="selectionTools"><button type="button" class="secondary" id="selectVisiblePoints">Selecionar visíveis</button><button type="button" class="secondary" id="clearPointSelection">Limpar seleção</button></div><div id="selectionDialogList"></div><div class="selection-dialog-footer"><span id="selectionDialogCount" role="status"></span><button type="button" id="confirmPointSelection">Concluir seleção</button></div>';
+ selectionDialog.innerHTML='<div class="selection-dialog-head"><h2 id="selectionDialogTitle">Selecionar pontos</h2><button type="button" class="secondary" id="closePointSelection" aria-label="Fechar seleção">Fechar</button></div><div id="selectionDialogFilters"></div><div class="actions" id="selectionTools"><button type="button" class="secondary" id="selectVisiblePoints">Usar pontos filtrados</button><button type="button" class="secondary" id="selectAllReportPoints">Selecionar todos</button><button type="button" class="secondary" id="clearPointSelection">Limpar seleção</button></div><p class="muted" id="selectionScopeHelp">Escolha os pontos que vão compor a prévia, o PDF e o resumo. Usar pontos filtrados substitui a seleção anterior.</p><div id="selectionDialogList"></div><div class="selection-dialog-footer"><span id="selectionDialogCount" role="status"></span><button type="button" id="confirmPointSelection">Concluir seleção</button></div>';
  document.body.append(selectionDialog);$('selectionDialogFilters').append(search);
  const dock=document.createElement('div');dock.className='report-export-dock';dock.append($('pdfSelectedPoints'));$('view-review').insertBefore(dock,$('entries').closest('.card'));
  const emptySelection=document.createElement('p');emptySelection.className='report-empty-selection';emptySelection.textContent='Escolha os pontos para montar a prévia.';$('entries').before(emptySelection);
@@ -82,7 +82,7 @@
  function selectableRows(){
   window.VistoriaPointIds?.ensure(records,activeReportId);
   const q=$('reportSearch').value,status=$('reportStatusFilter').value;
-  return records.map((r,i)=>({r,i})).filter(({r})=>r.pointId&&reportPointMatches(r,q,status));
+  return records.map((r,i)=>({r,i})).filter(({r})=>r.pointId&&(status==='selecionados'?selectedPoints.has(r.pointId)&&reportPointMatches(r,q,''):reportPointMatches(r,q,status)));
  }
  function renderSelectionDialog(){
   const rows=selectableRows(),list=$('selectionDialogList');list.replaceChildren();
@@ -90,11 +90,15 @@
    const label=document.createElement('label');label.className='selection-dialog-row';
    const input=document.createElement('input');input.type='checkbox';input.dataset.dialogPoint=r.pointId;input.checked=selectedPoints.has(r.pointId);
    const text=document.createElement('span');const title=document.createElement('strong');title.textContent='Ponto '+String(i+1).padStart(2,'0')+' · '+(r.tag||'TAG não informada');
-   const info=document.createElement('small');info.textContent=[r.equipment,r.status,r.priority].filter(Boolean).join(' · ');text.append(title,info);label.append(input,text);list.append(label);
+   const info=document.createElement('small');info.textContent=[r.area,r.equipment,r.pointWorkOrder?'OS '+r.pointWorkOrder:'',r.status,r.priority].filter(Boolean).join(' · ');text.append(title,info);label.append(input,text);list.append(label);
   }
   $('reportSearchCount').textContent=rows.length+' de '+records.length+' pontos disponíveis';
   if(!rows.length){const message=document.createElement('p');message.className='muted';message.textContent=records.length?'Nenhum ponto corresponde aos filtros.':'Nenhum ponto registrado nesta vistoria.';list.append(message);if(records.length&&($('reportSearch').value||$('reportStatusFilter').value)){const resetFilters=document.createElement('button');resetFilters.type='button';resetFilters.className='secondary';resetFilters.textContent='Mostrar todos os pontos';resetFilters.onclick=()=>{$('reportSearch').value='';$('reportStatusFilter').value='';filterReport()};list.append(resetFilters)}}
   $('selectVisiblePoints').disabled=!rows.length;
+  $('selectAllReportPoints').disabled=!records.length;
+  const visibleSelected=rows.filter(({r})=>selectedPoints.has(r.pointId)).length;
+  const hiddenSelected=selectedPoints.size-visibleSelected;
+  $('selectionDialogCount').textContent=selectedPoints.size+' selecionado(s)'+(hiddenSelected?' · '+hiddenSelected+' fora do filtro':'');
  }
 
  function addReportDetails(){
@@ -112,10 +116,13 @@
  $('onlySelectedPoints').onchange=filterReport;
  $('togglePointSelection').onclick=()=>{$('reportSearch').value='';$('reportStatusFilter').value='';filterReport();selectionDialog.showModal();renderSelectionDialog()};
  $('closePointSelection').onclick=$('confirmPointSelection').onclick=()=>selectionDialog.close();
- $('selectionDialogList').addEventListener('change',e=>{const id=e.target.dataset.dialogPoint;if(!id)return;initialSelectionPending=false;if(e.target.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();updatePointSelection();$('entries').querySelectorAll('.entry').forEach((entry,i)=>{entry.hidden=!selectedPoints.has(records[i]?.pointId)});emptySelection.hidden=selectedPoints.size>0;$('makeSummary').disabled=!selectedPoints.size});
+ $('selectionDialogList').addEventListener('change',e=>{const id=e.target.dataset.dialogPoint;if(!id)return;initialSelectionPending=false;if(e.target.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
  function invalidateSummary(){const field=$('summaryText');if(field)field.value='';}
  $('entries').addEventListener('change',e=>{const input=e.target;if(!input.matches('[data-select-point]')||!input.dataset.selectPoint)return;const id=input.dataset.selectPoint;initialSelectionPending=false;if(input.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
- $('selectVisiblePoints').onclick=()=>{initialSelectionPending=false;for(const {r} of selectableRows())selectedPoints.add(r.pointId);invalidateSummary();filterReport()};
+ function replaceReportSelection(ids,rows){const next=rows.map(({r})=>r.pointId).filter(Boolean);ids.clear();for(const id of next)ids.add(id);}
+ function applyReportSelection(rows){initialSelectionPending=false;replaceReportSelection(selectedPoints,rows);invalidateSummary();filterReport()}
+ $('selectVisiblePoints').onclick=()=>applyReportSelection(selectableRows());
+ $('selectAllReportPoints').onclick=()=>{$('reportSearch').value='';$('reportStatusFilter').value='';applyReportSelection(selectableRows())};
  $('clearPointSelection').onclick=()=>{selectedPoints.clear();$('onlySelectedPoints').checked=true;initialSelectionPending=false;invalidateSummary();filterReport()};
  const previewButton=document.createElement('button');previewButton.type='button';previewButton.className='secondary';previewButton.id='previewSelectedPdf';previewButton.textContent='Visualizar PDF';dock.prepend(previewButton);
  function generateSelectedPdf(preview=false){return guarded(async()=>{

@@ -236,3 +236,21 @@ test('seletor de relatório recupera pontos legados sem ID antes de filtrar e pe
  assert.match(source,/togglePointSelection'\)\.onclick=\(\)=>\{\$\('reportSearch'\)\.value='';\$\('reportStatusFilter'\)\.value='';filterReport\(\);selectionDialog\.showModal\(\);renderSelectionDialog\(\)/);
  assert.match(source,/Mostrar todos os pontos/);
 });
+
+test('seleção filtrada substitui pontos de outras situações e todos inclui o relatório completo',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ const matcher=source.slice(source.indexOf('function reportPointMatches('),source.indexOf('function reportPointDetails('));
+ const rowsCode=source.slice(source.indexOf('function selectableRows('),source.indexOf('function renderSelectionDialog('));
+ const replace=source.slice(source.indexOf('function replaceReportSelection('),source.indexOf('function applyReportSelection('));
+ const records=[{tag:'A',pointId:'point-001',status:'Pendente'},{tag:'B',pointId:'point-002',status:'Em acompanhamento'},{tag:'C',pointId:'point-003',status:'Corrigido'},{tag:'D',pointId:'point-004',status:'Sem pendência'}];
+ const before=JSON.stringify(records),selectedPoints=new Set(['point-001','point-002','point-003','point-004']),controls={reportSearch:{value:''},reportStatusFilter:{value:''}};
+ const {rows,apply}=new Function('records','activeReportId','window','$','selectedPoints',matcher+rowsCode+replace+';return {rows:selectableRows,apply:replaceReportSelection};')(records,'report-one',{},id=>controls[id],selectedPoints);
+ controls.reportStatusFilter.value='Pendente';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-001']);
+ controls.reportStatusFilter.value='Em acompanhamento';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-002']);
+ controls.reportStatusFilter.value='finalizados';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-003','point-004']);
+ controls.reportStatusFilter.value='selecionados';assert.deepEqual(rows().map(x=>x.r.tag),['C','D']);
+ controls.reportStatusFilter.value='';apply(selectedPoints,rows());assert.equal(selectedPoints.size,4);
+ controls.reportSearch.value='B';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-002']);assert.equal(JSON.stringify(records),before);
+ assert.match(source,/selectAllReportPoints/);assert.match(source,/fora do filtro/);
+ const editor=readFileSync('edit-saved.js','utf8');assert.match(editor,/records\.forEach\(\(r,i\)=>/);assert.doesNotMatch(editor,/VistoriaReportSelection|reportStatusFilter|selectedPoints/);
+});
