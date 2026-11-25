@@ -4,7 +4,7 @@
  const select=document.createElement('select');select.id='savedPointPicker';picker.append(select);
  const hint=document.createElement('small');hint.className='muted';hint.textContent='Selecione um ponto de qualquer vistoria salva neste aparelho. O aplicativo abre a vistoria correspondente.';picker.append(hint);$('formTitle').after(picker);
  const choices=new Map();
- function pointLabel(r,i){return String(i+1).padStart(2,'0')+'. '+(r.tag||'TAG não informada')+' — '+[r.area,r.status].filter(Boolean).join(' · ');}
+ function pointLabel(r){return String(r.tag||'').trim()||'TAG não informada';}
  function otherSavedReports(items,currentId){return items.filter(row=>row.id!==currentId&&Array.isArray(row.document?.records)&&row.document.records.length);}
  function refreshPicker(){
   const others=otherSavedReports(historyItems,activeReportId);
@@ -12,16 +12,15 @@
   picker.hidden=!total;pickerTitle.textContent='Ponto salvo para editar ('+total+' '+(total===1?'ponto':'pontos')+' em '+(others.length+(records.length?1:0))+' vistoria(s))';
   choices.clear();select.replaceChildren();
   const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Selecione um ponto salvo';select.append(placeholder);
-  function addGroup(title,points,reportId,current){
-   if(!points.length)return;const group=document.createElement('optgroup');group.label=title;
-   points.forEach((r,i)=>{const option=document.createElement('option');const key=current?String(i):'saved:'+choices.size;option.value=key;option.textContent=pointLabel(r,i);choices.set(key,{reportId,pointId:r.pointId,index:i,current});group.append(option)});select.append(group);
+  function addPoints(points,reportId,current,reference){
+   points.forEach((r,i)=>{const option=document.createElement('option');const key=current?String(i):'saved:'+choices.size;const tag=pointLabel(r);option.value=key;option.textContent=tag;choices.set(key,{reportId,pointId:r.pointId,index:i,current,tag,reference,area:r.area,status:r.status});select.append(option)});
   }
   // Current records always come from the live form, never the saved snapshot.
-  addGroup('Vistoria aberta · '+($('number').value||'Sem referência'),records,activeReportId,true);
+  addPoints(records,activeReportId,true,$('number').value||'Vistoria aberta');
   for(const row of others){
    const meta=row.document.meta||{},points=row.document.records.map(r=>({pointId:r.pointId,tag:r.tag,area:r.area,status:r.status}));
    window.VistoriaPointIds?.ensure(points,row.id);
-   addGroup([meta.title||'Vistoria',meta.number,meta.workOrder?'OS '+meta.workOrder:'',meta.date].filter(Boolean).join(' · '),points,row.id,false);
+   addPoints(points,row.id,false,[meta.number,meta.workOrder?'OS '+meta.workOrder:'',meta.date].filter(Boolean).join(' · ')||'Vistoria salva');
   }
   select.value=editing===null?'':String(editing);
  }
@@ -52,7 +51,7 @@
    refreshPicker();document.dispatchEvent(new CustomEvent('vistoria-point-editor-opened'));
   });
  }
- select.onchange=async()=>{const target=choices.get(select.value);if(!target)return;if(busy||historyBusy){refreshPicker();notify('Aguarde a operação em andamento.');return}if(target.current){openPoint(target.index);return}select.disabled=true;try{await openSavedReportPoint(target)}finally{select.disabled=false;refreshPicker()}};
+ select.onchange=async()=>{const target=choices.get(select.value);if(!target)return;if(busy||historyBusy){refreshPicker();notify('Aguarde a operação em andamento.');return}if([...choices.values()].filter(p=>p.tag===target.tag).length>1&&!confirm('Existem registros com a mesma TAG. Abrir '+target.tag+'?\n'+[target.reference,target.area,target.status,'Ponto '+(target.index+1)].filter(Boolean).join(' · '))){refreshPicker();return}if(target.current){openPoint(target.index);return}select.disabled=true;try{await openSavedReportPoint(target)}finally{select.disabled=false;refreshPicker()}};
  const originalRender=render;render=function(){originalRender();refreshPicker()};
  const originalReset=reset;reset=function(){originalReset();refreshPicker()};
  const originalFill=fill;fill=function(d){originalFill(d);refreshPicker()};
