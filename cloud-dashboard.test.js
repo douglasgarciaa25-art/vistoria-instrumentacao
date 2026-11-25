@@ -67,3 +67,14 @@ test('UI não modifica as permissões autenticadas nem endpoints existentes',()=
  assert.match(cloud,/const baseline=JSON\.parse\(localStorage\.getItem\(/);
  assert.match(cloud,/if\(member\.role!=='admin'\)return/);
 });
+
+test('Login aprovado inicia autorização offline uma vez e preserva renovação por cookie',()=>{
+ assert.match(cloud,/if\(await tryAutomaticPersistence\(\)\)return;/);
+ const flow=cloud.slice(cloud.indexOf('async function tryAutomaticPersistence()'),cloud.indexOf('function disconnect()'));
+ assert.match(flow,/sessionStorage\.getItem\(PERSISTENCE_ATTEMPT_KEY\)/);
+ assert.match(flow,/if\(member\?\.status!=='approved'\)return false;/);
+ assert.match(flow,/sessionStorage\.setItem\(PERSISTENCE_ATTEMPT_KEY,'1'\)/);
+ assert.match(flow,/\/api\/team-drive-authorize\?personal=1/);
+ assert.match(cloud,/fetch\('\/api\/personal-session',\{method:'POST',cache:'no-store',credentials:'same-origin'\}\)/);
+ assert.match(cloud,/sessionStorage\.removeItem\(PERSISTENCE_ATTEMPT_KEY\)/);
+});
