@@ -1,4 +1,7 @@
 import {googleIdentity,memberFor,teamDb} from '../team-auth.mjs';
+const emailAccess=(action,email,subject)=>teamDb('rpc/vistoria_manage_email_access',{method:'POST',body:JSON.stringify({p_action:action,p_email:email,p_subject:subject})});
+const normalizeEmail=value=>String(value||'').trim().toLowerCase();
+const validEmail=email=>email.length<=254&&/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  const reply=(s,b)=>res.status(s).json(b);
@@ -10,14 +13,25 @@ export default async function handler(req,res){
  if(req.method==='POST'&&req.body?.action==='request'){
  if(!member){
  const admin=admins.includes(identity.email);
- await teamDb('vistoria_members',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify({google_subject:identity.subject,email:identity.email,role:admin?'admin':'technician',status:admin?'approved':'pending'})});
+ if(admin)await teamDb('vistoria_members',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify({google_subject:identity.subject,email:identity.email,role:'admin',status:'approved'})});
+ else await emailAccess('request',identity.email,identity.subject);
  member=await memberFor(identity);
  }
  return reply(200,{member});
  }
  if(req.method==='GET'&&req.query?.list!=='1')return reply(200,{member});
  if(member?.status!=='approved'||member.role!=='admin')return reply(403,{error:'Acesso administrativo necessário.'});
- if(req.method==='GET')return reply(200,{members:await teamDb('vistoria_members?select=google_subject,email,role,status,technician_name,requested_at&order=requested_at.desc')});
+ if(req.method==='GET')return reply(200,{members:await teamDb('vistoria_members?select=google_subject,email,role,status,technician_name,requested_at&order=requested_at.desc'),invitations:await teamDb('vistoria_email_invitations?select=email,authorized_at&order=authorized_at.desc')});
+ if(req.method==='POST'&&['authorize-email','cancel-invitation'].includes(req.body?.action)){
+ const email=normalizeEmail(req.body.email);
+ if(!validEmail(email))return reply(400,{error:'Informe um e-mail Google válido.'});
+ const result=await emailAccess(req.body.action==='authorize-email'?'authorize':'cancel',email,identity.subject);
+ if(result.state==='forbidden')return reply(403,{error:'Acesso administrativo necessário.'});
+ if(result.state==='ambiguous')return reply(409,{error:'Mais de um cadastro possui este e-mail. Revise os usuários existentes.'});
+ if(result.state==='admin')return reply(409,{error:'Esta conta já é administradora.'});
+ if(!['approved','invited','cancelled'].includes(result.state))return reply(400,{error:'Operação inválida.'});
+ return reply(200,{ok:true,state:result.state});
+ }
  if(req.method==='POST'&&req.body?.action==='set-name'){
  const subject=String(req.body.subject||'');
  const name=String(req.body.name||'').normalize('NFC').trim().replace(/\s+/g,' ');
