@@ -45,6 +45,10 @@
       "use": "@vercel/static"
     },
     {
+      "src": "PDF-JS-LICENSE.md",
+      "use": "@vercel/static"
+    },
+    {
       "src": "*.png",
       "use": "@vercel/static"
     },
