@@ -114,7 +114,8 @@
  $('entries').addEventListener('change',e=>{const input=e.target;if(!input.matches('[data-select-point]')||!input.dataset.selectPoint)return;const id=input.dataset.selectPoint;initialSelectionPending=false;if(input.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
  $('selectVisiblePoints').onclick=()=>{initialSelectionPending=false;for(const {r} of selectableRows())selectedPoints.add(r.pointId);invalidateSummary();filterReport()};
  $('clearPointSelection').onclick=()=>{selectedPoints.clear();$('onlySelectedPoints').checked=true;initialSelectionPending=false;invalidateSummary();filterReport()};
- $('pdfSelectedPoints').onclick=()=>guarded(async()=>{
+ const previewButton=document.createElement('button');previewButton.type='button';previewButton.className='secondary';previewButton.id='previewSelectedPdf';previewButton.textContent='Visualizar PDF';dock.prepend(previewButton);
+ function generateSelectedPdf(preview=false){return guarded(async()=>{
   const snapshot=selectedReportSnapshot(data(),selectedPoints);
   if(!snapshot)return notify('Selecione pelo menos um ponto já registrado.');
   const pending=data().pending;
@@ -122,8 +123,9 @@
    if(!confirm('Existem alterações no formulário ainda não aplicadas. O PDF selecionado utilizará somente os pontos já registrados. Continuar?'))return;
   }
   const button=$('pdfSelectedPoints');button.disabled=true;
-  try{await exportReportDocuments([snapshot])}finally{filterReport()}
- });
+  try{if(preview)await exportReportDocuments([snapshot],[],{preview:true});else await exportReportDocuments([snapshot])}finally{filterReport()}
+ });}
+ $('pdfSelectedPoints').onclick=()=>generateSelectedPdf();previewButton.onclick=()=>generateSelectedPdf(true);
  document.addEventListener('vistoria-saved',filterReport);
  document.addEventListener('DOMContentLoaded',()=>{
   const report=$('view-review'),review=$('entries').closest('.card'),formats=report.querySelector('.report-formats'),actions=formats?.querySelector('.actions');
@@ -159,6 +161,6 @@
  function inspect(d){const issues=[],m=d.meta||{};for(const [key,label] of [['number','Referência'],['date','Data'],['author','Responsável'],['objective','Objetivo']])if(!String(m[key]||'').trim())issues.push(label+' não preenchido');if(!d.records.length)issues.push('Nenhum ponto adicionado');d.records.forEach((r,i)=>{const tag=r.tag||'Ponto '+(i+1);for(const [key,label] of [['tag','TAG'],['area','Área'],['problem','Condição encontrada']])if(!String(r[key]||'').trim())issues.push(tag+': '+label+' não preenchido');if(['Pendente','Em acompanhamento'].includes(r.status)){for(const [key,label] of [['action','Ação'],['owner','Responsável pela ação'],['deadline','Prazo']])if(!String(r[key]||'').trim())issues.push(tag+': '+label+' a definir')}if(r.status==='Corrigido'&&(!r.completionDate||!r.completionWork))issues.push(tag+': conclusão sem data ou serviço descrito');if(!r.photos.length)issues.push(tag+': sem foto de evidência')});const pending=d.pending;if(pending&&(pending.fields?.tag||pending.fields?.problem||pending.photos?.length))issues.push(pending.editing!==null&&pending.editing!==undefined?'Existe uma edição ainda não aplicada ao ponto':'Existe um ponto preenchido ainda não adicionado');return issues}
  function drawAudit(docs){const counts=new Map();for(const d of docs){const key=normalize(d.meta.number);if(key)counts.set(key,(counts.get(key)||0)+1)}const result=docs.map((d,i)=>{const issues=inspect(d);if(counts.get(normalize(d.meta.number))>1)issues.push('Referência repetida no conjunto selecionado');return {label:d.meta.number||'Vistoria '+(i+1),issues}});$('auditResults').innerHTML=result.map(r=>'<div class="entry"><h3>'+esc(r.label)+'</h3>'+(r.issues.length?'<ul>'+r.issues.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'<p class="completion-detail">Campos verificados sem pendências de preenchimento.</p>')+'</div>').join('');return result}
  $('auditReport').onclick=()=>{const snapshot=selectedReportSnapshot(data(),selectedPoints);if(!snapshot)return notify('Selecione os pontos antes de revisar.');drawAudit([snapshot]);audit.open=true};
- const exportPdf=exportReportDocuments;exportReportDocuments=async function(documents){const result=drawAudit(documents),warnings=result.reduce((n,r)=>n+r.issues.length,0);if(warnings){audit.open=true;if(audit.parentElement?.tagName==='DETAILS')audit.parentElement.open=true;document.querySelector('[data-view="review"]').click();if(!confirm('A revisão encontrou '+warnings+' aviso(s) de preenchimento em '+documents.length+' vistoria(s).\n\nCancelar: revisar os detalhes na tela.\nOK: gerar o PDF mesmo assim, apenas com os pontos já adicionados.'))return}return exportPdf(documents)};
+ const exportPdf=exportReportDocuments;exportReportDocuments=async function(documents,ids=[],options={}){const result=drawAudit(documents),warnings=result.reduce((n,r)=>n+r.issues.length,0);if(warnings){audit.open=true;if(audit.parentElement?.tagName==='DETAILS')audit.parentElement.open=true;document.querySelector('[data-view="review"]').click();if(!confirm('A revisão encontrou '+warnings+' aviso(s) de preenchimento em '+documents.length+' vistoria(s).\n\nCancelar: revisar os detalhes na tela.\nOK: gerar o PDF mesmo assim, apenas com os pontos já adicionados.'))return}return exportPdf(documents,ids,options)};
  const originalWord=$('word').onclick;$('word').onclick=()=>guarded(async()=>{await persistCurrent();const result=drawAudit([data()]);if(result[0].issues.length){audit.open=true;if(audit.parentElement?.tagName==='DETAILS')audit.parentElement.open=true;if(!confirm('A revisão encontrou '+result[0].issues.length+' aviso(s). Gerar o Word mesmo assim?'))return}return originalWord()});
 })();
