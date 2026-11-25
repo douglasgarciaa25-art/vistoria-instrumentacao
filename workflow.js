@@ -21,12 +21,43 @@
   return [['Condição',r.condition],['Diagnóstico / testes',r.analysisDraft],['Histórico de análise',r.analysisHistory],['Impacto',r.impact],['Ação recomendada / realizada',r.action],['Responsável',r.owner],['Prazo',r.deadline],['Serviço realizado',r.completionWork],['Data de conclusão',r.completionDate],['Concluído por',r.completionBy]].filter(([,v])=>String(v??'').trim());
  }
  let filterReportId;
+ const selectedPoints=new Set();
+ const selectionBar=document.createElement('section');selectionBar.className='report-selection';
+ selectionBar.innerHTML='<p id="pointSelectionCount" role="status">Nenhum ponto selecionado</p><div class="actions"><button type="button" class="secondary" id="selectVisiblePoints">Selecionar visíveis</button><button type="button" class="secondary" id="clearPointSelection">Limpar seleção</button></div><label class="report-selection-check"><input type="checkbox" id="onlySelectedPoints"> Exibir somente pontos selecionados</label><button type="button" id="pdfSelectedPoints" disabled>Baixar PDF dos pontos selecionados</button><p class="muted">A seleção não altera os dados da vistoria nem a opção de PDF completo.</p>';
+ search.after(selectionBar);
+ function selectedReportSnapshot(doc,ids){
+  const indices=doc.records.map((r,i)=>ids.has(r.pointId)?i:-1).filter(i=>i>=0);
+  if(!indices.length)return null;
+  const snapshot=structuredClone({...doc,records:indices.map(i=>doc.records[i])});
+  delete snapshot.pending;
+  delete snapshot.exportPointNumber;
+  snapshot.exportPointNumbers=indices.map(i=>i+1);
+  snapshot.meta.sourcePdf='';snapshot.meta.sourcePdfName='';
+  if(indices.length!==doc.records.length)snapshot.meta.conclusion='';
+  snapshot.meta.title=(snapshot.meta.title||'Relatório de vistoria técnica')+' — '+indices.length+' ponto(s) selecionado(s)';
+  return snapshot;
+ }
+ function updatePointSelection(){
+  const available=new Set(records.map(r=>r.pointId).filter(Boolean));
+  for(const id of selectedPoints)if(!available.has(id))selectedPoints.delete(id);
+  $('pointSelectionCount').textContent=selectedPoints.size+' de '+records.length+' ponto(s) selecionado(s)';
+  $('pdfSelectedPoints').disabled=!selectedPoints.size;
+  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
+   const r=records[i];if(!r)return;
+   let input=entry.querySelector('[data-select-point]');
+   if(!input){const label=document.createElement('label');label.className='report-selection-check';input=document.createElement('input');input.type='checkbox';label.append(input,document.createTextNode(' Incluir no relatório selecionado'));entry.prepend(label)}
+   input.dataset.selectPoint=r.pointId||'';input.disabled=!r.pointId;
+   input.checked=!!r.pointId&&selectedPoints.has(r.pointId);
+   input.setAttribute('aria-label','Selecionar ponto '+(i+1)+' '+(r.tag||''));
+  });
+ }
  function filterReport(){
-  if(filterReportId!==activeReportId){filterReportId=activeReportId;$('reportSearch').value='';$('reportStatusFilter').value=''}
+  if(filterReportId!==activeReportId){filterReportId=activeReportId;selectedPoints.clear();$('onlySelectedPoints').checked=false;$('reportSearch').value='';$('reportStatusFilter').value=''}
+  updatePointSelection();
   const q=$('reportSearch').value,status=$('reportStatusFilter').value;let count=0;
-  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];const match=!!r&&reportPointMatches(r,q,status);entry.hidden=!match;if(match)count++});
+  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];const match=!!r&&reportPointMatches(r,q,status)&&(!$('onlySelectedPoints').checked||selectedPoints.has(r.pointId));entry.hidden=!match;if(match)count++});
   const closed=records.filter(r=>['Corrigido','Sem pendência'].includes(r.status)).length;
-  $('reportSearchCount').textContent=count+' de '+records.length+' ponto(s) exibido(s) · '+closed+' finalizado(s).'+(q||status?' O filtro não altera o PDF.':'');
+  $('reportSearchCount').textContent=count+' de '+records.length+' ponto(s) exibido(s) · '+closed+' finalizado(s).'+(q||status||$('onlySelectedPoints').checked?' O filtro não altera o PDF completo.':'');
  }
  function addReportDetails(){
   $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
@@ -40,6 +71,21 @@
   });
  }
  $('reportSearch').oninput=filterReport;$('reportStatusFilter').onchange=filterReport;
+ $('onlySelectedPoints').onchange=filterReport;
+ $('entries').addEventListener('change',e=>{const input=e.target;if(!input.matches('[data-select-point]')||!input.dataset.selectPoint)return;const id=input.dataset.selectPoint;if(input.checked)selectedPoints.add(id);else selectedPoints.delete(id);filterReport()});
+ $('selectVisiblePoints').onclick=()=>{for(const entry of $('entries').querySelectorAll('.entry:not([hidden])')){const id=entry.querySelector('[data-select-point]')?.dataset.selectPoint;if(id)selectedPoints.add(id)}filterReport()};
+ $('clearPointSelection').onclick=()=>{selectedPoints.clear();$('onlySelectedPoints').checked=false;filterReport()};
+ $('pdfSelectedPoints').onclick=()=>guarded(async()=>{
+  const snapshot=selectedReportSnapshot(data(),selectedPoints);
+  if(!snapshot)return notify('Selecione pelo menos um ponto já registrado.');
+  const pending=data().pending;
+  if(pending&&(pending.editing!==null&&pending.editing!==undefined||pending.fields?.tag||pending.fields?.problem||pending.photos?.length)){
+   if(!confirm('Existem alterações no formulário ainda não aplicadas. O PDF selecionado utilizará somente os pontos já registrados. Continuar?'))return;
+  }
+  const button=$('pdfSelectedPoints');button.disabled=true;
+  try{await exportReportDocuments([snapshot])}finally{filterReport()}
+ });
+ document.addEventListener('vistoria-saved',filterReport);
  // A single viewer serves current records and TAG history, without changing the source files.
  const viewer=document.createElement('dialog');viewer.className='photo-viewer';viewer.innerHTML='<div class="viewer-head"><h2 id="viewerTitle">Fotos da vistoria</h2><button type="button" id="closeViewer" class="secondary">Fechar</button></div><div class="actions"><button type="button" id="viewerSingle">Foto ampliada</button><button type="button" id="viewerCompare" class="secondary">Antes / depois</button><button type="button" id="viewerZoom" class="secondary">Ampliar detalhe</button></div><div id="singlePhoto"><label>Foto<select id="viewerPhoto"></select></label><div class="photo-zoom"><img id="viewerImage" alt=""></div><p id="viewerCaption" class="muted"></p></div><div id="comparePhotos" hidden><p class="muted">Escolha as fotos para comparar. As legendas Antes/Depois sugerem a seleção.</p><div class="compare-grid"><div><label>Antes<select id="viewerBefore"></select></label><img id="beforeImage" alt="Antes da intervenção"></div><div><label>Depois<select id="viewerAfter"></select></label><img id="afterImage" alt="Depois da intervenção"></div></div></div>';document.body.append(viewer);let viewerPhotos=[];
  function displayPhoto(){const p=viewerPhotos[+$('viewerPhoto').value];if(!p)return;$('viewerImage').src=p.src;$('viewerImage').alt=p.caption||'Evidência da vistoria';$('viewerCaption').textContent=p.caption||'Sem legenda';$('viewerImage').classList.remove('zoomed');$('viewerZoom').textContent='Ampliar detalhe'}

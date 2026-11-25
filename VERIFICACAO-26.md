@@ -126,3 +126,9 @@ Legenda: **C** = implementação presente e conferida no código; **T** = teste 
 - Mudança incremental: ao navegar entre etapas, o título da etapa recebe foco de teclado e leitor de tela, sem alterar os dados preenchidos.
 - Rolagem respeita a preferência do sistema por movimento reduzido; validação utiliza a mesma lista de campos essenciais exibida no contador.
 - Teste sintético de regressão incluído. Conferência visual e com leitor de tela Android real permanece pendente.
+
+## Relatório parcial — seleção de pontos (24/11/2026)
+
+- Seleção por ID permanente do ponto; filtro visual opcional somente selecionados, seleção dos visíveis e limpeza da seleção.
+- PDF parcial somente com os pontos selecionados, respectivas fotos e numeração original; não inclui PDF de origem integral ou conclusão geral de uma seleção parcial. Exportação completa permanece disponível.
+- Seleção não modifica documentos salvos, não é sincronizada e é reiniciada ao trocar de vistoria. Teste de regressão sintético; homologação Android real pendente.

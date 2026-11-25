@@ -155,3 +155,11 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .report-management-summary label{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:650}
 .report-management-summary progress{display:block;width:100%;height:12px;accent-color:#27894a;margin:7px 0 10px}
 @media(max-width:750px){.report-management-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Seleção de pontos para relatórios parciais, sem modificar o relatório original. */
+#view-review .report-selection{padding:12px;margin:8px 0 16px;border:1px solid #ded8e7;border-radius:12px;background:#faf9fc}
+#view-review .report-selection p{margin:4px 0 10px}
+#view-review .report-selection-check{display:flex;align-items:center;gap:10px;min-height:44px;font-size:13px;color:#45325e;cursor:pointer}
+#view-review .report-selection-check input{width:20px!important;height:20px;min-height:0;margin:0;flex:none;accent-color:#351463}
+#view-review #pdfSelectedPoints{width:100%;min-height:48px;margin-top:6px}
+#view-review .report-selection .actions button{min-height:44px}
