@@ -219,3 +219,20 @@ test('diálogo e opções recolhíveis mantêm os controles existentes',()=>{
 });
 
  test('prévia real reutiliza o PDF serializado e preserva opções na auditoria',()=>{const pdf=readFileSync('pdf-export.js','utf8'),flow=readFileSync('workflow.js','utf8');assert.match(pdf,/const pdfBlob=new Blob\(\[await doc.save\(\)\]/);assert.match(pdf,/options.preview\?previewGeneratedPdf:download/);assert.match(pdf,/save.onclick=\(\)=>download\(blob,name\)/);assert.match(flow,/return exportPdf\(documents,ids,options\)/);assert.match(flow,/exportReportDocuments\(\[snapshot\],\[\],\{preview:true\}\)/);});
+
+test('seletor de relatório recupera pontos legados sem ID antes de filtrar e permite retornar a todos',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ const matcher=source.slice(source.indexOf('function reportPointMatches('),source.indexOf('function reportPointDetails('));
+ const rowsCode=source.slice(source.indexOf('function selectableRows('),source.indexOf('function renderSelectionDialog('));
+ const records=[{tag:'A',status:'Corrigido'},{tag:'B',status:'Pendente',pointId:'point-002'}];
+ const controls={reportSearch:{value:''},reportStatusFilter:{value:''}};
+ const window={VistoriaPointIds:{ensure(points,id){for(const [i,r] of points.entries())if(!r.pointId)r.pointId='legacy:'+id+':'+(i+1);}}};
+ const getRows=new Function('records','activeReportId','window','$',matcher+rowsCode+';return selectableRows;')(records,'report-one',window,id=>controls[id]);
+ assert.deepEqual(getRows().map(x=>x.r.tag),['A','B']);assert.equal(records[0].pointId,'legacy:report-one:1');
+ controls.reportStatusFilter.value='Pendente';assert.deepEqual(getRows().map(x=>x.r.tag),['B']);
+ controls.reportStatusFilter.value='finalizados';assert.deepEqual(getRows().map(x=>x.r.tag),['A']);
+ controls.reportStatusFilter.value='';assert.deepEqual(getRows().map(x=>x.r.tag),['A','B']);assert.equal(records[1].pointId,'point-002');
+ assert.match(source,/function updatePointSelection\(\)\{[\s\S]*?VistoriaPointIds\?\.ensure\(records,activeReportId\);\s*const available/);
+ assert.match(source,/togglePointSelection'\)\.onclick=\(\)=>\{\$\('reportSearch'\)\.value='';\$\('reportStatusFilter'\)\.value='';filterReport\(\);selectionDialog\.showModal\(\);renderSelectionDialog\(\)/);
+ assert.match(source,/Mostrar todos os pontos/);
+});
