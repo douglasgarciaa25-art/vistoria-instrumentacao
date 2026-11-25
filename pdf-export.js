@@ -15,24 +15,24 @@ async function exportReportDocuments(documents,ids=[]){
  function newPage(){page=doc.addPage([W,H]);if(m.watermark)page.drawText(clean(m.watermark),{x:80,y:180,size:53,font:bold,color:rgb(.93,.93,.93),rotate:degrees(52)});page.drawImage(logo,{x:M,y:H-69,width:130,height:130*logo.height/logo.width});draw('CMOC BRASIL',W-M-115,H-43,9,bold);draw('Versão app: v'+(window.VISTORIA_APP_VERSION||'6.0.0'),W-M-115,H-59,9);page.drawLine({start:{x:M,y:H-83},end:{x:W-M,y:H-83},thickness:.6,color:line});y=H-108}
  function need(h){if(y-h<55)newPage()}
  function paragraph(v,size=10,color=ink){for(const t of wrap(v,size,CW)){need(size+5);draw(t,M,y,size,regular,color);y-=size+5}y-=5}
- function heading(v){const lines=wrap(v,12,CW-26,bold),h=17+lines.length*17;need(h+92);y-=8;page.drawRectangle({x:M,y:y-h,width:CW,height:h,color:light});page.drawRectangle({x:M,y:y-h,width:4,height:h,color:green});lines.forEach((t,i)=>draw(t,M+13,y-21-i*17,12,bold,green));y-=h+13}
+ function heading(v,following=32){const lines=wrap(v,11,CW-26,bold),h=10+lines.length*14;need(h+following+10);y-=5;page.drawRectangle({x:M,y:y-h,width:CW,height:h,color:light});page.drawRectangle({x:M,y:y-h,width:4,height:h,color:green});lines.forEach((t,i)=>draw(t,M+12,y-15-i*14,11,bold,green));y-=h+5}
  function detail(label,value){
   if(value===undefined||value===null||value==='')return;
   const lines=wrap(value,10,CW-28);
   let start=0;
   do{
-   if(y<123)newPage();
-   const available=Math.floor((y-71-32)/14);
+   if(y<100)newPage();
+   const available=Math.floor((y-60-24)/12);
    if(available<1){newPage();continue}
-   const count=Math.min(26,available,lines.length-start),h=30+count*14;
+   const count=Math.min(26,available,lines.length-start),h=24+count*12;
    page.drawRectangle({x:M,y:y-h,width:CW,height:h,color:rgb(.979,.976,.989),borderWidth:.45,borderColor:line});
    page.drawRectangle({x:M,y:y-h,width:3,height:h,color:green});
-   draw(label.toUpperCase()+(start?' (CONT.)':''),M+13,y-16,8,bold,green);
-   lines.slice(start,start+count).forEach((t,i)=>draw(t,M+13,y-35-i*14,10));
-   y-=h+10;start+=count;
+   draw(label.toUpperCase()+(start?' (CONT.)':''),M+13,y-12,8,bold,green);
+   lines.slice(start,start+count).forEach((t,i)=>draw(t,M+13,y-24-i*12,10));
+   y-=h+5;start+=count;
   }while(start<lines.length)
  }
- function grid(items){const gap=10,width=(CW-gap)/2;for(let k=0;k<items.length;k+=2){const cells=items.slice(k,k+2).map(([label,value])=>({label,lines:wrap(value||'Não informado',10,width-20)}));const maxLines=Math.max(...cells.map(c=>c.lines.length));for(let off=0;off<maxLines;off+=30){const n=Math.min(30,maxLines-off),h=34+n*14;need(h+10);cells.forEach((c,i)=>{const x=M+i*(width+gap);page.drawRectangle({x,y:y-h,width,height:h,color:light,borderWidth:.5,borderColor:line});draw(c.label.toUpperCase()+(off?' (CONT.)':''),x+10,y-15,7,bold,muted);c.lines.slice(off,off+n).forEach((t,j)=>draw(t,x+10,y-32-j*14,10))});y-=h+9}}}
+ function grid(items){const gap=10,width=(CW-gap)/2;for(let k=0;k<items.length;k+=2){const cells=items.slice(k,k+2).map(([label,value])=>({label,lines:wrap(value||'Não informado',10,width-20)}));const maxLines=Math.max(...cells.map(c=>c.lines.length));for(let off=0;off<maxLines;off+=30){const n=Math.min(30,maxLines-off),h=23+n*12;need(h+5);cells.forEach((c,i)=>{const x=M+i*(width+gap);page.drawRectangle({x,y:y-h,width,height:h,color:light,borderWidth:.5,borderColor:line});draw(c.label.toUpperCase()+(off?' (CONT.)':''),x+10,y-11,7,bold,muted);c.lines.slice(off,off+n).forEach((t,j)=>draw(t,x+10,y-23-j*12,10))});y-=h+5}}}
  for(const reportDocument of documents){m=reportDocument.meta;const records=reportDocument.records;
  let sourcePdfFailed=false;
  if(m.sourcePdf){
@@ -42,43 +42,45 @@ async function exportReportDocuments(documents,ids=[]){
    // An external source is retained in the editable record, not appended to its PDF.
   }catch(e){if(String(e.message).startsWith('Vistoria importada anteriormente'))throw e;sourcePdfFailed=true;sourcePdfWarnings++}
  }
- newPage();if(sourcePdfFailed)detail('Aviso de anexação','O PDF de origem não pôde ser incorporado. Confira o arquivo original antes de enviar este relatório.');else if(m.sourcePdf)detail('Documento externo de referência',m.sourcePdfName||'PDF original disponível separadamente na vistoria.');for(const t of wrap(m.title||'Relatório de levantamento técnico',16,CW,bold)){need(27);draw(t,M,y,16,bold);y-=22}y-=12;
+ newPage();if(sourcePdfFailed)detail('Aviso de anexação','O PDF de origem não pôde ser incorporado. Confira o arquivo original antes de enviar este relatório.');else if(m.sourcePdf)detail('Documento externo de referência',m.sourcePdfName||'PDF original disponível separadamente na vistoria.');for(const t of wrap(m.title||'Relatório de levantamento técnico',16,CW,bold)){need(27);draw(t,M,y,16,bold);y-=20}y-=5;
  grid([['Data da vistoria',datefmt(m.date)],['Código / referência',m.number||'Não informado'],['Ordem de serviço (OS)',m.workOrder||'Não informado'],['Responsável pelo levantamento',m.author],['Empresa / unidade',m.company],['Setor',m.sector],['Pontos inspecionados',String(records.length)]]);
- heading('1. Objetivo');detail('Objetivo do levantamento',m.objective);
+ heading('1. Objetivo');const selected=Boolean(reportDocument.exportPointNumbers?.length||reportDocument.exportPointNumber);detail('Objetivo do levantamento',selected?'Documentar as condições, evidências e encaminhamentos dos pontos selecionados: '+records.map(r=>r.tag||r.equipment||'Ponto sem identificação').join(', ')+'.':m.objective);
  
  heading('Resumo do levantamento');
  const counts={};records.forEach(r=>counts[r.priority]=(counts[r.priority]||0)+1);
  paragraph('Total: '+records.length+' ponto(s). '+Object.entries(counts).map(([k,v])=>k+': '+v).join(' | '),9);
  const urgent=records.filter(r=>['Alta','Crítica'].includes(r.priority)&&!['Corrigido','Sem pendência'].includes(r.status));
- if(urgent.length){detail('Pontos prioritários em aberto',urgent.map(r=>r.tag+' | Prioridade: '+r.priority+' | Situação: '+r.status).join('\n'))}else paragraph('Nenhuma pendência classificada como alta ou crítica.',9);
+ if(urgent.length&&records.length>1){detail('Pontos prioritários em aberto',urgent.map(r=>r.tag+' | Prioridade: '+r.priority+' | Situação: '+r.status).join('\n'))}else if(urgent.length)paragraph('Pendência prioritária: '+urgent[0].tag+' | '+urgent[0].priority+' | '+urgent[0].status,9);else paragraph('Nenhuma pendência classificada como alta ou crítica.',9);
  const pending=records.filter(r=>r.status==='Pendente'||r.status==='Em acompanhamento').length;
  paragraph(records.length+' ponto(s) registrado(s)  |  '+pending+' em acompanhamento ou pendente(s)',9,muted);
  for(let i=0;i<records.length;i++){
- const r=records[i];need(165);heading('2.'+(reportDocument.exportPointNumbers?.[i]||reportDocument.exportPointNumber||i+1)+' Levantamento de campo');
+ const r=records[i];need(125);heading('2.'+(reportDocument.exportPointNumbers?.[i]||reportDocument.exportPointNumber||i+1)+' Levantamento de campo');
  for(const t of wrap(r.tag+' | '+r.area,14,CW,bold)){need(21);draw(t,M,y,14,bold);y-=20}y-=5;
  const pc={Crítica:rgb(.67,.15,.15),Alta:rgb(.72,.30,.08),'Média':rgb(.47,.35,.08),Baixa:green}[r.priority]||muted;
- need(28);draw('PRIORIDADE: '+r.priority.toUpperCase(),M,y,9,bold,pc);y-=22;
+ const overdue=r.deadline&&/^\d{4}-\d{2}-\d{2}$/.test(r.deadline)&&r.deadline<today()&&['Pendente','Em acompanhamento'].includes(r.status);need(22);draw('PRIORIDADE: '+String(r.priority||'A definir').toUpperCase()+(overdue?' | PRAZO VENCIDO':''),M,y,9,bold,pc);y-=16;
  grid([['Ordem de serviço (OS)',r.pointWorkOrder||m.workOrder||'Não informado'],['Equipamento',r.equipment],['Condição',r.condition],['Situação',r.status],['Prazo previsto',r.deadline?datefmt(r.deadline):'A definir']]);
- if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)checks.forEach(c=>detail(c.label,c.value||'Não verificado'));else paragraph('Checklist não preenchido.',9)}
+ if(r.inspectionType){heading('Checklist - '+r.inspectionType);let checks=[];try{checks=JSON.parse(r.checklistData||'[]')}catch{}if(Array.isArray(checks)&&checks.length)grid(checks.map(c=>[c.label,c.value||'Não verificado']));else paragraph('Checklist não preenchido.',9)}
  if(r.problem||r.analysisHistory||r.impact||r.action||r.owner)heading('Descrição técnica e encaminhamentos');
  detail('Condição encontrada',r.problem);detail('Andamento da análise',r.analysisHistory);detail('Impacto / consequência',r.impact);const actionText=String(r.action||'');const splitAction=actionText.match(/^SERVIÇO REALIZADO:\s*([\s\S]*?)\s*PENDÊNCIAS:\s*([\s\S]*)$/i);if(splitAction){detail('Serviço realizado (relatado)',splitAction[1]);detail('Pendências e ações recomendadas',splitAction[2]);}else detail('Ação recomendada',r.action);detail('Responsável pela ação',r.owner);if(r.completionWork){heading('Baixa e conclusão');detail('Data da conclusão',datefmt(r.completionDate));detail('Serviço realizado',r.completionWork);detail('Executante informado (sem verificação)',r.completionBy)}
  if(r.photos?.length){for(let j=0;j<r.photos.length;j++){
  const p=r.photos[j];let img;
  try{img=/^data:image\/png;base64,/i.test(p.src)?await doc.embedPng(p.src):await doc.embedJpg(p.src)}catch{detail('Foto '+(j+1),'Imagem não incorporada ao PDF. Confira o original.');continue}
- const caption='Foto '+(reportDocument.exportPointNumbers?.[i]||reportDocument.exportPointNumber||i+1)+'.'+(j+1)+(p.caption?' - '+p.caption:'');
+ const captionText=String(p.caption||'').replace(/\bMódulos danificado\b/gi,'Módulos danificados').replace(/\bMódulo danificados\b/gi,'Módulo danificado');const caption='Foto '+(reportDocument.exportPointNumbers?.[i]||reportDocument.exportPointNumber||i+1)+'.'+(j+1)+(captionText?' - '+captionText:'');
  const captionLines=wrap(caption,9,CW),captionHeight=captionLines.length*14;
  // Reserve space for the heading, caption and footer before sizing the photo.
- const headingHeight=j===0?35:0;
- const maxHeight=Math.max(80,Math.min(530,H-108-55-headingHeight-39-Math.min(captionHeight,140)));
+ const headingHeight=j===0?34:0;
+ const reserve=headingHeight+30+Math.min(captionHeight,140);
+ const naturalHeight=Math.min(records.length===1?300:380,CW*img.height/img.width);
+ if(y-55-reserve<Math.min(naturalHeight,180))newPage();
+ const maxHeight=Math.max(1,Math.min(naturalHeight,y-55-reserve));
  const scale=Math.min(CW/img.width,maxHeight/img.height),w=img.width*scale,h=img.height*scale;
- need(h+39+Math.min(captionHeight,140)+headingHeight);
- if(j===0)heading('REGISTRO FOTOGRÁFICO');
- page.drawImage(img,{x:M+(CW-w)/2,y:y-h-5,width:w,height:h});y-=h+23;
- paragraph(caption,9,muted);y-=7;
+ if(j===0)heading('REGISTRO FOTOGRÁFICO',h+20);
+ page.drawImage(img,{x:M+(CW-w)/2,y:y-h-5,width:w,height:h});y-=h+15;
+ paragraph(caption,9,muted);y-=3;
  }}
  }
  if(m.conclusion){heading('3. Conclusão / observações finais');paragraph(m.conclusion)}
- heading('Controle do documento');grid([['Elaboração',m.author],['Data',datefmt(m.date)]]);need(85);y-=28;page.drawLine({start:{x:M,y},end:{x:M+CW*.65,y},thickness:.7,color:line});y-=15;draw('Assinatura do responsável técnico',M,y,9,bold);y-=15;paragraph(m.author||'Nome a preencher',9,muted);paragraph('Campo para assinatura manual. Não constitui assinatura digital.',8,muted);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
+ need(125);heading('Controle do documento',88);grid([['Elaboração',m.author],['Data',datefmt(m.date)]]);need(57);y-=12;page.drawLine({start:{x:M,y},end:{x:M+CW*.65,y},thickness:.7,color:line});y-=12;draw('Assinatura do responsável técnico',M,y,9,bold);y-=12;paragraph(m.author||'Nome a preencher',9,muted);paragraph('Campo para assinatura manual. Não constitui assinatura digital.',8,muted);if(m.approver||m.approvalDate)grid([['Aprovação registrada',m.approver||'Não informada'],['Data da aprovação',m.approvalDate?datefmt(m.approvalDate):'Não informada']]);if(m.homologator||m.homologDate)grid([['Homologação registrada',m.homologator||'Não informada'],['Data da homologação',m.homologDate?datefmt(m.homologDate):'Não informada']]);if(m.revision||m.revisionNote)grid([['Revisão',m.revision||'Não informada'],['Alterações',m.revisionNote||'Não informadas']]);
  }
  const pages=doc.getPages();pages.forEach((p,i)=>{p.drawLine({start:{x:M,y:39},end:{x:W-M,y:39},thickness:.5,color:line});p.drawText('CMOC Brasil | Levantamento de instrumentação e automação',{x:M,y:25,size:8,font:regular,color:muted});const s=(i+1)+' / '+pages.length;p.drawText(s,{x:W-M-regular.widthOfTextAtSize(s,8),y:25,size:8,font:regular,color:muted})});
  const first=documents[0].meta;
