@@ -78,3 +78,14 @@ test('Login aprovado inicia autorização offline uma vez e preserva renovação
  assert.match(cloud,/fetch\('\/api\/personal-session',\{method:'POST',cache:'no-store',credentials:'same-origin'\}\)/);
  assert.match(cloud,/sessionStorage\.removeItem\(PERSISTENCE_ATTEMPT_KEY\)/);
 });
+
+test('Ações administrativas refletem o status atual',()=>{
+ const source=cloud.slice(cloud.indexOf('function memberStatusActions('),cloud.indexOf('async function showTeam(){'));
+ const actions=new Function(source+';return memberStatusActions;')();
+ assert.deepEqual(actions({role:'technician',status:'pending'}),[['Aprovar','approved'],['Bloquear','blocked']]);
+ assert.deepEqual(actions({role:'technician',status:'approved'}),[['Bloquear','blocked']]);
+ assert.deepEqual(actions({role:'technician',status:'blocked'}),[['Desbloquear','approved']]);
+ assert.deepEqual(actions({role:'admin',status:'approved'}),[]);
+ assert.deepEqual(actions({role:'technician',status:'unknown'}),[]);
+ assert.ok(cloud.includes('adminPanel.open=adminWasOpen'));
+});
