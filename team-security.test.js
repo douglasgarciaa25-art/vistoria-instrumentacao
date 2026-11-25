@@ -39,3 +39,28 @@ test('API da equipe: autorização, propriedade, lixeira e partes',async()=>{
   assert.deepEqual((await invoke('POST',{id:'r1'},{...base,action:'upload-status'})).payload,{parts:[0]});
  }finally{globalThis.fetch=original;for(const k of ['VISTORIA_GOOGLE_CLIENT_ID','my_super_base_secrety_key133']){if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}}
 });
+
+import memberHandler from './api/team.mjs';
+test('Pré-autorização exige administrador e usa a identidade Google verificada',async()=>{
+ const original=globalThis.fetch;const env={...process.env};
+ process.env.VISTORIA_GOOGLE_CLIENT_ID='test-client';process.env.my_super_base_secrety_key133='test-only';process.env.VISTORIA_GOOGLE_ALLOWED_EMAILS='';
+ let member={google_subject:'admin-subject',role:'admin',status:'approved'},subject='admin-subject',email='admin@example.invalid',rpc=[],verified=true;
+ globalThis.fetch=async(url,opts={})=>{
+ url=String(url);
+ if(url.startsWith('https://oauth2.googleapis.com/'))return Response.json({aud:'test-client',email_verified:verified,sub:subject,email});
+ if(url.includes('vistoria_members?'))return Response.json(member?[member]:[]);
+ if(url.includes('rpc/vistoria_manage_email_access')){const b=JSON.parse(opts.body);rpc.push(b);if(b.p_action==='request'){member={google_subject:subject,role:'technician',status:'approved'};return Response.json({state:'approved'});}return Response.json({state:b.p_action==='cancel'?'cancelled':'invited'});}
+ throw Error('Unexpected request '+url);
+ };
+ async function invoke(body){let status,payload;await memberHandler({method:'POST',query:{},body,headers:{authorization:'Bearer fake-token'}},{setHeader(){},status(s){status=s;return this},json(p){payload=p;return this}});return {status,payload};}
+ try{
+ assert.equal((await invoke({action:'authorize-email',email:'  Tech@Example.invalid  '})).status,200);
+ assert.deepEqual(rpc[0],{p_action:'authorize',p_email:'tech@example.invalid',p_subject:'admin-subject'});
+ assert.equal((await invoke({action:'authorize-email',email:'bad email'})).status,400);
+ assert.equal((await invoke({action:'cancel-invitation',email:'tech@example.invalid'})).payload.state,'cancelled');
+ member={role:'technician',status:'approved'};assert.equal((await invoke({action:'authorize-email',email:'other@example.invalid'})).status,403);
+ member=null;subject='new-subject';email='tech@example.invalid';verified=false;assert.equal((await invoke({action:'request',email:'spoof@example.invalid'})).status,401);
+ verified=true;assert.equal((await invoke({action:'request',email:'spoof@example.invalid'})).payload.member.status,'approved');
+ assert.deepEqual(rpc[2],{p_action:'request',p_email:'tech@example.invalid',p_subject:'new-subject'});
+ }finally{globalThis.fetch=original;for(const k of ['VISTORIA_GOOGLE_CLIENT_ID','my_super_base_secrety_key133','VISTORIA_GOOGLE_ALLOWED_EMAILS']){if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}}
+});
