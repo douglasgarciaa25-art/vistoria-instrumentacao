@@ -1101,20 +1101,33 @@
       if(generation!==teamViewGeneration)return;
       status.textContent=member?.status==='approved'?'Equipe conectada · '+(member.technician_name||member.email||'Conta Google aprovada'):member?.status==='blocked'?'Acesso à equipe bloqueado.':'Solicitação enviada. Aguarde aprovação.';
       if(member?.status!=='approved')return;
-      try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
-      if(member.role!=='admin')return;
-      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
+      if(member.role!=='admin'){try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}return;}
+      const adminPanel=document.createElement('section');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('h3');adminTitle.textContent='Gerenciar acesso dos técnicos';adminPanel.append(adminTitle);box.append(adminPanel);
+      const guidance=document.createElement('p');guidance.className='muted';guidance.textContent='Cadastre o e-mail Google do técnico antes do primeiro acesso. Somente você, como administrador, pode autorizar ou bloquear o acesso à nuvem da equipe.';adminPanel.append(guidance);
+      const inviteForm=document.createElement('form');inviteForm.className='cloud-member-row';const emailLabel=document.createElement('label');emailLabel.textContent='E-mail Google do novo técnico';emailLabel.htmlFor='gdrive-invite-email';const emailInput=document.createElement('input');emailInput.id='gdrive-invite-email';emailInput.type='email';emailInput.required=true;emailInput.maxLength=254;emailInput.placeholder='tecnico@exemplo.com';emailInput.autocomplete='off';const inviteButton=document.createElement('button');inviteButton.type='submit';inviteButton.textContent='Liberar acesso à nuvem';const notice=document.createElement('p');notice.className='muted';notice.setAttribute('role','status');notice.setAttribute('aria-live','polite');inviteForm.append(emailLabel,emailInput,inviteButton,notice);adminPanel.append(inviteForm);
+      inviteForm.addEventListener('submit',async event=>{event.preventDefault();if(inviteButton.disabled)return;const email=emailInput.value.trim().toLowerCase();if(!confirm('Liberar acesso à nuvem da equipe para '+email+'?'))return;inviteButton.disabled=true;notice.textContent='Salvando autorização…';try{const d=await teamRequest('POST',{action:'authorize-email',email});await showTeam();if(generation+1===teamViewGeneration)status.textContent=d.state==='approved'?'Acesso liberado para '+email+'.':'E-mail autorizado. O técnico poderá entrar com essa conta Google: '+email;}catch(e){notice.textContent=e.message;}finally{inviteButton.disabled=false;}});
+      const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
       authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
       adminPanel.append(authorize);
-      const {members}=await teamRequest('GET',null,true);
+      const lists=document.createElement('details');lists.className='cloud-disclosure';const listsTitle=document.createElement('summary');listsTitle.textContent='Usuários e autorizações';lists.append(listsTitle);adminPanel.append(lists);
+      try{
+      const {members,invitations=[]}=await teamRequest('GET',null,true);
+      if(generation!==teamViewGeneration)return;
+      listsTitle.textContent='Usuários e autorizações ('+members.length+' cadastrados · '+invitations.length+' aguardando login)';
+      for(const invitation of invitations){
+        const row=document.createElement('div');row.className='cloud-member-row';const label=document.createElement('span');label.textContent=invitation.email+' — Autorizado, aguardando primeiro login';row.append(label);const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar autorização';cancel.onclick=async()=>{if(!confirm('Cancelar a autorização de '+invitation.email+'?'))return;cancel.disabled=true;try{await teamRequest('POST',{action:'cancel-invitation',email:invitation.email});await showTeam();}catch(e){status.textContent=e.message;cancel.disabled=false;}};row.append(cancel);lists.append(row);
+      }
       for(const m of members){
-        const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' — '+(m.technician_name||'Nome não registrado')+' ';
+        const row=document.createElement('div');row.textContent=m.email+' — '+({approved:'Aprovado',pending:'Aguardando aprovação',blocked:'Bloqueado'}[m.status]||m.status)+' — '+(m.technician_name||'Nome não registrado')+' ';
         if(m.status==='approved'){const b=document.createElement('button');b.type='button';b.textContent='Cadastrar nome do técnico';b.onclick=async()=>{const name=prompt('Nome completo do técnico aprovado (vinculado à conta Google '+m.email+'):',m.technician_name||'');if(name===null)return;try{await teamRequest('POST',{action:'set-name',subject:m.google_subject,name});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);}
-        if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']]){
+        if(m.role!=='admin')for(const [label,value] of (m.status==='approved'?[['Bloquear','blocked']]:m.status==='blocked'?[['Liberar acesso','approved']]:[['Aprovar','approved'],['Bloquear','blocked']])){
           const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);
         }
-        row.className='cloud-member-row';adminPanel.append(row);
+        row.className='cloud-member-row';lists.append(row);
       }
+      }catch(e){const error=document.createElement('p');error.textContent=e.message;lists.append(error);}
+      if(generation!==teamViewGeneration)return;
+      try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
     }catch(e){status.textContent=e.message;}
   }
   function setup() {
