@@ -263,12 +263,27 @@ test('editor oferece pontos de todas as vistorias salvas, sem misturar IDs nem i
  const items=[{id:'current',document:{records:[{tag:'A'}]}},{id:'another',document:{records:[{tag:'B'}]}},{id:'empty',document:{records:[]}}];
  assert.deepEqual(reports(items,'current').map(r=>r.id),['another']);
  const points=[{pointId:'point-001',tag:'X'},{pointId:'point-002',tag:'X'}];assert.equal(find(points,{pointId:'point-002'}),1);assert.equal(find(points,{pointId:'missing'}),-1);assert.equal(find(points,{}),-1);
- assert.match(source,/select.append\(option\)/);assert.doesNotMatch(source,/createElement\('optgroup'\)/);assert.match(source,/await persistCurrent\(\);[\s\S]*?objectStore\('reports'\)\.get\(target.reportId\)/);
+ assert.match(source,/fragment.append\(option\)/);assert.doesNotMatch(source,/createElement\('optgroup'\)/);assert.match(source,/await persistCurrent\(\);[\s\S]*?objectStore\('reports'\)\.get\(target.reportId\)/);
  assert.match(source,/reset\(\);activeReportId=row.id;fill\(doc\);\s*if\(hasPendingDraft\(\)\)/);assert.match(source,/if\(editing!==i\)notify/);assert.match(source,/document.addEventListener\('vistoria-saved',refreshPicker\)/);
 });
 
 test('seletor de edição exibe somente TAG e mantém identidade de registros repetidos',()=>{
  const source=readFileSync('edit-saved.js','utf8');const code=source.slice(source.indexOf('function pointLabel('),source.indexOf('function otherSavedReports('));const label=new Function(code+';return pointLabel;')();
  assert.equal(label({tag:'C260 BA01',area:'BV',status:'Pendente'}),'C260 BA01');assert.equal(label({tag:'  MC4530_FI015  '}),'MC4530_FI015');assert.equal(label({}),'TAG não informada');
- assert.match(source,/option.textContent=tag/);assert.match(source,/choices.set\(key,\{reportId,pointId:r.pointId,index:i,current,tag/);assert.match(source,/Existem registros com a mesma TAG/);
+ assert.match(source,/option.textContent=p.tag/);assert.match(source,/nextChoices.set\(key,\{reportId,pointId:r.pointId,index:i,current,tag/);assert.match(source,/Existem registros com a mesma TAG/);
+});
+
+test('seletor não reconstrói opções durante foco ou salvamentos sem alteração',()=>{
+ const source=readFileSync('edit-saved.js','utf8');
+ const code=source.slice(source.indexOf('function pointLabel('),source.indexOf('function hasPendingDraft('));
+ const records=[{pointId:'point-001',tag:'B'}],historyItems=[{id:'other',document:{meta:{},records:[{pointId:'point-002',tag:'A'}]}}];
+ let rebuilds=0;const select={value:'',replaceChildren(fragment){rebuilds++;this.options=fragment.children}};
+ const document={createElement(){return {}},createDocumentFragment(){return {children:[],append(o){this.children.push(o)}}}};
+ const run=new Function('records','historyItems','activeReportId','window','$','document','select','picker','pickerTitle','editing',`let choices=new Map(),pickerSignature='',pickerFocused=false; `+code+`;return {refreshPicker,focus(v){pickerFocused=v},choices(){return choices}};`)(records,historyItems,'current',{},()=>({value:'RV'}),document,select,{}, {},null);
+ run.refreshPicker();assert.equal(rebuilds,1);const first=select.options.map(o=>[o.value,o.textContent]);assert.deepEqual(first.map(x=>x[1]),['Selecione um ponto salvo','A','B']);
+ run.refreshPicker();assert.equal(rebuilds,1);
+ run.focus(true);historyItems[0].document.records.push({pointId:'point-003',tag:'C'});run.refreshPicker();assert.equal(rebuilds,1);assert.equal(run.choices().size,2);
+ run.focus(false);run.refreshPicker();assert.equal(rebuilds,2);assert.equal(run.choices().size,3);assert.deepEqual(select.options.slice(0,3).map(o=>[o.value,o.textContent]),first);
+ run.refreshPicker();assert.equal(rebuilds,2);
+ assert.match(source,/select.addEventListener\('focus'/);assert.match(source,/select.addEventListener\('blur'/);assert.match(source,/if\(signature!==pickerSignature\)/);
 });
