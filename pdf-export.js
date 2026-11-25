@@ -1,5 +1,15 @@
+function previewGeneratedPdf(blob,name){
+ const dialog=document.createElement('dialog');dialog.style.cssText='width:min(95vw,900px);max-height:90vh;padding:12px';
+ const heading=document.createElement('h2');heading.textContent='Prévia do PDF gerado';
+ const url=URL.createObjectURL(blob);const frame=document.createElement('iframe');frame.title='PDF do relatório';frame.src=url;frame.style.cssText='width:100%;height:60vh;border:0';
+ const note=document.createElement('p');note.textContent='Se o navegador não exibir o PDF, use Abrir PDF ou Baixar PDF.';
+ const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Abrir PDF';
+ const save=document.createElement('button');save.type='button';save.textContent='Baixar PDF';save.onclick=()=>download(blob,name);
+ const close=document.createElement('button');close.type='button';close.textContent='Fechar';close.onclick=()=>dialog.close();
+ dialog.append(heading,frame,note,link,save,close);document.body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();URL.revokeObjectURL(url)},{once:true});dialog.showModal();
+}
 /* Relatório A4 com paginação, fotos proporcionais e cabeçalho em todas as páginas. */
-async function exportReportDocuments(documents,ids=[]){
+async function exportReportDocuments(documents,ids=[],options={}){
  const button=$('pdf');button.disabled=true;button.textContent='Preparando relatório…';
  try{
  const {PDFDocument,StandardFonts,rgb,degrees}=PDFLib,doc=await PDFDocument.create();
@@ -93,7 +103,8 @@ async function exportReportDocuments(documents,ids=[]){
  doc.setSubject('VISTORIA-REF-V1:'+encodeURIComponent(documents.length===1?String(first.number||''):''));
  doc.setAuthor(clean(documents.length>1?'Instrumentação e automação':first.author||''));
  if(documents.length===1)vistoriaPdfEmbed(doc,documents[0],ids[0]);
- download(new Blob([await doc.save()],{type:'application/pdf'}),documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify(sourcePdfWarnings?'PDF gerado com aviso: '+sourcePdfWarnings+' arquivo(s) de origem indisponível(is). Revise antes do envio.':'PDF gerado. Confira os downloads.');
+ const pdfBlob=new Blob([await doc.save()],{type:'application/pdf'});const deliver=options.preview?previewGeneratedPdf:download;
+ deliver(pdfBlob,documents.length>1?'Vistorias-reunidas-'+today()+'.pdf':'Relatorio-vistoria-'+m.date+(documents[0].exportPointNumber?'-ponto-'+documents[0].exportPointNumber:'-'+documents[0].records.length+'-pontos')+'-'+Date.now()+'.pdf');notify(sourcePdfWarnings?'PDF gerado com aviso: '+sourcePdfWarnings+' arquivo(s) de origem indisponível(is). Revise antes do envio.':'PDF gerado. Confira os downloads.');
  }catch(e){notify('Não foi possível gerar o PDF: '+e.message)}finally{button.disabled=false;button.textContent='Baixar PDF individual'}
 };
 
