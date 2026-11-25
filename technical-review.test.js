@@ -150,3 +150,18 @@ test('relatório: filtros de TAG, OS e situação preservam índices e dados',()
  assert.match(s,/filterReportId!==activeReportId/);
  assert.match(s,/originalRender\(\);filterReport\(\);addReportDetails\(\);photoButtons\(\)/);
 });
+
+test('indicadores da vistoria contam situações reais e conclusão sem alterar pontos',()=>{
+ const s=readFileSync('layout.js','utf8');
+ const body=s.slice(s.indexOf('function reportManagementStats('),s.indexOf('function updateReportSummary('));
+ const stats=new Function(body+';return reportManagementStats;')();
+ const points=[...Array.from({length:7},()=>({status:'Corrigido'})),{status:'Sem pendência'},...Array.from({length:2},()=>({status:'Em acompanhamento'})),...Array.from({length:5},()=>({status:'Pendente'}))];
+ const before=JSON.stringify(points);
+ assert.deepEqual(stats(points),{total:15,done:8,progress:2,pending:5,other:0,rate:53.3});
+ assert.deepEqual(stats([]),{total:0,done:0,progress:0,pending:0,other:0,rate:null});
+ assert.equal(stats([{status:'Sem pendência'}]).rate,100);
+ assert.deepEqual(stats([{status:'Legado'}]),{total:1,done:0,progress:0,pending:0,other:1,rate:0});
+ assert.equal(JSON.stringify(points),before);
+ assert.match(s,/reportManagementStats\(records\)/);
+ assert.match(s,/function update\(\)\{updateReportSummary\(\)/);
+});
