@@ -1,7 +1,7 @@
 import {googleIdentity,memberFor,teamDb} from '../team-auth.mjs';
 const emailAccess=(action,email,subject)=>teamDb('rpc/vistoria_manage_email_access',{method:'POST',body:JSON.stringify({p_action:action,p_email:email,p_subject:subject})});
 const normalizeEmail=value=>String(value||'').trim().toLowerCase();
-const validEmail=email=>email.length<=254&&/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
+const validEmail=email=>email.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  const reply=(s,b)=>res.status(s).json(b);
