@@ -1091,10 +1091,18 @@
     });
   }
   let teamViewGeneration=0;
+  function memberStatusActions(member){
+    if(member.role==='admin')return [];
+    if(member.status==='approved')return [['Bloquear','blocked']];
+    if(member.status==='blocked')return [['Desbloquear','approved']];
+    if(member.status==='pending')return [['Aprovar','approved'],['Bloquear','blocked']];
+    return [];
+  }
   async function showTeam(){
     const generation=++teamViewGeneration;
     const target=$('gdrive-team-users'),status=$('gdrive-team-status');
     if(!target||!status)return;
+    const adminWasOpen=target.querySelector('.cloud-admin-panel')?.open===true;
     captureCloudReportDisclosures(target);const box=document.createElement('div');target.replaceChildren(box);
     try{
       const {member}=await teamRequest('POST',{action:'request'});
@@ -1103,15 +1111,20 @@
       if(member?.status!=='approved')return;
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
       if(member.role!=='admin')return;
-      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
+      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';adminPanel.open=adminWasOpen;const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
       authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
       adminPanel.append(authorize);
       const {members}=await teamRequest('GET',null,true);
       for(const m of members){
-        const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' — '+(m.technician_name||'Nome não registrado')+' ';
-        if(m.status==='approved'){const b=document.createElement('button');b.type='button';b.textContent='Cadastrar nome do técnico';b.onclick=async()=>{const name=prompt('Nome completo do técnico aprovado (vinculado à conta Google '+m.email+'):',m.technician_name||'');if(name===null)return;try{await teamRequest('POST',{action:'set-name',subject:m.google_subject,name});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);}
-        if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']]){
-          const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);
+        const row=document.createElement('div');
+        const labels={approved:'🟢 Aprovado',pending:'🟡 Pendente',blocked:'🔴 Bloqueado'};
+        row.textContent=m.email+' — '+(labels[m.status]||'Situação desconhecida')+' — '+(m.technician_name||'Nome não registrado')+' ';
+        if(m.status==='approved'){const b=document.createElement('button');b.type='button';b.textContent=m.technician_name?'Editar nome':'Cadastrar nome do técnico';b.onclick=async()=>{const name=prompt('Nome completo do técnico aprovado (vinculado à conta Google '+m.email+'):',m.technician_name||'');if(name===null)return;try{await teamRequest('POST',{action:'set-name',subject:m.google_subject,name});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);}
+        for(const [label,value] of memberStatusActions(m)){
+          const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{
+            const buttons=[...row.querySelectorAll('button')];buttons.forEach(item=>item.disabled=true);
+            try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message;buttons.forEach(item=>item.disabled=false)}
+          };row.append(b);
         }
         row.className='cloud-member-row';adminPanel.append(row);
       }
