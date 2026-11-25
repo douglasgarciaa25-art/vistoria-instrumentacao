@@ -132,7 +132,7 @@ test('motor offline preserva fatos, identificadores e incerteza',async()=>{
 
 test('relatório: filtros de TAG, OS e situação preservam índices e dados',()=>{
  const s=readFileSync('workflow.js','utf8');
- const code=s.slice(s.indexOf('function reportPointMatches('),s.indexOf('let filterReportId;'));
+ const code=s.slice(s.indexOf('function reportPointMatches('),s.indexOf('let filterReportId,'));
  const {matches,details}=new Function(code+';return {matches:reportPointMatches,details:reportPointDetails};')();
  const rows=[{tag:'C240 BA01',pointWorkOrder:'000123',status:'Corrigido',action:'Calibração',impact:'<teste>',completionWork:'Executado'},{tag:'C215 BA02',status:'Pendente'},{tag:'C270',status:'Sem pendência'},{tag:'C221',status:'Em acompanhamento'}];
  const original=JSON.stringify(rows);
@@ -146,7 +146,7 @@ test('relatório: filtros de TAG, OS e situação preservam índices e dados',()
  assert.deepEqual(details(rows[1]),[]);
  assert.equal(JSON.stringify(rows),original);
  assert.match(s,/dd.textContent=String\(value\)/);
- assert.match(s,/entry.hidden=!match/);
+ assert.match(s,/entry.hidden=!r\|\|!selectedPoints.has\(r.pointId\)/);
  assert.match(s,/filterReportId!==activeReportId/);
  assert.match(s,/originalRender\(\);filterReport\(\);addReportDetails\(\);photoButtons\(\)/);
 });
@@ -189,8 +189,8 @@ test('PDF parcial contém somente IDs selecionados, fotos e números originais, 
 test('prévia inicia vazia e exibe somente os pontos marcados; seleção permanece acessível',()=>{
  const source=readFileSync('workflow.js','utf8');
  assert.match(source,/id="onlySelectedPoints" checked hidden/);
- assert.match(source,/search.hidden=preview/);
- assert.match(source,/const q=preview\?'':/);
+ assert.match(source,/selectionDialog.showModal\(\)/);
+ assert.match(source,/entry.hidden=!r\|\|!selectedPoints.has\(r.pointId\)/);
  assert.match(source,/selectedPoints.has\(r.pointId\)/);
  assert.match(source,/emptySelection.hidden=!preview\|\|selectedPoints.size>0/);
  assert.match(source,/\$\('togglePointSelection'\).onclick=/);
@@ -204,4 +204,16 @@ test('resumo executivo exclui pontos não selecionados e não inclui conclusão 
  const output={value:''},button={};
  const generate=new Function('$','data','records','window','datefmt','notify',body+";return $('makeSummary').onclick;")(id=>id==='makeSummary'?button:output,()=>({meta:{date:'2026-11-24',conclusion:'Conclusão geral'}}),records,{VistoriaReportSelection:()=>[records[0]]},v=>v,()=>{});
  generate();assert.match(output.value,/RESUMO EXECUTIVO/);assert.match(output.value,/Falha A/);assert.doesNotMatch(output.value,/Falha B|Corrigido B|Conclusão geral/);
+});
+
+
+test('seleção inicial automática apenas para ponto único, sem reativar seleção limpa',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ const code=source.slice(source.indexOf('function initialPointSelection('),source.indexOf('function updatePointSelection('));
+ const initial=new Function(code+';return initialPointSelection;')();
+ const ids=new Set();assert.equal(initial([],ids,true),true);assert.equal(initial([{}],ids,true),true);assert.equal(initial([{pointId:'one'}],ids,true),false);assert.deepEqual([...ids],['one']);ids.clear();assert.equal(initial([{pointId:'one'}],ids,false),false);assert.equal(ids.size,0);assert.equal(initial([{pointId:'one'},{pointId:'two'}],ids,true),false);assert.equal(ids.size,0);
+});
+test('diálogo e opções recolhíveis mantêm os controles existentes',()=>{
+ const source=readFileSync('workflow.js','utf8');const css=readFileSync('layout.css','utf8');
+ assert.match(source,/selectionDialog.showModal\(\)/);assert.match(source,/selectionDialogList/);assert.match(source,/details.append\(tools\)/);assert.match(source,/extras.append\(trash\)/);assert.match(source,/extras.append\(audit\)/);assert.match(source,/report.insertBefore\(dock,review\)/);assert.match(css,/report-export-dock\{position:sticky/);
 });
