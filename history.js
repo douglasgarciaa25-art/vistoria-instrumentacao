@@ -145,6 +145,15 @@ async function vistoriaMoveArea(id,destination){
  });
 }
 
+// Após salvar um ponto como Corrigido, conclui automaticamente a vistoria apenas
+// quando TODOS os pontos estão encerrados. Não descarta rascunhos nem altera fotos/IDs.
+function vistoriaFinalizeOnSavedCorrection(savedStatus,doc,stamp){
+ if(savedStatus!=='Corrigido'||!doc?.records?.length)return false;
+ if(!vistoriaAllPointsClosed(doc)||vistoriaHasNewDraft(doc)||doc.pending?.editing!=null)return false;
+ if(doc.meta?.finalizedAt)return false;
+ doc.meta.finalizedAt=stamp;
+ return true;
+}
 // Finalização da vistoria: no clique, salva a edição aberta, marca pontos como corrigidos e preserva evidências.
 function vistoriaAllPointsClosed(doc){
  return !!doc?.records?.length&&doc.records.every(vistoriaPointClosed);
