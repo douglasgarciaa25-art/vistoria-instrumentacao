@@ -386,3 +386,22 @@ test('resultado de sincronização permanece separado do cadastro de equipe',()=
  assert.match(src,/gdrive-team-refresh'\)\.onclick=async\(\)=>\{await syncTeam\(\);await showTeam\(\);\}/);
  assert.doesNotMatch(src,/Sincronização solicitada\. Confira a fila/);
 });
+
+
+test('base antiga com foto reordenada só é recuperada com hash original comprovado',async()=>{
+ const vm=await import('node:vm'),{createHash}=await import('node:crypto'),src=file('google-drive-sync.js');
+ const code=src.slice(src.indexOf('  async function confirmedTeamBase('),src.indexOf('  async function syncTeam('));
+ const digest=async d=>createHash('sha256').update(JSON.stringify(d)).digest('hex');
+ const verify=vm.runInNewContext(code+';confirmedTeamBase',{digest,structuredClone});
+ const original={meta:{title:'Teste'},records:[{photos:[{src:'data:image/jpeg;base64,AAAA',caption:'foto'}]}]};
+ const returned={meta:{title:'Teste'},records:[{photos:[{caption:'foto',src:'data:image/jpeg;base64,AAAA'}]}]};
+ assert.equal(await verify(returned,await digest(original)),true);
+ returned.records[0].photos[0].caption='alterada';
+ assert.equal(await verify(returned,await digest(original)),false);
+});
+test('fila automática em primeiro plano respeita conta e consulta PDF sem envio',()=>{
+ const src=file('google-drive-sync.js'),worker=file('background-sync.js');
+ assert.match(src,/if\(receiveOnly!==true&&window\.VistoriaBackground\?\.run\)/);
+ assert.match(src,/await window\.VistoriaBackground\.run\(member\.google_subject\)/);
+ assert.match(worker,/expectedSubject!==null&&auth\.subject!==expectedSubject/);
+});
