@@ -52,10 +52,13 @@
 
  backup.querySelector('p').textContent='Baixe uma cópia editável com os registros e fotos. Para levar os dados a outro aparelho, conecte o Google Drive ou restaure o arquivo.';
  const current=document.createElement('div');current.className='current-bar';current.innerHTML='<div><span class="current-dot"></span><span id="activeLabel">Vistoria em edição</span></div><button type="button" class="secondary" id="quickSave">'+icon('check')+'Salvar</button>';editor.insertBefore(current,meta);
+ const newBar=document.createElement('div');newBar.className='editor-new-report';newBar.innerHTML='<button type="button" id="editorNewReport">'+icon('plus')+' Nova vistoria</button>';editor.insertBefore(newBar,current);
+ const newStyle=document.createElement('style');newStyle.textContent='#view-editor .editor-new-report{display:flex;margin:0 0 10px}#view-editor #editorNewReport{width:100%;min-height:48px;font-size:14px;justify-content:center}';document.head.append(newStyle);
  function show(view,focus=false){for(const el of [home,editor,report,storage])el.hidden=el.id!=='view-'+view;nav.querySelectorAll('button').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(focus){window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});const heading=$('view-'+view).querySelector('h2');heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true})}update()}
  nav.addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(b)show(b.dataset.view,true)});
  main.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)show(b.dataset.go,true)});
- $('quickNew').onclick=()=>{if(!historyReady||busy||historyBusy)return notify('Aguarde o carregamento dos formulários.');show('editor',true);$('newReport').click()};$('continueReport').onclick=()=>show('editor',true);$('quickSave').onclick=()=>$('saveReport').click();
+ function startNewReport(){if(!historyReady||busy||historyBusy)return notify('Aguarde o carregamento dos formulários.');show('editor',true);$('newReport').click()}
+ $('quickNew').onclick=startNewReport;$('editorNewReport').onclick=startNewReport;$('continueReport').onclick=()=>show('editor',true);$('quickSave').onclick=()=>$('saveReport').click();
  ['newReport','clear'].forEach(id=>$(id).addEventListener('click',()=>{if(historyReady&&!busy)show('editor',true)}));
  history.addEventListener('click',e=>{const b=e.target.closest('[data-open-report],[data-duplicate-report]');if(b&&historyReady&&!busy&&!historyBusy)show('editor',true)},true);
  $('entries').addEventListener('click',e=>{if(e.target.closest('[data-edit],[data-duplicate-item]'))show('editor',true)},true);
