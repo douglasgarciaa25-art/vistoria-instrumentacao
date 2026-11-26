@@ -12,13 +12,10 @@
    help.textContent='Nova versão disponível para instalar.';
    const action=document.createElement('button');action.type='button';action.id='vistoria-update';action.className='secondary';action.textContent='Atualizar aplicativo';action.style.margin='8px';action.style.fontSize='12px';
    (document.querySelector('header')||document.body).append(action);
-   action.addEventListener('click',async()=>{
-    action.disabled=true;action.textContent='Salvando antes de atualizar…';
-    try{
-     if(typeof historyReady!=='undefined'&&historyReady&&typeof persistCurrent==='function')await persistCurrent();
-     navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true});
-     reg.waiting?.postMessage({type:'ACTIVATE_UPDATE'});
-    }catch(e){action.disabled=false;action.textContent='Tentar novamente';help.textContent='Falha ao salvar: '+e.message}
+   action.addEventListener('click',()=>{
+    const shared=document.getElementById('applyUpdate');
+    if(shared){shared.click();return;}
+    help.textContent='Abra a aba Vistoria para salvar antes de atualizar.';
    });
   };
   ready();reg.addEventListener('updatefound',()=>{const worker=reg.installing;worker?.addEventListener('statechange',()=>{if(worker.state==='installed')ready()})});
