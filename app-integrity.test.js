@@ -402,3 +402,19 @@ test('indicadores do relatório consolidam todos os pontos existentes, sem depen
  assert.match(layout,/não selecionadas para PDF/);
  assert.match(layout,/\$\('metricPoints'\)\.textContent=points\.length/);
 });
+
+
+test('identidade pública própria e transparência OAuth permanecem acessíveis',()=>{
+ const html=readFileSync('index.html','utf8');
+ const layout=readFileSync('layout.js','utf8');
+ const privacy=readFileSync('privacidade.html','utf8');
+ const header=html.match(/<header>[\s\S]*?<\/header>/)[0];
+ assert.match(header,/alt="Logotipo Vistoria Técnica"/);
+ assert.doesNotMatch(header,/CMOC/);
+ const info=html.match(/<section[^>]*id="app-public-info"[^>]*>[\s\S]*?<\/section>/)[0];
+ for(const required of ['Google','drive.file','backup','sincronização','/privacidade.html','/termos.html'])assert.ok(info.includes(required),required);
+ assert.match(layout,/home\.insertBefore\(\$\('app-public-info'\),history\)/);
+ assert.match(privacy,/sem login/);
+ assert.match(privacy,/Uso Limitado/);
+ assert.match(readFileSync('google2fd58006cf13a852.html','utf8'),/google-site-verification: google2fd58006cf13a852.html/);
+});

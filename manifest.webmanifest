@@ -1,9 +1,9 @@
 {
   "id": "/",
-  "name": "Vistorias — Instrumentação",
-  "short_name": "Vistorias",
+  "name": "Vistoria Técnica — Instrumentação",
+  "short_name": "Vistoria Técnica",
   "lang": "pt-BR",
-  "description": "Levantamento técnico de instrumentação e automação",
+  "description": "Registro de inspeções, evidências, pendências e relatórios de manutenção",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
