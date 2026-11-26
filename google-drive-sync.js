@@ -764,11 +764,13 @@
         }catch(e){failed(item.report_id,e);}
       }
       if(accessToken!==runToken||!validToken())return;
-      if(receiveOnly!==true){
+      // Consulta para importar PDF nunca envia alterações nem certifica a sincronização completa.
+      if(receiveOnly===true&&(teamDeferred||teamConflicts))setResult('Recebimento parcial para PDF. Pendências: '+teamDeferred+'; conflitos: '+teamConflicts+'.'+(failures.length?' '+failures.slice(0,8).join(' | '):''));
+      if(receiveOnly===true){await refreshHistory();return;}
       if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
         const remoteIds=new Set(remote.map(x=>x.report_id));
         for(const item of local){
-          if(queueMember?.google_subject!==member.google_subject||!validToken()||localStorage.getItem('vistoria-team-auto:'+member.google_subject)!=='1')break;
+          if(queueMember?.google_subject!==member.google_subject||!validToken()||accessToken!==runToken||localStorage.getItem('vistoria-team-auto:'+member.google_subject)!=='1')break;
           if(remoteIds.has(item.id)||isTeamReport(item.id)||baseline[item.id]||!validate(item)||!item.document.records?.length)continue;
           if(!await activeMatchesSaved(item.id,await digest(item.document))){teamDeferred++;continue;}
           try{
@@ -781,7 +783,7 @@
       }
       for(const item of remote){
         if(queued.has(item.report_id))continue;
-        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
+        if(queueMember?.google_subject!==member.google_subject||!validToken()||accessToken!==runToken)break;
         try{
         const previous=baseline[item.report_id];
         if(!previous||previous.revision!==item.revision)continue;
@@ -794,7 +796,6 @@
           baseline[item.report_id]={revision:d.revision,hash};
           localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
         }catch(e){failed(item.report_id,e);}
-      }
       }
       if(accessToken!==runToken||!validToken())return;
       await showPendingQueue(member);
