@@ -37,7 +37,7 @@
  for(const child of [...form.children]){
   if(child===fields)continue;
   if(child.classList.contains('photo'))group.set(child,{step:4,optional:false});
-  else if(child.classList.contains('completion'))group.set(child,{step:3,optional:true});
+  else if(child.classList.contains('completion'))group.set(child,{step:3,optional:true,completion:true});
   else if(child.querySelector?.('#inspectionType'))group.set(child,{step:2,optional:true});
   else if(child.classList.contains('actions')&&child.querySelector('#submit'))group.set(child,{step:4,optional:false});
  }
@@ -101,6 +101,18 @@
   '#form .wizard-caption{margin-top:3px}',
   '#form .wizard-footer{margin-top:12px;padding-top:10px}',
   '#form .wizard-footer button:disabled{opacity:.45}',
+  '#form .wizard-mode{display:flex;gap:6px;margin:0 0 12px;padding:3px;background:#f3eff7;border-radius:9px}',
+  '#form .wizard-mode button{flex:1;min-width:0;min-height:44px;font-size:13px;background:transparent;color:#513c64;border:0}',
+  '#form .wizard-mode button[aria-pressed="true"]{background:#351463;color:white}',
+  '#form .wizard-mode-help{margin:0 0 10px;font-size:12px;color:#62586e}',
+  '#form[data-wizard-mode="quick"] .wizard-eyebrow,#form[data-wizard-mode="quick"] .wizard-progress,#form[data-wizard-mode="quick"] .wizard-navigation,#form[data-wizard-mode="quick"] .wizard-footer,#form[data-wizard-mode="quick"] .wizard-title,#form[data-wizard-mode="quick"] .wizard-caption,#form .wizard-mode-help[hidden]{display:none!important}',
+  '#form[data-wizard-mode="quick"] .wizard-box{margin:0 0 10px}',
+  '#form[data-wizard-mode="quick"] .photo{margin-top:10px}',
+  '#form[data-wizard-mode="quick"] .photo > p.muted{display:none}',
+  '#form[data-wizard-mode="quick"] #submit{min-height:50px;flex:1}',
+  '#form .wizard-area-use{min-height:40px;align-self:end}',
+  '#form .wizard-area-use[hidden],#form #wizardQuickDiagnostics[hidden]{display:none!important}',
+  '@media(max-width:600px){#form[data-wizard-mode="quick"] input:not([type="file"]),#form[data-wizard-mode="quick"] select,#form[data-wizard-mode="quick"] textarea{font-size:16px;min-height:44px}#form[data-wizard-mode="quick"] .photo .actions>*{flex:1 1 130px;min-height:48px}}',
   '#form .wizard-analysis{grid-column:1/-1;border:0;padding:0;margin:0;background:transparent}',
   '#form .wizard-analysis > summary,#form .wizard-analysis > p[hidden]{display:none!important}',
   '#form .wizard-analysis-tools{margin:8px 0 0;padding:8px 10px;border:1px solid #e7dff0;border-radius:8px}',
@@ -132,6 +144,17 @@
   +'<details class="wizard-navigation" id="wizardNavigation"><summary>Ir para outra etapa</summary><div class="wizard-steps" role="group" aria-label="Selecionar etapa"></div></details>'
   +'<button type="button" class="secondary wizard-more" id="wizardMore" aria-expanded="false" hidden></button>';
  fields.before(wizard);
+ const modeBar=document.createElement('div');modeBar.className='wizard-mode';modeBar.setAttribute('role','group');modeBar.setAttribute('aria-label','Modo de preenchimento');
+ modeBar.innerHTML='<button type="button" id="wizardModeQuick" aria-pressed="true">Rápido</button><button type="button" id="wizardModeGuide" aria-pressed="false">Por etapas</button>';
+ wizard.before(modeBar);
+ const modeHelp=document.createElement('p');modeHelp.className='wizard-mode-help';modeHelp.textContent='TAG, local, condição e situação. Adicione fotos e salve; os demais campos são opcionais.';modeBar.after(modeHelp);
+ const modeQuick=modeBar.querySelector('#wizardModeQuick');const modeGuide=modeBar.querySelector('#wizardModeGuide');
+ const quickDiagnostics=document.createElement('button');quickDiagnostics.type='button';quickDiagnostics.className='secondary';quickDiagnostics.textContent='＋ Diagnóstico e ferramentas técnicas';quickDiagnostics.id='wizardQuickDiagnostics';quickDiagnostics.style.minHeight='44px';fields.after(quickDiagnostics);
+ // Reaproveita a área geral somente quando o técnico pedir, sem sobrescrever o campo.
+ const areaInput=document.getElementById('area');const reportAreaInput=document.getElementById('reportArea');
+ const useArea=document.createElement('button');useArea.type='button';useArea.className='secondary wizard-area-use';useArea.textContent='Usar área da vistoria';
+ if(areaInput){areaInput.closest('label')?.after(useArea);group.set(useArea,{step:0,optional:false});}
+ useArea.addEventListener('click',()=>{if(!areaInput||areaInput.value.trim()||!reportAreaInput?.value.trim())return;areaInput.value=reportAreaInput.value.trim();areaInput.dispatchEvent(new Event('input',{bubbles:true}));});
  const nav=wizard.querySelector('.wizard-navigation');
  const stepButtons=steps.map((step,index)=>{
   const button=document.createElement('button');
@@ -191,6 +214,17 @@
   return ids?.length?ids.every(id=>String(document.getElementById(id)?.value||'').trim()):null;
  }
  let current=0;
+ let quickMode=true;
+ function isQuickVisible(config,corrected,details){
+  if(config.step===4)return true;
+  if(config.step===2)return details;
+  if(config.step===3&&config.optional)return details||(corrected&&config.completion===true);
+  return !config.optional||details;
+ }
+ function setMode(quick,step=0){quickMode=Boolean(quick);if(!quickMode)setStep(step,true);else{current=0;render();}}
+ modeQuick.addEventListener('click',()=>setMode(true));
+ modeGuide.addEventListener('click',()=>setMode(false,current));
+ quickDiagnostics.addEventListener('click',()=>setMode(false,2));
  // Os dados gerais continuam editáveis, mas não ocupam a tela toda durante o campo.
  const reportPanel=document.getElementById('identification');
  const reportFields=document.getElementById('meta');
@@ -207,7 +241,7 @@
   reportToggle.addEventListener('click',()=>setReportExpanded(!reportExpanded));
   const oldSteps=document.querySelector('#view-editor .editor-steps');
   if(oldSteps)oldSteps.hidden=true;
-  ['title','date','number','workOrder'].forEach(id=>document.getElementById(id)?.addEventListener('input',refreshReportSummary));
+  ['title','date','number','workOrder','reportArea'].forEach(id=>document.getElementById(id)?.addEventListener('input',()=>{refreshReportSummary();if(id==='reportArea')render();}));
   setReportExpanded(false);
  }
  function refreshReportSummary(){
@@ -243,9 +277,17 @@
   if(document.getElementById('status')?.value==='Corrigido')expanded[3]=true;
  }
  function render(){
+  const corrected=document.getElementById('status')?.value==='Corrigido';
+  form.dataset.wizardMode=quickMode?'quick':'guided';
+  modeQuick.setAttribute('aria-pressed',String(quickMode));modeGuide.setAttribute('aria-pressed',String(!quickMode));modeHelp.hidden=!quickMode;quickDiagnostics.hidden=!quickMode;
+  useArea.hidden=!reportAreaInput?.value.trim()||Boolean(areaInput?.value.trim());
   for(const [node,config] of group){
    node.dataset.wizardHidden=String(config.step!==current||(config.optional&&!expanded[current]));
+   if(quickMode)node.dataset.wizardHidden=String(!isQuickVisible(config,corrected,expanded[0]));
   }
+  if(corrected&&quickMode){const completion=form.querySelector('.completion');if(completion)completion.open=true;}
+  const submitButton=document.getElementById('submit');
+  if(submitButton&&editing===null)submitButton.textContent=quickMode?'Salvar ponto':'Adicionar ao relatório';
   wizard.querySelector('progress').value=current+1;
   wizard.querySelector('progress').setAttribute('aria-valuetext','Etapa '+(current+1)+' de '+steps.length+': '+steps[current].title);
   wizard.querySelector('#wizardCounter').textContent='Etapa '+(current+1)+' de '+steps.length;
@@ -272,9 +314,9 @@
    else button.removeAttribute('aria-current');
   });
   const hasOptions=[...group.values()].some(config=>config.step===current&&config.optional);
-  more.hidden=!hasOptions;
+  more.hidden=!quickMode&&!hasOptions;
   more.setAttribute('aria-expanded',String(expanded[current]));
-  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+(current===2?' ferramentas adicionais':' campos adicionais');
+  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+(!quickMode&&current===2?' ferramentas adicionais':' campos adicionais');
   more.title=steps[current].more;
   back.disabled=current===0;
   quick.hidden=current===steps.length-1;
@@ -294,6 +336,7 @@
   }
  }
  function openField(id,index){
+  if(quickMode)expanded[0]=true;
   expanded[index]=true;
   setStep(index,true);
   const input=document.getElementById(id);
@@ -345,7 +388,7 @@
   return true;
  }
  form.addEventListener('submit',event=>{
-  if(current<steps.length-1){
+  if(!quickMode&&current<steps.length-1){
    event.preventDefault();event.stopImmediatePropagation();
    if(validate(current))setStep(current+1,true);
    return;
@@ -376,6 +419,7 @@
   if(event.target!==first)return;
   const holder=[...group.keys()].find(node=>node.contains(event.target));
   const stage=holder?group.get(holder).step:0;
+  if(quickMode)expanded[0]=true;
   expanded[stage]=true;
   setStep(stage,true);
  },true);
