@@ -145,7 +145,7 @@ async function vistoriaMoveArea(id,destination){
  });
 }
 
-// Finalização geral: não altera nem encerra pontos técnicos automaticamente.
+// Finalização da vistoria: no clique, salva a edição aberta, marca pontos como corrigidos e preserva evidências.
 function vistoriaAllPointsClosed(doc){
  return !!doc?.records?.length&&doc.records.every(vistoriaPointClosed);
 }
@@ -159,7 +159,7 @@ function vistoriaHasNewDraft(doc){
 function vistoriaReportStatus(doc){
  if(!doc||!Array.isArray(doc.records))return {kind:'unknown',label:'Status indisponível'};
  if(doc.records.some(p=>p?.status==='Pendente'))return {kind:'pending',label:'Pendente'};
- if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc)&&doc.pending?.editing==null)return {kind:'done',label:'Finalizada'};
+ if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc)&&doc.pending?.editing==null)return doc.meta?.finalizedAt?{kind:'done',label:'Finalizada'}:{kind:'progress',label:'Pronta para finalizar'};
  if(!doc.records.length)return {kind:'progress',label:'Não iniciada'};
  if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc))return {kind:'progress',label:'Pronta para finalizar'};
  return {kind:'progress',label:'Em acompanhamento'};
@@ -197,20 +197,45 @@ function refreshVistoriaCloudStatuses(){
  }
  for(const list of lists)list.dispatchEvent(new Event('vistoria-status-refresh'));
 }
+function vistoriaPrepareFinalization(doc,stamp){
+  if(!doc?.records?.length)throw Error('Adicione pelo menos um ponto antes de finalizar a vistoria.');
+  const next=structuredClone(doc);
+  if(vistoriaHasNewDraft(next))throw Error('Salve o novo ponto antes de finalizar. Nenhum rascunho será descartado.');
+  const edit=next.pending?.editing;
+  if(edit!=null){
+    if(!Number.isInteger(edit)||!next.records[edit])throw Error('Não foi possível identificar o ponto em edição. Salve o ponto antes de finalizar.');
+    const fields=next.pending.fields||{},updated={...next.records[edit]};
+    for(const key of itemKeys)if(Object.prototype.hasOwnProperty.call(fields,key))updated[key]=String(fields[key]??'').trim();
+    if(!updated.tag||!updated.area||!updated.problem)throw Error('Informe TAG, área e condição encontrada no ponto em edição antes de finalizar.');
+    updated.photos=structuredClone(next.pending.photos??updated.photos??[]);
+    next.records[edit]=updated;
+  }
+  next.records=next.records.map(point=>{
+    if(vistoriaPointClosed(point))return point;
+    return {...point,status:'Corrigido',completionDate:point.completionDate||today()};
+  });
+  next.meta={...next.meta,finalizedAt:stamp};
+  next.pending={...next.pending,editing:null,photos:[],fields:Object.fromEntries(itemKeys.map(key=>[key,'']))};
+  return next;
+}
 async function setVistoriaFinalized(id){
  return guarded(async()=>{
   await persistCurrent();
   const previous=await requestResult(db.transaction('reports').objectStore('reports').get(id));
   if(!previous)throw Error('Vistoria não encontrada neste aparelho. Sincronize a nuvem.');
-  const reopen=vistoriaReportStatus(previous.document).kind==='done';
+  const reopen=!!previous.document.meta?.finalizedAt&&vistoriaReportStatus(previous.document).kind==='done';
   if(reopen){
    if(!confirm('Abrir esta vistoria para reavaliar os pontos? Altere a situação do ponto que precisa ser reaberto.'))return;
-   reset();activeReportId=previous.id;fill(previous.document);if(window.openSavedPointEditor)window.openSavedPointEditor();await persistCurrent();notify('Vistoria aberta. Altere a situação do ponto para reabrir a pendência.');($('identification')||$('meta')).scrollIntoView({behavior:'smooth'});return;
+   const reopened=structuredClone(previous.document);reopened.meta.finalizedAt='';
+   reset();activeReportId=previous.id;fill(reopened);
+   if(window.openSavedPointEditor)window.openSavedPointEditor();
+   await persistCurrent();
+   notify('Vistoria aberta. Altere a situação do ponto para reabrir a pendência.');
+   ($('identification')||$('meta')).scrollIntoView({behavior:'smooth'});
+   return;
   }
-  if(!reopen&&(!vistoriaAllPointsClosed(previous.document)||vistoriaHasNewDraft(previous.document)))throw Error('Conclua todos os pontos e salve os novos registros antes de finalizar a vistoria.');
-  if(!reopen&&previous.document.pending?.editing!=null)throw Error('Salve ou encerre a edição do ponto antes de finalizar a vistoria.');
-  if(!confirm(reopen?'Reabrir esta vistoria? Os pontos e o histórico serão preservados.':'Marcar esta vistoria como finalizada? Ela ficará oculta por padrão e poderá ser reaberta.'))return;
-  const stamp=reopen?'':new Date().toISOString();
+  const stamp=new Date().toISOString();
+  const next=vistoriaPrepareFinalization(previous.document,stamp);
   const tx=db.transaction(['reports','draft'],'readwrite'),done=transactionDone(tx),store=tx.objectStore('reports'),draft=tx.objectStore('draft');
   let changed=false;
   const req=store.get(id);
@@ -220,20 +245,19 @@ async function setVistoriaFinalized(id){
    const marker=draft.get('deleted-report:'+id);
    marker.onsuccess=()=>{
     if(marker.result)return;
-    const next={...latest.document,meta:{...latest.document.meta,finalizedAt:stamp}};
     const current=draft.get('current');
     current.onsuccess=()=>{
      store.put({...latest,updated:new Date().toISOString(),document:next});
-     if(current.result?.reportId===id)draft.put({...current.result,meta:{...current.result.meta,finalizedAt:stamp}},'current');
+     if(current.result?.reportId===id)draft.put({...next,reportId:id},'current');
      changed=true;
     };
    };
   };
   await done;
   if(!changed)throw Error('A vistoria foi alterada durante a operação. Atualize e tente novamente.');
-  if(activeReportId===id)$('finalizedAt').value=stamp;
+  if(activeReportId===id){reset();fill(next);}
   await refreshHistory();savedEvent();
-  notify(reopen?'Vistoria reaberta.':'Vistoria finalizada. Use Mostrar finalizadas para consultá-la.');
+  notify('Vistoria finalizada e pontos marcados como corrigidos. Use Mostrar finalizadas para consultá-la.');
  });
 }
 async function refreshHistory(){const rows=await requestResult(db.transaction('reports').objectStore('reports').getAll());historyItems=rows.sort((a,b)=>b.updated.localeCompare(a.updated));renderHistory();vistoriaRefreshAreaOptions();refreshVistoriaCloudStatuses()}
