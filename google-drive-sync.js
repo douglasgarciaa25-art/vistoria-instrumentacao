@@ -663,12 +663,18 @@
     }
     return false;
   }
+  async function repairTeamPacket(id,packet){
+    if(validate({id,document:packet.document}))return;
+    const {repairLegacyReport}=await import('./team-merge.mjs');
+    const repaired=repairLegacyReport(packet.document,metaKeys,itemKeys);
+    if(repaired&&validate({id,document:repaired})){packet.originalDocument=packet.document;packet.document=repaired;}
+  }
   async function syncTeam(receiveOnly=false){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
     const runToken=accessToken;
     const setResult=message=>{if(accessToken===runToken)setTeamSyncStatus(message);};
-    let teamSent=0,teamReceived=0,teamConflicts=0,teamDeferred=0;
+    let teamSent=0,teamReceived=0,teamConflicts=0,teamDeferred=0,teamRecovered=0;
     const conflictFields=[],failures=[];
     const failed=(id,e)=>{teamDeferred++;failures.push(id+': '+(e?.message||'Falha na sincronização'));};
     try{
@@ -677,7 +683,7 @@
       if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();setResult('Sincronização indisponível: conta não aprovada.');return;}
       if(queueMember?.google_subject!==member.google_subject)++queueGeneration;
       queueMember=member;
-      const {reports:remote}=await reportRequest();
+      let {reports:remote}=await reportRequest();
       if(accessToken!==runToken)return;
       rememberTeamIds(remote);
       const key='vistoria-team-baseline:'+member.google_subject;
@@ -686,7 +692,7 @@
       if(receiveOnly!==true&&window.VistoriaBackground?.run){
         try{
           const pending=(await window.VistoriaBackground.list()).some(j=>j.subject===member.google_subject&&j.state==='pending');
-          if(pending&&accessToken===runToken)await window.VistoriaBackground.run(member.google_subject);
+          if(pending&&accessToken===runToken){await window.VistoriaBackground.run(member.google_subject);if(accessToken===runToken){const latest=await reportRequest();remote=latest.reports;rememberTeamIds(remote);}}
         }catch(e){failures.push('Fila automática: '+e.message);}
       }
       if(accessToken!==runToken||!validToken())return;
@@ -725,14 +731,15 @@
         const localHash=row?await digest(row.document):null;
         if(row&&previous?.revision===item.revision&&localHash===previous.hash)continue;
         // Uma fila ainda em transmissão pode carregar a revisão anterior: aguardar recibo.
-        if(queued.has(item.report_id)){teamDeferred++;continue;}
+        if(queued.has(item.report_id))continue;
         if(row&&!previous){
           const received=await reportRequest('GET',item.report_id);
-          if(!validate({id:item.report_id,document:received.document})||received.revision!==item.revision){teamDeferred++;continue;}
+           if(!validate({id:item.report_id,document:received.document}))await repairTeamPacket(item.report_id,received);
+           if(!validate({id:item.report_id,document:received.document})||received.revision!==item.revision){teamDeferred++;continue;}
           if(queueMember?.google_subject!==member.google_subject||!validToken()){teamDeferred++;continue;}
           const latest=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
           if(!latest||await digest(latest.document)!==localHash){teamDeferred++;continue;}
-          const receivedHash=await digest(received.document);
+          const receivedHash=await digest(received.originalDocument||received.document);
           if(receivedHash===localHash){
             baseline[item.report_id]={revision:received.revision,hash:receivedHash};
             localStorage.setItem(key,JSON.stringify(baseline));markTeamRenewed(item.report_id,received.revision);
@@ -740,12 +747,11 @@
           }
           // Sem base, não inferir quais campos são alterações locais. Renovar o mesmo ID
           // e arquivar as duas versões em uma única transação, com aviso para revisão.
-          const archive={reportId:item.report_id,account:member.google_subject,baseRevision:null,remoteRevision:received.revision,local:row.document,remote:received.document,choices:[],reason:'missing-baseline',created:new Date().toISOString()};
+          const archive={reportId:item.report_id,account:member.google_subject,baseRevision:null,remoteRevision:received.revision,local:row.document,remote:received.originalDocument||received.document,choices:[],reason:'missing-baseline',created:new Date().toISOString()};
           if(!await replaceTeamLocal(item,row,received.document,member,archive)){teamDeferred++;continue;}
           baseline[item.report_id]={revision:received.revision,hash:receivedHash};
           localStorage.setItem(key,JSON.stringify(baseline));
-          teamReceived++;teamConflicts++;
-          conflictFields.push(item.report_id+': versão local anterior preservada; consulte as versões locais de conflitos');
+          teamReceived++;teamRecovered++;
           markTeamRenewed(item.report_id,received.revision,true);
           if(typeof refreshHistory==='function')await refreshHistory();
           continue;
@@ -758,31 +764,49 @@
             try{
               const current=await reportRequest('GET',item.report_id);
               if(current.revision!==item.revision)throw Error('Revisão remota alterada; nova tentativa automática');
-              if(!validate({id:item.report_id,document:current.document}))throw Error('Revisão remota inválida');
-              if(await confirmedTeamBase(current.document,localHash)){
+              if(!validate({id:item.report_id,document:current.document}))await repairTeamPacket(item.report_id,current);
+               if(!validate({id:item.report_id,document:current.document}))throw Error('Revisão remota inválida; originais preservados');
+              if(!current.originalDocument&&await confirmedTeamBase(current.document,localHash)){
                 if(!await replaceTeamLocal(item,row,current.document,member)){teamDeferred++;continue;}
                 baseline[item.report_id]={revision:current.revision,hash:await digest(current.document)};
                 localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;markTeamRenewed(item.report_id,current.revision);
                 if(typeof refreshHistory==='function')await refreshHistory();
                 continue;
               }
-              const base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);
-              if(base.revision!==previous.revision||!await confirmedTeamBase(base.document,previous.hash))throw Error('Revisão-base não confirmada');
-              const {mergeReport}=await import('./team-merge.mjs');
-              const merged=mergeReport(base.document,row.document,current.document);
+              let base=null;
+               try{base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);}
+               catch(e){if(e?.status!==404)throw e;}
+               const remoteHash=await digest(current.originalDocument||current.document);
+               const archive={reportId:item.report_id,account:member.google_subject,baseRevision:previous.revision,remoteRevision:current.revision,local:row.document,remote:current.originalDocument||current.document,choices:[],created:new Date().toISOString()};
+               if(!base||base.revision!==previous.revision||!await confirmedTeamBase(base.document,previous.hash)){
+                 // Sem base comum verificável, não presumir quais campos mudaram.
+                 // Renovar a cópia publicada somente com arquivo local recuperável.
+                 archive.reason='unavailable-baseline';
+                 if(!await replaceTeamLocal(item,row,current.document,member,archive)){teamDeferred++;continue;}
+                 baseline[item.report_id]={revision:current.revision,hash:remoteHash};
+                 localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;teamRecovered++;
+                 markTeamRenewed(item.report_id,current.revision,true);
+                 if(typeof refreshHistory==='function')await refreshHistory();
+                 continue;
+               }
+               const {autoResolveReport,repairLegacyReport}=await import('./team-merge.mjs');
+               const baseDocument=current.originalDocument?repairLegacyReport(base.document,metaKeys,itemKeys)||base.document:base.document;
+               const merged=autoResolveReport(baseDocument,row.document,current.document);
               if(merged.conflicts.length){
                 teamConflicts++;
                 conflictFields.push(item.report_id+': '+merged.conflicts.slice(0,8).map(c=>c.path.join('.')||'identidade/base').join(', '));
                 continue;
               }
               if(!validate({id:item.report_id,document:merged.document}))throw Error('Conciliação inválida');
-              const remoteHash=await digest(current.document);
-              if(!await replaceTeamLocal(item,row,merged.document,member)){teamDeferred++;continue;}
+              const archived=Boolean(merged.choices.length||current.originalDocument);
+               if(archived){archive.reason=merged.choices.length?'automatic-field-resolution':'legacy-schema-repair';archive.choices=merged.choices;archive.base=base.document;}
+               if(!await replaceTeamLocal(item,row,merged.document,member,archived?archive:null)){teamDeferred++;continue;}
+               if(archived)teamRecovered++;
               // O hash de referência continua sendo o conteúdo remoto confirmado.
               // O envio seguinte usa o CAS original para publicar apenas sobre essa revisão.
               baseline[item.report_id]={revision:current.revision,hash:remoteHash};
               localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
-              markTeamRenewed(item.report_id,current.revision);
+              markTeamRenewed(item.report_id,current.revision,archived);
               if(typeof refreshHistory==='function')await refreshHistory();
             }catch(e){
               teamConflicts++;conflictFields.push(item.report_id+': '+(e?.message||'base ou revisão não confirmada'));
@@ -793,9 +817,12 @@
         const active=typeof activeReportId!=='undefined'&&activeReportId===item.report_id;
         if(active&&!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
         const d=await reportRequest('GET',item.report_id);
-        if(!validate({id:item.report_id,document:d.document})||d.revision!==item.revision){teamDeferred++;continue;}
-        const remoteHash=await digest(d.document);
-        if(!await replaceTeamLocal(item,row,d.document,member)){teamDeferred++;continue;}
+         if(!validate({id:item.report_id,document:d.document}))await repairTeamPacket(item.report_id,d);
+         if(!validate({id:item.report_id,document:d.document})||d.revision!==item.revision){teamDeferred++;continue;}
+         const remoteHash=await digest(d.originalDocument||d.document);
+         const archive=d.originalDocument?{reportId:item.report_id,account:member.google_subject,baseRevision:previous?.revision??null,remoteRevision:d.revision,local:row?.document||d.document,remote:d.originalDocument,choices:[],reason:'legacy-schema-repair',created:new Date().toISOString()}:null;
+         if(!await replaceTeamLocal(item,row,d.document,member,archive)){teamDeferred++;continue;}
+         if(archive)teamRecovered++;
         baseline[item.report_id]={revision:d.revision,hash:remoteHash};
         localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
         markTeamRenewed(item.report_id,d.revision);
@@ -844,6 +871,7 @@
       setResult((teamConflicts||teamDeferred||missing?'Sincronização parcial':'Equipe sincronizada')+' às '+moment+
         '. Neste aparelho: '+finalLocal.length+'; na equipe: '+remoteIdsForTrash.size+'; ainda não recebidas: '+missing+
         '. Enviadas: '+teamSent+'; recebidas: '+teamReceived+'; conflitos: '+teamConflicts+'; pendentes: '+teamDeferred+'.'+
+         (teamRecovered?' Resolvidas automaticamente: '+teamRecovered+'. Versões originais disponíveis no histórico local.':'')+
         (failures.length?' Falhas (nova tentativa automática): '+failures.slice(0,8).join(' | ')+(failures.length>8?' | e outras '+(failures.length-8):'')+'.':'')+
         (conflictFields.length?' Campos em conflito: '+conflictFields.join(' | ')+'. Versões preservadas.':''));
     }catch(e){setResult('Equipe: sincronização pendente — '+e.message);}

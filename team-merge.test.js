@@ -14,3 +14,27 @@ test("ordem divergente",()=>{const base={"meta":{},"records":[{"pointId":"point-
 test('histórico detalha campos sem expor conteúdo dos anexos',()=>{const a={"meta":{"title":"A"},"records":[{"pointId":"point-001","status":"Pendente","photos":["data:image/x,abc"]}]},b={"meta":{"title":"B"},"records":[{"pointId":"point-001","status":"Corrigido","photos":["data:image/x,def"]}]};const c=revisionChanges(a,b);assert.equal(c.length,3);assert.equal(c[1].before,'Pendente');assert.equal(c[1].after,'Corrigido');assert.ok(!JSON.stringify(c).includes('data:image'));});
 
 test('resolução explícita preserva campos independentes e escolhe apenas o conflito',()=>{const base={meta:{title:'A',area:'X'},records:[]},local={meta:{title:'B',area:'X'},records:[]},remote={meta:{title:'C',area:'Y'},records:[]};const r=mergeReport(base,local,remote,new Map([[JSON.stringify(['meta','title']),'local']]));assert.deepEqual(r.document,{meta:{title:'B',area:'Y'},records:[]});assert.equal(r.conflicts.length,0);});
+
+test('conciliação automática conserva alterações independentes e escolhe texto remoto',async()=>{
+ const {autoResolveReport}=await import('./team-merge.mjs');
+ const base={meta:{title:'A',sector:'Usina'},records:[{pointId:'point-001',status:'Pendente',problem:'A'}]};
+ const local=structuredClone(base),remote=structuredClone(base);
+ local.meta.title='B';local.records[0].problem='B';remote.meta.title='C';remote.records[0].status='Corrigido';
+ const original=JSON.stringify([base,local,remote]);
+ const result=autoResolveReport(base,local,remote);
+ assert.deepEqual(result.document,{meta:{title:'C',sector:'Usina'},records:[{pointId:'point-001',status:'Corrigido',problem:'B'}]});
+ assert.deepEqual(result.choices,[{path:['meta','title'],choice:'remote'}]);assert.equal(JSON.stringify([base,local,remote]),original);
+});
+test('recuperação não presume exclusão ou decisão técnica divergente',async()=>{
+ const {autoResolveReport}=await import('./team-merge.mjs');
+ const base={meta:{},records:[{pointId:'point-001',status:'Pendente'}]},local=structuredClone(base),remote=structuredClone(base);
+ local.records=[];remote.records[0].status='Corrigido';assert.equal(autoResolveReport(base,local,remote).document,null);
+ local.records=structuredClone(base.records);local.records[0].status='Em acompanhamento';assert.equal(autoResolveReport(base,local,remote).document,null);
+});
+test('normalização legada só preenche ausências, preserva fotos e originais',async()=>{
+ const {repairLegacyReport}=await import('./team-merge.mjs');
+ const d={version:1,meta:{title:'Vistoria'},records:[{pointId:'point-001',tag:'A',photos:[{src:'data:image/jpeg;base64,AAAA'}]}]};
+ const raw=JSON.stringify(d),n=repairLegacyReport(d,['title','reopenedAt'],['tag','status']);
+ assert.equal(n.meta.reopenedAt,'');assert.equal(n.records[0].status,'');assert.equal(n.records[0].photos[0].caption,'');assert.equal(n.records[0].photos[0].src,d.records[0].photos[0].src);assert.equal(JSON.stringify(d),raw);
+ const bad=structuredClone(d);bad.records[0].photos=[{caption:'sem foto'}];assert.equal(repairLegacyReport(bad,['title'],['tag']),null);
+});
