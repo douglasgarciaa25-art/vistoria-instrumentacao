@@ -4,6 +4,28 @@ import {readFileSync} from 'node:fs';
 
 const file=name=>readFileSync(name,'utf8');
 
+test('Mostrar finalizadas lembra opção escolhida após sair, recarregar e voltar para Nuvem',async()=>{
+ const vm=await import('node:vm');
+ const source=file('history.js'),cloud=file('google-drive-sync.js');
+ const snippet=source.slice(source.indexOf("const VISTORIA_SHOW_FINALIZED_KEY="),source.indexOf('// Keep the user\'s disclosure state'));
+ const state=new Map();
+ const storage={getItem:key=>state.get(key)??null,setItem:(key,value)=>state.set(key,value)};
+ const run=()=>vm.runInNewContext(snippet+';({read:vistoriaShowFinalizedPreference,save:vistoriaSaveFinalizedPreference})',{localStorage:storage});
+ let a=run();
+ assert.equal(a.read(),false,'Inicialmente desmarcado');
+ assert.equal(a.save(true),true);
+ assert.equal(a.read(),true);
+ a=run();
+ assert.equal(a.read(),true,'Marcado também após nova abertura');
+ assert.equal(a.save(false),false);
+ assert.equal(run().read(),false,'Desmarcação deve ser lembrada');
+ assert.equal(vm.runInNewContext(snippet+';vistoriaShowFinalizedPreference()',{localStorage:{getItem(){throw Error('storage bloqueado')}}}),false,'Bloqueio de armazenamento não impede abrir');
+ assert.match(source,/\$\('showFinalizedReports'\)\.checked=vistoriaShowFinalizedPreference\(\)/);
+ assert.match(source,/vistoriaSaveFinalizedPreference\(\$\('showFinalizedReports'\)\.checked\)/);
+ assert.match(cloud,/showFinalized:typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference\(\)/);
+ assert.match(cloud,/disclosureState\.showFinalized=typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference\(\)/);
+ assert.match(cloud,/disclosureState\.showFinalized=vistoriaSaveFinalizedPreference\(showFinalized\.checked\)/);
+});
 test('PWA guarda todos os scripts efetivamente usados no modo offline',()=>{
  const scripts=[...file('index.html').matchAll(/<script src="([^"]+)"/g)].map(match=>match[1]);
  const sw=file('sw.js');
