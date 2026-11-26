@@ -181,7 +181,7 @@ test('PDF parcial contém somente IDs selecionados, fotos e números originais, 
  assert.equal(snapshot(doc,new Set()),null);
  partial.records[0].tag='alterado';assert.equal(JSON.stringify(doc),before);
  assert.match(source,/selectedPoints.clear\(\);\$\('onlySelectedPoints'\).checked=true/);
- assert.match(source,/await exportReportDocuments\(\[snapshot\]\)/);
+ assert.match(source,/await exportReportDocuments\(snapshots\)/);
  assert.match(readFileSync('pdf-export.js','utf8'),/reportDocument.exportPointNumbers\?\.\[i\]/);
 });
 
@@ -194,7 +194,7 @@ test('prévia inicia vazia e exibe somente os pontos marcados; seleção permane
  assert.match(source,/selectedPoints.has\(r.pointId\)/);
  assert.match(source,/emptySelection.hidden=!preview\|\|selectedPoints.size>0/);
  assert.match(source,/\$\('togglePointSelection'\).onclick=/);
- assert.match(source,/selectedReportSnapshot\(data\(\),selectedPoints\)/);
+ assert.match(source,/const snapshots=selectedSnapshots\(\)/);
 });
 
 test('resumo executivo exclui pontos não selecionados e não inclui conclusão geral em seleção parcial',()=>{
@@ -218,4 +218,87 @@ test('diálogo e opções recolhíveis mantêm os controles existentes',()=>{
  assert.match(source,/selectionDialog.showModal\(\)/);assert.match(source,/selectionDialogList/);assert.match(source,/details.append\(tools\)/);assert.match(source,/extras.append\(trash\)/);assert.match(source,/extras.append\(audit\)/);assert.match(source,/report.insertBefore\(dock,review\)/);assert.match(css,/report-export-dock\{position:sticky/);
 });
 
- test('prévia real reutiliza o PDF serializado e preserva opções na auditoria',()=>{const pdf=readFileSync('pdf-export.js','utf8'),flow=readFileSync('workflow.js','utf8');assert.match(pdf,/const pdfBlob=new Blob\(\[await doc.save\(\)\]/);assert.match(pdf,/options.preview\?previewGeneratedPdf:download/);assert.match(pdf,/save.onclick=\(\)=>download\(blob,name\)/);assert.match(flow,/return exportPdf\(documents,ids,options\)/);assert.match(flow,/exportReportDocuments\(\[snapshot\],\[\],\{preview:true\}\)/);});
+ test('prévia real reutiliza o PDF serializado e preserva opções na auditoria',()=>{const pdf=readFileSync('pdf-export.js','utf8'),flow=readFileSync('workflow.js','utf8');assert.match(pdf,/const pdfBlob=new Blob\(\[await doc.save\(\)\]/);assert.match(pdf,/options.preview\?previewGeneratedPdf:download/);assert.match(pdf,/save.onclick=\(\)=>download\(blob,name\)/);assert.match(flow,/return exportPdf\(documents,ids,options\)/);assert.match(flow,/exportReportDocuments\(snapshots,\[\],\{preview:true\}\)/);});
+
+test('seletor de relatório recupera pontos legados sem ID antes de filtrar e permite retornar a todos',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ const matcher=source.slice(source.indexOf('function reportPointMatches('),source.indexOf('function reportPointDetails('));
+ const rowsCode=source.slice(source.indexOf('function selectableRows('),source.indexOf('function renderSelectionDialog('));
+ const records=[{tag:'A',status:'Corrigido'},{tag:'B',status:'Pendente',pointId:'point-002'}];
+ const controls={reportSearch:{value:''},reportStatusFilter:{value:''}};
+ const window={VistoriaPointIds:{ensure(points,id){for(const [i,r] of points.entries())if(!r.pointId)r.pointId='legacy:'+id+':'+(i+1);}}};
+ const getRows=new Function('records','activeReportId','window','$','allSelectionRows',matcher+rowsCode+';return selectableRows;')(records,'report-one',window,id=>controls[id],()=>records.map((r,i)=>({r,i,key:r.pointId,source:{meta:{}}})));
+ assert.deepEqual(getRows().map(x=>x.r.tag),['A','B']);assert.equal(records[0].pointId,'legacy:report-one:1');
+ controls.reportStatusFilter.value='Pendente';assert.deepEqual(getRows().map(x=>x.r.tag),['B']);
+ controls.reportStatusFilter.value='finalizados';assert.deepEqual(getRows().map(x=>x.r.tag),['A']);
+ controls.reportStatusFilter.value='';assert.deepEqual(getRows().map(x=>x.r.tag),['A','B']);assert.equal(records[1].pointId,'point-002');
+ assert.match(source,/function updatePointSelection\(\)\{[\s\S]*?const available=new Set\(allSelectionRows\(\)/);
+ assert.match(source,/togglePointSelection'\)\.onclick=\(\)=>\{\$\('reportSearch'\)\.value='';\$\('reportStatusFilter'\)\.value='';filterReport\(\);selectionDialog\.showModal\(\);renderSelectionDialog\(\)/);
+ assert.match(source,/Mostrar todos os pontos/);
+});
+
+test('seleção filtrada substitui pontos de outras situações e todos inclui o relatório completo',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ const matcher=source.slice(source.indexOf('function reportPointMatches('),source.indexOf('function reportPointDetails('));
+ const rowsCode=source.slice(source.indexOf('function selectableRows('),source.indexOf('function renderSelectionDialog('));
+ const replace=source.slice(source.indexOf('function replaceReportSelection('),source.indexOf('function applyReportSelection('));
+ const records=[{tag:'A',pointId:'point-001',status:'Pendente'},{tag:'B',pointId:'point-002',status:'Em acompanhamento'},{tag:'C',pointId:'point-003',status:'Corrigido'},{tag:'D',pointId:'point-004',status:'Sem pendência'}];
+ const before=JSON.stringify(records),selectedPoints=new Set(['point-001','point-002','point-003','point-004']),controls={reportSearch:{value:''},reportStatusFilter:{value:''}};
+ const {rows,apply}=new Function('records','activeReportId','window','$','selectedPoints','allSelectionRows',matcher+rowsCode+replace+';return {rows:selectableRows,apply:replaceReportSelection};')(records,'report-one',{},id=>controls[id],selectedPoints,()=>records.map((r,i)=>({r,i,key:r.pointId,source:{meta:{}}})));
+ controls.reportStatusFilter.value='Pendente';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-001']);
+ controls.reportStatusFilter.value='Em acompanhamento';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-002']);
+ controls.reportStatusFilter.value='finalizados';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-003','point-004']);
+ controls.reportStatusFilter.value='selecionados';assert.deepEqual(rows().map(x=>x.r.tag),['C','D']);
+ controls.reportStatusFilter.value='';apply(selectedPoints,rows());assert.equal(selectedPoints.size,4);
+ controls.reportSearch.value='B';apply(selectedPoints,rows());assert.deepEqual([...selectedPoints],['point-002']);assert.equal(JSON.stringify(records),before);
+ assert.match(source,/selectAllReportPoints/);assert.match(source,/fora do filtro/);
+ const editor=readFileSync('edit-saved.js','utf8');assert.match(editor,/addPoints\(records,activeReportId,true,/);assert.doesNotMatch(editor,/VistoriaReportSelection|reportStatusFilter|selectedPoints/);
+});
+
+test('editor oferece pontos de todas as vistorias salvas, sem misturar IDs nem ignorar rascunhos',()=>{
+ const source=readFileSync('edit-saved.js','utf8');
+ const other=source.slice(source.indexOf('function otherSavedReports('),source.indexOf('function refreshPicker('));
+ const index=source.slice(source.indexOf('function pointIndex('),source.indexOf('async function openSavedReportPoint('));
+ const {reports,find}=new Function(other+index+';return {reports:otherSavedReports,find:pointIndex};')();
+ const items=[{id:'current',document:{records:[{tag:'A'}]}},{id:'another',document:{records:[{tag:'B'}]}},{id:'empty',document:{records:[]}}];
+ assert.deepEqual(reports(items,'current').map(r=>r.id),['another']);
+ const points=[{pointId:'point-001',tag:'X'},{pointId:'point-002',tag:'X'}];assert.equal(find(points,{pointId:'point-002'}),1);assert.equal(find(points,{pointId:'missing'}),-1);assert.equal(find(points,{}),-1);
+ assert.match(source,/fragment.append\(option\)/);assert.doesNotMatch(source,/createElement\('optgroup'\)/);assert.match(source,/await persistCurrent\(\);[\s\S]*?objectStore\('reports'\)\.get\(target.reportId\)/);
+ assert.match(source,/reset\(\);activeReportId=row.id;fill\(doc\);\s*if\(hasPendingDraft\(\)\)/);assert.match(source,/if\(editing!==i\)notify/);assert.match(source,/document.addEventListener\('vistoria-saved',refreshPicker\)/);
+});
+
+test('seletor de edição exibe somente TAG e mantém identidade de registros repetidos',()=>{
+ const source=readFileSync('edit-saved.js','utf8');const code=source.slice(source.indexOf('function pointLabel('),source.indexOf('function otherSavedReports('));const label=new Function(code+';return pointLabel;')();
+ assert.equal(label({tag:'C260 BA01',area:'BV',status:'Pendente'}),'C260 BA01');assert.equal(label({tag:'  MC4530_FI015  '}),'MC4530_FI015');assert.equal(label({}),'TAG não informada');
+ assert.match(source,/option.textContent=p.tag/);assert.match(source,/nextChoices.set\(key,\{reportId,pointId:r.pointId,index:i,current,tag/);assert.match(source,/Existem registros com a mesma TAG/);
+});
+
+test('seletor não reconstrói opções durante foco ou salvamentos sem alteração',()=>{
+ const source=readFileSync('edit-saved.js','utf8');
+ const code=source.slice(source.indexOf('function pointLabel('),source.indexOf('function hasPendingDraft('));
+ const records=[{pointId:'point-001',tag:'B'}],historyItems=[{id:'other',document:{meta:{},records:[{pointId:'point-002',tag:'A'}]}}];
+ let rebuilds=0;const select={value:'',replaceChildren(fragment){rebuilds++;this.options=fragment.children}};
+ const document={createElement(){return {}},createDocumentFragment(){return {children:[],append(o){this.children.push(o)}}}};
+ const run=new Function('records','historyItems','activeReportId','window','$','document','select','picker','pickerTitle','editing',`let choices=new Map(),pickerSignature='',pickerFocused=false; `+code+`;return {refreshPicker,focus(v){pickerFocused=v},choices(){return choices}};`)(records,historyItems,'current',{},()=>({value:'RV'}),document,select,{}, {},null);
+ run.refreshPicker();assert.equal(rebuilds,1);const first=select.options.map(o=>[o.value,o.textContent]);assert.deepEqual(first.map(x=>x[1]),['Selecione um ponto salvo','A','B']);
+ run.refreshPicker();assert.equal(rebuilds,1);
+ run.focus(true);historyItems[0].document.records.push({pointId:'point-003',tag:'C'});run.refreshPicker();assert.equal(rebuilds,1);assert.equal(run.choices().size,2);
+ run.focus(false);run.refreshPicker();assert.equal(rebuilds,2);assert.equal(run.choices().size,3);assert.deepEqual(select.options.slice(0,3).map(o=>[o.value,o.textContent]),first);
+ run.refreshPicker();assert.equal(rebuilds,2);
+ assert.match(source,/select.addEventListener\('focus'/);assert.match(source,/select.addEventListener\('blur'/);assert.match(source,/if\(signature!==pickerSignature\)/);
+});
+
+test('seletor global filtra situações e OS entre vistorias, mantendo IDs e metadados de origem no PDF',()=>{
+ const s=readFileSync('workflow.js','utf8');
+ const matcher=s.slice(s.indexOf('function reportPointMatches('),s.indexOf('function reportPointDetails('));
+ const rows=s.slice(s.indexOf('function selectionRows('),s.indexOf('function allSelectionRows('));
+ const filter=s.slice(s.indexOf('function selectableRows('),s.indexOf('function renderSelectionDialog('));
+ const snapshot=s.slice(s.indexOf('function selectedReportSnapshot('),s.indexOf('function initialPointSelection('));
+ const snapshots=s.slice(s.indexOf('function selectedSnapshots('),s.indexOf('function generateSelectedPdf('));
+ const sources=[{id:'a',current:true,meta:{number:'RV-A'},records:[{pointId:'same-id-1',tag:'A',status:'Pendente'}]},{id:'b',current:false,meta:{number:'RV-B',workOrder:'123'},records:[{pointId:'same-id-1',tag:'B',status:'Em acompanhamento'},{pointId:'point-003',tag:'C',status:'Corrigido'}]}];
+ sources[1].document={meta:sources[1].meta,records:sources[1].records};
+ const controls={reportSearch:{value:''},reportStatusFilter:{value:''}},ids=new Set(),records=sources[0].records;
+ const api=new Function('sources','records','activeReportId','window','$','selectedPoints','data',matcher+rows+filter+snapshot+snapshots+';function selectionSources(){return sources}function allSelectionRows(){return selectionRows(sources)}return {rows:selectableRows,pdf:selectedSnapshots};')(sources,records,'a',{},id=>controls[id],ids,()=>({meta:sources[0].meta,records}));
+ assert.equal(api.rows().length,3);controls.reportStatusFilter.value='Em acompanhamento';assert.deepEqual(api.rows().map(x=>x.r.tag),['B']);ids.add(api.rows()[0].key);controls.reportStatusFilter.value='';controls.reportSearch.value='123';assert.deepEqual(api.rows().map(x=>x.r.tag),['B','C']);controls.reportSearch.value='';ids.add(api.rows()[0].key);const docs=api.pdf();assert.deepEqual(docs.map(d=>d.meta.number),['RV-A','RV-B']);assert.deepEqual(docs.map(d=>d.records.map(r=>r.tag)),[['A'],['B']]);assert.equal(sources[1].records.length,2);
+ assert.match(s,/renderExternalPreview\(\)/);assert.match(s,/exportReportDocuments\(snapshots,\[\],\{preview:true\}\)/);
+});

@@ -12,7 +12,7 @@
   {title:'Condição encontrada',question:'O que foi encontrado em campo?',hint:'Registre a condição e descreva o fato observado, sem supor causas.',more:'Prioridade e recursos de revisão técnica'},
   {title:'Diagnóstico e impacto',question:'O que foi testado e qual o resultado?',hint:'Informe as consequências. Testes, histórico, checklist e descritivo guiado são opcionais.',more:'Testes, histórico, checklist e descritivo guiado'},
   {title:'Plano de ação',question:'O que deve ser feito ou foi realizado?',hint:'Indique a ação necessária. Prazos, responsáveis e conclusão podem ser detalhados.',more:'Responsável, prazo e conclusão da pendência'},
-  {title:'Fotos e salvar',question:'Deseja registrar evidências?',hint:'Adicione fotos da câmera ou da galeria e salve este ponto.',more:''}
+  {title:'Fotos e salvar',question:'Deseja registrar evidências?',hint:'Tire uma foto ou use Buscar fotos para selecionar imagens da Galeria, Google Fotos ou Arquivos, conforme o aparelho. Confira as miniaturas e salve este ponto.',more:''}
  ];
  const fieldSteps={
   tag:0,pointWorkOrder:0,area:0,equipment:0,
@@ -298,6 +298,7 @@
  reset=function(){const result=oldReset.apply(this,arguments);expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
  const oldFill=fill;
  fill=function(){const result=oldFill.apply(this,arguments);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
+ document.addEventListener('vistoria-point-editor-opened',()=>{expanded.fill(false);revealFilledOptions();setStep(0)});
  document.getElementById('savedPointPicker')?.addEventListener('change',()=>{
   revealFilledOptions();setStep(0);
  });

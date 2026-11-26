@@ -65,7 +65,7 @@ test('UI não modifica as permissões autenticadas nem endpoints existentes',()=
  assert.match(cloud,/await reportRequest\('GET',item\.report_id/);
  assert.match(cloud,/reportRequest\('DELETE',id,\{revision:state\.revision\}\)/);
  assert.match(cloud,/const baseline=JSON\.parse\(localStorage\.getItem\(/);
- assert.match(cloud,/if\(member\.role!=='admin'\)return/);
+ assert.match(cloud,/if\(member\.role!=='admin'\)\{try\{await showReports/);
 });
 
 test('Login aprovado inicia autorização offline uma vez e preserva renovação por cookie',()=>{
@@ -77,4 +77,23 @@ test('Login aprovado inicia autorização offline uma vez e preserva renovação
  assert.match(flow,/\/api\/team-drive-authorize\?personal=1/);
  assert.match(cloud,/fetch\('\/api\/personal-session',\{method:'POST',cache:'no-store',credentials:'same-origin'\}\)/);
  assert.match(cloud,/sessionStorage\.removeItem\(PERSISTENCE_ATTEMPT_KEY\)/);
+});
+
+ test('Administrador pode pré-autorizar técnico por e-mail sem aguardar solicitação',()=>{
+ assert.ok(cloud.indexOf("if(member.role!=='admin'){try{await showReports")<cloud.indexOf("Gerenciar acesso dos técnicos"));
+ assert.ok(cloud.includes("Liberar acesso à nuvem"));
+ assert.ok(cloud.includes("action:'authorize-email',email"));
+ assert.ok(cloud.includes("action:'cancel-invitation',email:invitation.email"));
+ assert.ok(cloud.includes("🟡 Pendente"));
+ });
+
+test('Ações administrativas refletem o status atual',()=>{
+ const source=cloud.slice(cloud.indexOf('function memberStatusActions('),cloud.indexOf('async function showTeam(){'));
+ const actions=new Function(source+';return memberStatusActions;')();
+ assert.deepEqual(actions({role:'technician',status:'pending'}),[['Aprovar','approved'],['Bloquear','blocked']]);
+ assert.deepEqual(actions({role:'technician',status:'approved'}),[['Bloquear','blocked']]);
+ assert.deepEqual(actions({role:'technician',status:'blocked'}),[['Desbloquear','approved']]);
+ assert.deepEqual(actions({role:'admin',status:'approved'}),[]);
+ assert.deepEqual(actions({role:'technician',status:'unknown'}),[]);
+ assert.ok(cloud.includes('adminPanel.open=adminWasOpen'));
 });
