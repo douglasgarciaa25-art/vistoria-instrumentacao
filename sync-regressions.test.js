@@ -239,7 +239,7 @@ test('status geral só finaliza quando o usuário conclui a vistoria',async()=>{
 });
 test('salvar um ponto Corrigido finaliza automaticamente só quando todos estão encerrados',async()=>{
  const vm=await import('node:vm'),src=file('history.js'),html=file('index.html');
- const snippet=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('function refreshVistoriaCloudStatuses'));
+ const snippet=src.slice(src.indexOf('function vistoriaFinalizeOnSavedCorrection'),src.indexOf('function refreshVistoriaCloudStatuses'));
  const ctx=vm.createContext({});
  vm.runInContext(snippet,ctx);
  const stamp='2026-11-26T13:00:00Z';
