@@ -395,10 +395,10 @@ test('indicadores do relatório consolidam todos os pontos existentes, sem depen
  assert.equal(stats.rate,60);
  assert.equal(scope.collect(rows,'nova',current).length,7,'Inclui nova vistoria ainda não salva no histórico');
  assert.equal(scope.stats([]).rate,null,'Sem registros mantém o estado vazio');
- assert.match(layout,/reportManagementStats\\(reportPointsAcrossSavedReports\\(historyItems,activeReportId,records\\)\\)/);
+ assert.match(layout,/reportManagementStats\(reportPointsAcrossSavedReports\(historyItems,activeReportId,records\)\)/);
  assert.match(layout,/Indicadores gerais/);
  assert.match(layout,/Acompanhamento de todos os pontos/);
  assert.match(layout,/pontos nesta vistoria/);
  assert.match(layout,/não selecionadas para PDF/);
- assert.match(layout,/\\$\\('metricPoints'\\)\\.textContent=points\\.length/);
+ assert.match(layout,/\$\('metricPoints'\)\.textContent=points\.length/);
 });
