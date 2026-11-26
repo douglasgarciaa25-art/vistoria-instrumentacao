@@ -162,7 +162,7 @@ test('indicadores da vistoria contam situações reais e conclusão sem alterar 
  assert.equal(stats([{status:'Sem pendência'}]).rate,100);
  assert.deepEqual(stats([{status:'Legado'}]),{total:1,done:0,progress:0,pending:0,other:1,rate:0});
  assert.equal(JSON.stringify(points),before);
- assert.match(s,/reportManagementStats\(records\)/);
+ assert.match(s,/reportManagementStats\(reportPointsAcrossSavedReports\(historyItems,activeReportId,records\)\)/);
  assert.match(s,/function update\(\)\{updateReportSummary\(\)/);
 });
 
