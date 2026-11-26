@@ -49,16 +49,22 @@
   function attach(reg){if(!reg||registration===reg)return;registration=reg;check();reg.addEventListener('updatefound',()=>{const w=reg.installing;w?.addEventListener('statechange',check)});}
   navigator.serviceWorker.getRegistration().then(attach).catch(()=>{});
   navigator.serviceWorker.ready.then(attach).catch(()=>{});
+  // A sincronização em segundo plano é independente do salvamento local.
+  // Só operações que modificam o formulário/fotos exigem espera antes de recarregar.
+  async function waitForLocalUpdateIdle(){
+   for(let attempt=0;(busy||historyBusy)&&attempt<32;attempt++)await new Promise(resolve=>setTimeout(resolve,250));
+   if(busy||historyBusy)throw Error('Há uma edição ou foto em processamento. Termine essa operação antes de atualizar; seus registros continuam neste aparelho.');
+  }
   action.onclick=async()=>{
    if(requested)return;
-   if(busy||historyBusy||window.VistoriaGoogleDrive?.getState()?.busy){message.textContent='Aguarde a operação atual e tente novamente.';return notify(message.textContent);}
    requested=true;action.disabled=true;action.textContent='Salvando…';message.textContent='Salvando a vistoria neste aparelho.';
    try{
+    await waitForLocalUpdateIdle();
     await persistCurrent();
-    if(busy||historyBusy||window.VistoriaGoogleDrive?.getState()?.busy)throw Error('Outra operação foi iniciada. Tente novamente.');
+    await waitForLocalUpdateIdle();
     const reg=await navigator.serviceWorker.getRegistration();
     const worker=reg?.waiting;
-    if(!worker){location.reload();return;}
+    if(!worker){await waitForLocalUpdateIdle();await persistCurrent();location.reload();return;}
     action.textContent='Atualizando…';message.textContent='Vistoria salva. Instalando a atualização.';
     await new Promise((resolve,reject)=>{
      let timer;
@@ -72,8 +78,10 @@
      timer=setTimeout(()=>{if(worker.state==='activated')finish();else fail()},12000);
      try{worker.postMessage({type:'ACTIVATE_UPDATE'});stateChanged()}catch(e){cleanup();reject(e)}
     });
-    if(busy||historyBusy||window.VistoriaGoogleDrive?.getState()?.busy)throw Error('Operação iniciada durante a atualização. Salve e tente novamente.');
+    await waitForLocalUpdateIdle();
+    // Regrava qualquer edição feita enquanto o service worker estava ativando.
     await persistCurrent();
+    message.textContent='Vistoria salva no aparelho. A sincronização com a nuvem poderá continuar após atualizar.';
     location.reload();
    }catch(e){requested=false;action.disabled=false;action.textContent='Salvar e atualizar';message.textContent=e.message;updates.hidden=false;notify('Não foi possível concluir a atualização: '+e.message)}
   };
