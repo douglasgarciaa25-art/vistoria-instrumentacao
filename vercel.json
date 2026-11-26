@@ -59,6 +59,10 @@
     {
       "src": "team-merge.mjs",
       "use": "@vercel/static"
+    },
+    {
+      "src": "vistoria-logo.svg",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
