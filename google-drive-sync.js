@@ -451,6 +451,7 @@
     $('gdrive-disconnect').hidden=true;
     $('gdrive-connect').textContent='Conectar Google';
     googleAccount='';folderId='';photosId='';pdfsId='';syncScope='';syncMap={};photoSynced={};remoteItems=[];
+    setTeamSyncStatus('');
     ++teamViewGeneration;$('gdrive-team-users')?.replaceChildren();if($('gdrive-team-status'))$('gdrive-team-status').textContent='Conta desconectada';
     if(token&&window.google?.accounts?.oauth2)window.google.accounts.oauth2.revoke(token,()=>{});
     display('Desconectado. Arquivos já enviados continuam no Google Drive.');
@@ -465,11 +466,12 @@
   }
   async function reportRequest(method='GET',id='',body=null,history=false,trash=false,version=null,part=null,downloadRevision=null,stateOnly=false){
     assertReady();
-    if(method==='POST'&&body?.document){const bytes=new TextEncoder().encode(JSON.stringify(body.document));if(bytes.length>3000000){if(bytes.length>12000000)throw Error('Relatório acima de 12 MB. Reduza as fotos.');const {member}=await teamRequest();if(member?.status!=='approved')throw Error('Acesso não aprovado');const hash=await digest(body.document);const queueKey='vistoria-upload:'+member.google_subject+':'+id;let pending;try{pending=JSON.parse(localStorage.getItem(queueKey)||'null');}catch{}if(!pending||pending.hash!==hash||pending.revision!==body.revision||Date.now()-pending.created>86400000){pending={upload_id:crypto.randomUUID(),hash,revision:body.revision,created:Date.now()};localStorage.setItem(queueKey,JSON.stringify(pending));}const upload_id=pending.upload_id;const size=750000;const total=Math.ceil(bytes.length/size);const staged=await reportRequest('POST',id,{action:'upload-status',upload_id,revision:body.revision});const received=new Set(staged.parts||[]);for(let part=0;part<total;part++){if(received.has(part))continue;const chunk=bytes.subarray(part*size,(part+1)*size);let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));await reportRequest('POST',id,{action:'upload-part',upload_id,part,payload:btoa(binary),revision:body.revision});const status=$('gdrive-team-status');if(status)status.textContent='Enviando relatório: '+(part+1)+'/'+total;}const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');const result=await reportRequest('POST',id,{action:'upload-finish',upload_id,total,revision:body.revision,sha256});localStorage.removeItem(queueKey);return result;}}
+    if(method==='POST'&&body?.document){const bytes=new TextEncoder().encode(JSON.stringify(body.document));if(bytes.length>3000000){if(bytes.length>12000000)throw Error('Relatório acima de 12 MB. Reduza as fotos.');const {member}=await teamRequest();if(member?.status!=='approved')throw Error('Acesso não aprovado');const hash=await digest(body.document);const queueKey='vistoria-upload:'+member.google_subject+':'+id;let pending;try{pending=JSON.parse(localStorage.getItem(queueKey)||'null');}catch{}if(!pending||pending.hash!==hash||pending.revision!==body.revision||Date.now()-pending.created>86400000){pending={upload_id:crypto.randomUUID(),hash,revision:body.revision,created:Date.now()};localStorage.setItem(queueKey,JSON.stringify(pending));}const upload_id=pending.upload_id;const size=750000;const total=Math.ceil(bytes.length/size);const staged=await reportRequest('POST',id,{action:'upload-status',upload_id,revision:body.revision});const received=new Set(staged.parts||[]);for(let part=0;part<total;part++){if(received.has(part))continue;const chunk=bytes.subarray(part*size,(part+1)*size);let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));await reportRequest('POST',id,{action:'upload-part',upload_id,part,payload:btoa(binary),revision:body.revision});setTeamSyncStatus('Enviando relatório: '+(part+1)+'/'+total);}const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');const result=await reportRequest('POST',id,{action:'upload-finish',upload_id,total,revision:body.revision,sha256});localStorage.removeItem(queueKey);return result;}}
     const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':version!==null?'&version='+encodeURIComponent(version):'')+(part!==null?'&part='+part+'&revision='+encodeURIComponent(downloadRevision):'')+(stateOnly?'&state=1':''):(trash?'?trash=1':'')),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Object.assign(Error(d.error||'Falha na vistoria compartilhada'),{status:r.status});if(d.segmented){if(!Number.isInteger(d.total)||d.total<1||d.total>16)throw Error('Quantidade de partes inválida');const chunks=[];let length=0;for(let i=0;i<d.total;i++){const p=await reportRequest('GET',id,null,false,false,version,i,d.revision);if(p.part!==i||p.total!==d.total||p.revision!==d.revision)throw Error('Download inconsistente');const chunk=Uint8Array.from(atob(p.payload),c=>c.charCodeAt(0));chunks.push(chunk);length+=chunk.length;}const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}return {...d,document:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))};}return d;
   }
   let teamRunning=false;
+  function setTeamSyncStatus(message){const status=$('gdrive-team-sync-result');if(status)status.textContent=message;}
   const TEAM_IDS='vistoria-team-known-ids';
   const LOCAL_COPY_IDS='vistoria-team-local-copy-ids';
   function rememberTeamIds(remote){const ids=new Set(JSON.parse(localStorage.getItem(TEAM_IDS)||'[]')),copies=new Set(JSON.parse(localStorage.getItem(LOCAL_COPY_IDS)||'[]'));for(const item of remote){ids.add(item.report_id);copies.delete(item.report_id);}localStorage.setItem(TEAM_IDS,JSON.stringify([...ids]));localStorage.setItem(LOCAL_COPY_IDS,JSON.stringify([...copies]));}
@@ -645,14 +647,19 @@
   async function syncTeam(receiveOnly=false){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
+    const runToken=accessToken;
+    const setResult=message=>{if(accessToken===runToken)setTeamSyncStatus(message);};
     let teamSent=0,teamReceived=0,teamConflicts=0,teamDeferred=0;
-    const conflictFields=[];
+    const conflictFields=[],failures=[];
+    const failed=(id,e)=>{teamDeferred++;failures.push(id+': '+(e?.message||'Falha na sincronização'));};
     try{
       const {member}=await teamRequest();
-      if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();return;}
+      if(accessToken!==runToken)return;
+      if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();setResult('Sincronização indisponível: conta não aprovada.');return;}
       if(queueMember?.google_subject!==member.google_subject)++queueGeneration;
       queueMember=member;
       const {reports:remote}=await reportRequest();
+      if(accessToken!==runToken)return;
       rememberTeamIds(remote);
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
@@ -668,13 +675,14 @@
           if(state.report_id===row.id&&state.deleted_at){
             if(await applyTeamTrash(state,row,member))teamReceived++;else teamDeferred++;
           }
-        }catch{teamDeferred++;}
+        }catch(e){failed(row.id,e);}
       }
       local=await reports();
       await showPendingQueue(member);
       // A revisão recebida deve atualizar também a vistoria que está aberta.
       for(const item of remote){
-        if(queueMember?.google_subject!==member.google_subject||!validToken())break;
+        if(queueMember?.google_subject!==member.google_subject||!validToken()||accessToken!==runToken)break;
+        try{
         const marker=await idbReq(db.transaction('draft').objectStore('draft').get('deleted-report:'+item.report_id));
         if(marker&&!canRestoreTeamTrash(marker,item,member.google_subject)){
           teamDeferred++;
@@ -753,8 +761,10 @@
         localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
         markTeamRenewed(item.report_id,d.revision);
         if(typeof refreshHistory==='function')await refreshHistory();
+        }catch(e){failed(item.report_id,e);}
       }
-      if(receiveOnly===true){await refreshHistory();return;}
+      if(accessToken!==runToken||!validToken())return;
+      if(receiveOnly!==true){
       if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'){
         const remoteIds=new Set(remote.map(x=>x.report_id));
         for(const item of local){
@@ -763,15 +773,16 @@
           if(!await activeMatchesSaved(item.id,await digest(item.document))){teamDeferred++;continue;}
           try{
             const d=await reportRequest('POST',item.id,{document:item.document,revision:0});
-            rememberTeamIds([{report_id:item.id}]);
+            rememberTeamIds([{report_id:item.id}]);remoteIdsForTrash.add(item.id);
             baseline[item.id]={revision:d.revision,hash:await digest(item.document)};
             localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
-          }catch(e){teamDeferred++;const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
+          }catch(e){failed(item.id,e);}
         }
       }
       for(const item of remote){
         if(queued.has(item.report_id))continue;
         if(queueMember?.google_subject!==member.google_subject||!validToken())break;
+        try{
         const previous=baseline[item.report_id];
         if(!previous||previous.revision!==item.revision)continue;
         const row=await idbReq(db.transaction('reports').objectStore('reports').get(item.report_id));
@@ -779,22 +790,23 @@
         const hash=await digest(row.document);
         if(hash===previous.hash)continue;
         if(!await activeMatchesSaved(item.report_id,hash)){teamDeferred++;continue;}
-        try{
           const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
           baseline[item.report_id]={revision:d.revision,hash};
           localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
-        }catch(e){teamDeferred++;const status=$('gdrive-team-status');if(status)status.textContent='Envio pendente: '+e.message;}
-
+        }catch(e){failed(item.report_id,e);}
       }
+      }
+      if(accessToken!==runToken||!validToken())return;
       await showPendingQueue(member);
-      const status=$('gdrive-team-status');
-      if(status){
-        const moment=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-        status.textContent=(teamConflicts||teamDeferred?'Sincronização parcial':'Equipe sincronizada')+' às '+moment+
-          '. Enviadas: '+teamSent+'; recebidas: '+teamReceived+
-          '; conflitos: '+teamConflicts+'; pendentes: '+teamDeferred+'.'+(conflictFields.length?' Campos em conflito: '+conflictFields.join(' | ')+'. Versões preservadas.':'');
-      }
-    }catch(e){const status=$('gdrive-team-status');if(status)status.textContent='Equipe: sincronização pendente — '+e.message;}
+      const finalLocal=await reports(),localIds=new Set(finalLocal.map(row=>row.id));
+      const missing=[...remoteIdsForTrash].filter(id=>!localIds.has(id)).length;
+      const moment=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      setResult((teamConflicts||teamDeferred||missing?'Sincronização parcial':'Equipe sincronizada')+' às '+moment+
+        '. Neste aparelho: '+finalLocal.length+'; na equipe: '+remoteIdsForTrash.size+'; ainda não recebidas: '+missing+
+        '. Enviadas: '+teamSent+'; recebidas: '+teamReceived+'; conflitos: '+teamConflicts+'; pendentes: '+teamDeferred+'.'+
+        (failures.length?' Falhas (nova tentativa automática): '+failures.slice(0,8).join(' | ')+(failures.length>8?' | e outras '+(failures.length-8):'')+'.':'')+
+        (conflictFields.length?' Campos em conflito: '+conflictFields.join(' | ')+'. Versões preservadas.':''));
+    }catch(e){setResult('Equipe: sincronização pendente — '+e.message);}
     finally{teamRunning=false;}
   }
   window.addEventListener('online',()=>{if(validToken())void syncTeam();else void restoreSession();});
@@ -1100,7 +1112,7 @@
       const {member}=await teamRequest('POST',{action:'request'});
       if(generation!==teamViewGeneration)return;
       status.textContent=member?.status==='approved'?'Equipe conectada · '+(member.technician_name||member.email||'Conta Google aprovada'):member?.status==='blocked'?'Acesso à equipe bloqueado.':'Solicitação enviada. Aguarde aprovação.';
-      if(member?.status!=='approved')return;
+      if(member?.status!=='approved'){setTeamSyncStatus('');return;}
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
       if(member.role!=='admin')return;
       const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
@@ -1149,10 +1161,10 @@
     if(anchor)anchor.prepend(panel);
     const team=document.createElement('section');
     team.className='cloud-team-panel';
-     team.innerHTML='<div class="cloud-section-head"><div><span class="cloud-overline">TRABALHO COMPARTILHADO</span><h3>Minha equipe</h3><p>Compartilhe e acompanhe vistorias com segurança.</p></div><button type="button" class="secondary" id="gdrive-team-refresh">Atualizar</button><button type="button" id="gdrive-team-local-sync" aria-label="Sincronizar vistorias locais com a equipe">Sincronizar com a equipe</button></div><p id="gdrive-team-status" class="cloud-team-status" role="status" aria-live="polite"></p><details class="cloud-disclosure cloud-local-queue"><summary>Alterações locais aguardando sincronização</summary><div id="gdrive-queue" role="status" aria-live="polite"></div></details><div id="gdrive-team-users"></div>';
+     team.innerHTML='<div class="cloud-section-head"><div><span class="cloud-overline">TRABALHO COMPARTILHADO</span><h3>Minha equipe</h3><p>Compartilhe e acompanhe vistorias com segurança.</p></div><button type="button" class="secondary" id="gdrive-team-refresh">Atualizar</button><button type="button" id="gdrive-team-local-sync" aria-label="Sincronizar vistorias locais com a equipe">Sincronizar com a equipe</button></div><p id="gdrive-team-status" class="cloud-team-status" role="status" aria-live="polite"></p><p id="gdrive-team-sync-result" class="cloud-team-status" role="status" aria-live="polite"></p><details class="cloud-disclosure cloud-local-queue"><summary>Alterações locais aguardando sincronização</summary><div id="gdrive-queue" role="status" aria-live="polite"></div></details><div id="gdrive-team-users"></div>';
     panel.append(team);
-    $('gdrive-team-refresh').onclick=showTeam;
-    $('gdrive-team-local-sync').onclick=async()=>{const button=$('gdrive-team-local-sync'),status=$('gdrive-team-status');if(teamRunning||historyBusy||busy)return notify('Aguarde a operação atual.');if(!validToken())return notify('Conecte sua conta Google antes de sincronizar com a equipe.');if(!navigator.onLine)return notify('Sem internet. As vistorias locais permanecem salvas.');if(!confirm('Enviar as vistorias locais ainda não compartilhadas para a equipe aprovada? As vistorias abertas serão preservadas e poderão ser enviadas após fechar a edição.'))return;button.disabled=true;try{await persistCurrent();const {member}=await teamRequest();if(member?.status!=='approved')throw Error('Sua conta precisa estar aprovada na equipe.');localStorage.setItem('vistoria-team-auto:'+member.google_subject,'1');status.textContent='Sincronizando vistorias locais com a equipe…';await syncTeam();await showTeam();status.textContent='Sincronização solicitada. Confira a fila de pendências e eventuais conflitos antes de considerar todos os envios concluídos.';}catch(e){status.textContent='Não foi possível sincronizar: '+e.message;}finally{button.disabled=false;}};
+    $('gdrive-team-refresh').onclick=async()=>{await syncTeam();await showTeam();};
+    $('gdrive-team-local-sync').onclick=async()=>{const button=$('gdrive-team-local-sync'),status=$('gdrive-team-sync-result');if(teamRunning||historyBusy||busy)return notify('Aguarde a operação atual.');if(!validToken())return notify('Conecte sua conta Google antes de sincronizar com a equipe.');if(!navigator.onLine)return notify('Sem internet. As vistorias locais permanecem salvas.');if(!confirm('Enviar as vistorias locais ainda não compartilhadas para a equipe aprovada? As vistorias abertas serão preservadas e poderão ser enviadas após fechar a edição.'))return;button.disabled=true;try{await persistCurrent();const {member}=await teamRequest();if(member?.status!=='approved')throw Error('Sua conta precisa estar aprovada na equipe.');localStorage.setItem('vistoria-team-auto:'+member.google_subject,'1');status.textContent='Sincronizando vistorias locais com a equipe…';await syncTeam();await showTeam();}catch(e){status.textContent='Não foi possível sincronizar: '+e.message;}finally{button.disabled=false;}};
     $('gdrive-client-id').value=localStorage.getItem(CLIENT_KEY)||'176075378816-q3bad015gckijtjocifmod48al6m1e8q.apps.googleusercontent.com';
     loadGoogleScript().catch(()=>{}); // Precarrega; a autorização só ocorre após o clique do usuário.
     $('gdrive-connect').addEventListener('click',startConnection);
