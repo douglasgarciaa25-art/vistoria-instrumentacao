@@ -813,7 +813,7 @@
   }
   const cloudReportDisclosureStates=new Map();
   function cloudDisclosureState(subject){
-    if(!cloudReportDisclosureStates.has(subject))cloudReportDisclosureStates.set(subject,{list:false,showFinalized:vistoriaShowFinalizedPreference(),areas:new Map(),menus:new Map()});
+    if(!cloudReportDisclosureStates.has(subject))cloudReportDisclosureStates.set(subject,{list:false,showFinalized:typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference(),areas:new Map(),menus:new Map()});
     return cloudReportDisclosureStates.get(subject);
   }
   function captureCloudReportDisclosures(root){
@@ -828,7 +828,7 @@
     }
   }
   async function showReports(member,box,status){
-    const section=document.createElement('section');section.className='cloud-team-reports';section.dataset.disclosureSubject=member.google_subject;const disclosureState=cloudDisclosureState(member.google_subject);disclosureState.showFinalized=vistoriaShowFinalizedPreference();box.append(section);
+    const section=document.createElement('section');section.className='cloud-team-reports';section.dataset.disclosureSubject=member.google_subject;const disclosureState=cloudDisclosureState(member.google_subject);disclosureState.showFinalized=typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference();box.append(section);
     const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As revisões da equipe renovam automaticamente a vistoria neste aparelho, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
     const autoKey='vistoria-team-auto:'+member.google_subject;
     const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
