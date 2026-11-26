@@ -263,7 +263,7 @@ test('salvar um ponto Corrigido finaliza automaticamente só quando todos estão
  assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',doc(['Corrigido'],{editing:0,fields:{}}),stamp),false);
  assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',doc(['Corrigido'],{editing:null,fields:{tag:'Rascunho'}}),stamp),false);
  assert.match(html,/const autoFinalized=vistoriaFinalizeOnSavedCorrection\(r\.status,snapshot,new Date\(\)\.toISOString\(\)\)/);
- assert.match(html,/if\(autoFinalized\)\$\('finalizedAt'\)\.value=snapshot\.meta\.finalizedAt/);
+ assert.match(html,/if\(autoFinalized\)\{\$\('finalizedAt'\)\.value=snapshot\.meta\.finalizedAt/);
  assert.match(html,/render\(\);save\(\);notify\(autoFinalized\?/);
 });
 test('um clique finaliza a vistoria e registra pontos como corrigidos sem perder a edição',async()=>{
