@@ -169,9 +169,8 @@ function vistoriaHasNewDraft(doc){
 function vistoriaReportStatus(doc){
  if(!doc||!Array.isArray(doc.records))return {kind:'unknown',label:'Status indisponível'};
  if(doc.records.some(p=>p?.status==='Pendente'))return {kind:'pending',label:'Pendente'};
- if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc)&&doc.pending?.editing==null)return doc.meta?.reopenedAt&&!doc.meta?.finalizedAt?{kind:'progress',label:'Em revisão'}:{kind:'done',label:'Finalizada'};
+ if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc))return doc.meta?.reopenedAt&&!doc.meta?.finalizedAt?{kind:'progress',label:'Em revisão'}:{kind:'done',label:'Finalizada'};
  if(!doc.records.length)return {kind:'progress',label:'Não iniciada'};
- if(vistoriaAllPointsClosed(doc)&&!vistoriaHasNewDraft(doc))return {kind:'progress',label:'Pronta para finalizar'};
  return {kind:'progress',label:'Em acompanhamento'};
 }
 function vistoriaStatusHtml(doc){
