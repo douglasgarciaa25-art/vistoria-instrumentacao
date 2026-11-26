@@ -228,6 +228,15 @@ test('status geral conclui automaticamente quando todos os pontos estão encerra
  assert.equal(ctx.vistoriaReportStatus(d(['Pendente','Corrigido'],'2026-11-24')).kind,'pending');
  assert.equal(ctx.vistoriaReportStatus(d(['Em acompanhamento','Corrigido'])).kind,'progress');
  assert.equal(ctx.vistoriaReportStatus(d(['Corrigido','Sem pendência'])).label,'Finalizada');
+  const preservedRemote=d(['Corrigido'],'',{editing:0,fields:{tag:'',problem:''}});
+  preservedRemote.meta.title='Relatório de vistoria técnica (versão remota preservada)';
+  const before=JSON.stringify(preservedRemote);
+  assert.equal(ctx.vistoriaReportStatus(preservedRemote).label,'Finalizada','Editor antigo não impede finalização de ponto já corrigido');
+  assert.equal(ctx.vistoriaStatusAction(preservedRemote),'Reabrir vistoria');
+  assert.equal(ctx.vistoriaVisible(preservedRemote,false),false);
+  assert.equal(JSON.stringify(preservedRemote),before,'Classificação não modifica nem duplica a vistoria');
+  const newDraft=d(['Corrigido'],'',{editing:null,fields:{tag:'Nova TAG',problem:'Novo ponto'}});
+  assert.equal(ctx.vistoriaReportStatus(newDraft).kind,'progress','Um novo ponto não salvo continua pendente de registro');
   assert.equal(ctx.vistoriaVisible(d(['Corrigido']),false),false);
   assert.equal(ctx.vistoriaStatusAction(d(['Corrigido'])),'Reabrir vistoria');
   assert.equal(ctx.vistoriaReportStatus({meta:{reopenedAt:'2026-11-26T10:00:00Z'},records:[{status:'Corrigido'}]}).label,'Em revisão');
