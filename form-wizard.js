@@ -10,7 +10,7 @@
  const steps=[
   {title:'Identificação',question:'Qual equipamento será inspecionado?',hint:'Informe a TAG e a localização. OS e detalhes adicionais continuam disponíveis.',more:'OS, equipamento e ferramentas adicionais'},
   {title:'Condição encontrada',question:'O que foi encontrado em campo?',hint:'Registre a condição e descreva o fato observado, sem supor causas.',more:'Prioridade e recursos de revisão técnica'},
-  {title:'Diagnóstico e impacto',question:'O que foi testado e qual o resultado?',hint:'Informe as consequências. Testes, histórico, checklist e descritivo guiado são opcionais.',more:'Testes, histórico, checklist e descritivo guiado'},
+  {title:'Diagnóstico e impacto',question:'O que foi testado e qual o resultado?',hint:'Registre apenas o que foi observado. Esta etapa é opcional.',more:'Histórico, checklist, descritivo guiado e revisão técnica'},
   {title:'Plano de ação',question:'O que deve ser feito ou foi realizado?',hint:'Indique a ação necessária. Prazos, responsáveis e conclusão podem ser detalhados.',more:'Responsável, prazo e conclusão da pendência'},
   {title:'Fotos e salvar',question:'Deseja registrar evidências?',hint:'Tire uma foto ou use Buscar fotos para selecionar imagens da Galeria, Google Fotos ou Arquivos, conforme o aparelho. Confira as miniaturas e salve este ponto.',more:''}
  ];
@@ -42,6 +42,36 @@
   else if(child.classList.contains('actions')&&child.querySelector('#submit'))group.set(child,{step:4,optional:false});
  }
 
+ // Etapa 3: deixa os dois campos de campo sempre acessíveis, sem abrir menus.
+ const analysisDraft=document.getElementById('analysisDraft');
+ const analysisHistory=document.getElementById('analysisHistory');
+ const analysisSection=analysisDraft?.closest('details');
+ if(analysisSection&&group.has(analysisSection)){
+  group.set(analysisSection,{step:2,optional:false});
+  analysisSection.classList.add('wizard-analysis');
+  analysisSection.open=true;
+  const draftLabel=analysisDraft.closest('label');
+  const historyLabel=analysisHistory?.closest('label');
+  const appendButton=document.getElementById('appendAnalysis');
+  const extras=document.createElement('details');
+  extras.className='wizard-analysis-tools';
+  const summary=document.createElement('summary');summary.textContent='Histórico e revisão técnica';extras.append(summary);
+  // Os nós originais são movidos, preservando IDs, eventos, ditado e revisão.
+  for(const child of [...analysisSection.children]){
+   if(child===draftLabel||child===appendButton||child.tagName==='SUMMARY')continue;
+   if(child===historyLabel||child.matches('.technical-review,.technical-review-preview,.technical-review-note')||child.tagName==='BUTTON'||child.classList.contains('actions'))extras.append(child);
+   else if(child.matches('p.muted'))child.hidden=true;
+  }
+  if(draftLabel?.firstChild?.nodeType===3)draftLabel.firstChild.textContent='Testes realizados e resultado (opcional)';
+  analysisDraft.placeholder='Ex.: Simulado sinal de 4–20 mA; entrada analógica respondeu corretamente.';
+  analysisDraft.rows=3;
+  if(appendButton){appendButton.textContent='Registrar andamento agora';appendButton.classList.add('wizard-analysis-append');}
+  analysisSection.append(extras);
+  analysisSection.addEventListener('toggle',()=>{if(!analysisSection.open)analysisSection.open=true});
+ }
+ const impactField=document.getElementById('impact');
+ if(impactField){const label=impactField.closest('label');if(label?.firstChild?.nodeType===3)label.firstChild.textContent='Impacto na operação (opcional)';impactField.placeholder='Ex.: Perda de indicação de nível no supervisório.';impactField.rows=3;}
+
  const style=document.createElement('style');
  style.textContent=[
   '#identification #meta[hidden],#identification > details[hidden],#view-editor .editor-steps[hidden],#form .wizard-pending[hidden],#form .wizard-pending button[hidden]{display:none!important}',
@@ -71,6 +101,12 @@
   '#form .wizard-caption{margin-top:3px}',
   '#form .wizard-footer{margin-top:12px;padding-top:10px}',
   '#form .wizard-footer button:disabled{opacity:.45}',
+  '#form .wizard-analysis{grid-column:1/-1;border:0;padding:0;margin:0;background:transparent}',
+  '#form .wizard-analysis > summary,#form .wizard-analysis > p[hidden]{display:none!important}',
+  '#form .wizard-analysis-tools{margin:8px 0 0;padding:8px 10px;border:1px solid #e7dff0;border-radius:8px}',
+  '#form .wizard-analysis-tools > summary{font-size:13px;cursor:pointer}',
+  '#form .wizard-analysis-append{min-height:42px;width:100%;margin-top:8px}',
+  '#form .wizard-analysis textarea,#form #impact{min-height:90px}',
   '#form .wizard-quick{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}',
   '#form .wizard-quick[hidden],#form .wizard-question[hidden],#form .wizard-caption[hidden]{display:none!important}',
   '#form .wizard-quick button{min-height:44px;font-size:13px}',
@@ -202,7 +238,7 @@
  }
  function revealFilledOptions(){
   for(const [node,config] of group){
-   if(config.optional&&hasFilled(node))expanded[config.step]=true;
+   if(config.step!==2&&config.optional&&hasFilled(node))expanded[config.step]=true;
   }
   if(document.getElementById('status')?.value==='Corrigido')expanded[3]=true;
  }
@@ -238,12 +274,12 @@
   const hasOptions=[...group.values()].some(config=>config.step===current&&config.optional);
   more.hidden=!hasOptions;
   more.setAttribute('aria-expanded',String(expanded[current]));
-  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+' campos adicionais';
+  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+(current===2?' ferramentas adicionais':' campos adicionais');
   more.title=steps[current].more;
   back.disabled=current===0;
   quick.hidden=current===steps.length-1;
   quickSave.textContent=document.getElementById('submit')?.textContent==='Salvar alteração'?'Salvar alteração':'Salvar ponto';
-  next.textContent=current===steps.length-2?'Ir para fotos':'Avançar';
+  next.textContent=current===2?'Ir para ação':current===steps.length-2?'Ir para fotos':'Avançar';
   next.hidden=current===steps.length-1;
   footer.querySelector('#wizardHint').textContent=current===steps.length-1
    ?'Confira as fotos e toque em Adicionar ao relatório ou Salvar alteração.'
@@ -297,6 +333,17 @@
  back.addEventListener('click',()=>setStep(current-1,true));
  next.addEventListener('click',()=>{if(validate(current))setStep(current+1,true)});
  more.addEventListener('click',()=>{expanded[current]=!expanded[current];render()});
+ // O PDF usa analysisHistory: registra o texto digitado ao salvar, sem alterar a situação.
+ function recordAnalysisOnSave(){
+  if(!analysisDraft||!analysisHistory)return false;
+  const value=analysisDraft.value.trim();
+  if(!value)return false;
+  const previous=analysisHistory.value.trim();
+  const stamp=new Date().toLocaleString('pt-BR');
+  analysisHistory.value=(previous?previous+'\n\n':'')+'ANDAMENTO — '+stamp+'\n'+value;
+  analysisDraft.value='';
+  return true;
+ }
  form.addEventListener('submit',event=>{
   if(current<steps.length-1){
    event.preventDefault();event.stopImmediatePropagation();
@@ -306,6 +353,7 @@
   for(let step=0;step<steps.length-1;step++){
    if(!validate(step)){event.preventDefault();event.stopImmediatePropagation();return}
   }
+  if(!busy)recordAnalysisOnSave();
  },true);
  form.addEventListener('input',event=>{
   if(event.target.matches('input,textarea,select')){
