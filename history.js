@@ -35,6 +35,14 @@ function save(){clearTimeout(saveTimer);$('saveState').textContent='Alterações
 if(typeof document.addEventListener==='function'){const flush=()=>{if(saveTimer&&historyReady)persistCurrent().catch(e=>notify(e.message))};document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush()});if(typeof window!=='undefined')window.addEventListener('pagehide',flush)}
 // Organização por área, independente da área técnica dos pontos.
 const VISTORIA_AREA_KEY='vistoria-report-areas-v1';
+const VISTORIA_SHOW_FINALIZED_KEY='vistoria-show-finalizadas-v1';
+function vistoriaShowFinalizedPreference(){
+ try{return localStorage.getItem(VISTORIA_SHOW_FINALIZED_KEY)==='1';}catch{return false;}
+}
+function vistoriaSaveFinalizedPreference(checked){
+ try{localStorage.setItem(VISTORIA_SHOW_FINALIZED_KEY,checked?'1':'0');}catch{}
+ return !!checked;
+}
 const vistoriaAreaOpen=new Map();
 // Keep the user's disclosure state across refreshes, filters and moves by report ID.
 const vistoriaMoreOpen=new Set();
@@ -277,7 +285,8 @@ async function createNew(){await guarded(async()=>{await persistCurrent();blankR
 $('newReport').onclick=createNew;$('clear').onclick=createNew;
 $('saveReport').onclick=()=>guarded(async()=>{await persistCurrent();notify('Formulário salvo.')});
 const finalFilter=document.createElement('label');finalFilter.className='vistoria-finalized-filter';finalFilter.innerHTML='<input type="checkbox" id="showFinalizedReports"><span id="finalizedReportsLabel" aria-live="polite">Mostrar finalizadas (0)</span>';$('historyList').before(finalFilter);
-$('showFinalizedReports').onchange=()=>{renderHistory();if($('showFinalizedReports').checked)vistoriaRevealFinalizedAreas($('historyList'),'details[data-area-group]');};
+$('showFinalizedReports').checked=vistoriaShowFinalizedPreference();
+$('showFinalizedReports').onchange=()=>{vistoriaSaveFinalizedPreference($('showFinalizedReports').checked);renderHistory();if($('showFinalizedReports').checked)vistoriaRevealFinalizedAreas($('historyList'),'details[data-area-group]');};
 const areaTools=document.createElement('div');areaTools.className='vistoria-area-tools';
 const createAreaButton=document.createElement('button');createAreaButton.type='button';createAreaButton.className='secondary';createAreaButton.textContent='+ Criar área';createAreaButton.onclick=vistoriaCreateArea;
 const areaHint=document.createElement('small');areaHint.className='muted';areaHint.textContent='Áreas vazias ficam neste aparelho; áreas atribuídas acompanham a sincronização.';
