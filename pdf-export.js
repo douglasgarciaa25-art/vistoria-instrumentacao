@@ -24,7 +24,7 @@ async function previewGeneratedPdf(blob,name){
  const initial=make('p','Preparando as páginas do PDF…','text-align:center;padding:24px 10px;color:#52636c');initial.setAttribute('role','status');view.append(initial);
  const footer=make('div','','display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;padding:10px;border-top:1px solid #e3e5e8;background:white');
  const link=make('a','Abrir PDF','display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid #280b4b;border-radius:8px;color:#280b4b;font-weight:600;text-decoration:none;font-size:13px;min-height:40px;box-sizing:border-box');link.href=url;link.target='_blank';link.rel='noopener';
- const save=button('Baixar PDF',()=>download(blob,name));footer.append(link,save);
+ const save=button('Baixar PDF',()=>{});save.onclick=()=>download(blob,name);footer.append(link,save);
  shell.append(header,controls,view,footer);dialog.append(shell);document.body.append(dialog);
  const update=()=>{prev.disabled=!pdf||current<=1;next.disabled=!pdf||current>=pdf.numPages;smaller.disabled=!pdf||zoom<=1;larger.disabled=!pdf||zoom>=2;status.textContent=pdf?'Página '+current+' / '+pdf.numPages:'Carregando…';zoomLabel.textContent=Math.round(zoom*100)+'%'};
  const showError=()=>{if(closed)return;status.textContent='Prévia indisponível';view.replaceChildren(make('p','Não foi possível exibir as páginas neste dispositivo. O PDF foi gerado e pode ser aberto ou baixado pelos botões abaixo.','text-align:center;padding:24px 10px;color:#52636c'));prev.disabled=next.disabled=smaller.disabled=larger.disabled=true};
