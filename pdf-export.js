@@ -1,12 +1,58 @@
-function previewGeneratedPdf(blob,name){
- const dialog=document.createElement('dialog');dialog.style.cssText='width:min(95vw,900px);max-height:90vh;padding:12px';
- const heading=document.createElement('h2');heading.textContent='Prévia do PDF gerado';
- const url=URL.createObjectURL(blob);const frame=document.createElement('iframe');frame.title='PDF do relatório';frame.src=url;frame.style.cssText='width:100%;height:60vh;border:0';
- const note=document.createElement('p');note.textContent='Se o navegador não exibir o PDF, use Abrir PDF ou Baixar PDF.';
- const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Abrir PDF';
- const save=document.createElement('button');save.type='button';save.textContent='Baixar PDF';save.onclick=()=>download(blob,name);
- const close=document.createElement('button');close.type='button';close.textContent='Fechar';close.onclick=()=>dialog.close();
- dialog.append(heading,frame,note,link,save,close);document.body.append(dialog);dialog.addEventListener('close',()=>{dialog.remove();URL.revokeObjectURL(url)},{once:true});dialog.showModal();
+const PDF_PREVIEW_ENGINE='/pdf-preview-assets/5.4.624/engine.mjs', PDF_PREVIEW_WORKER='/pdf-preview-assets/5.4.624/worker.mjs';
+function loadPdfPreviewEngine(){return import(PDF_PREVIEW_ENGINE)}
+async function previewGeneratedPdf(blob,name){
+ const dialog=document.createElement('dialog');
+ dialog.className='pdf-preview-dialog';
+ dialog.style.cssText='width:min(96vw,960px);max-width:calc(100vw - 16px);height:min(92dvh,960px);max-height:calc(100vh - 16px);box-sizing:border-box;padding:0;border:0;border-radius:14px;overflow:hidden;background:#fff;color:#20232b';
+ const make=(tag,text,style='')=>{const el=document.createElement(tag);if(text)el.textContent=text;if(style)el.style.cssText=style;return el};
+ const shell=make('div','','display:flex;flex-direction:column;height:100%;min-height:0');
+ const header=make('div','','padding:12px 14px;border-bottom:1px solid #e3e5e8;display:flex;align-items:center;gap:8px;justify-content:space-between');
+ const heading=make('h2','Prévia do relatório','font-size:18px;margin:0;line-height:1.2');heading.id='pdf-preview-title';dialog.setAttribute('aria-labelledby',heading.id);
+ const url=URL.createObjectURL(blob);
+ const button=(text,action)=>{const b=make('button',text,'min-height:40px;padding:7px 12px;font-size:13px;white-space:nowrap;border-radius:8px');b.type='button';b.onclick=action;return b};
+ const close=button('Fechar',()=>dialog.close());header.append(heading,close);
+ const controls=make('div','','padding:8px;display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px;border-bottom:1px solid #e3e5e8');
+ const status=make('span','Carregando…','min-width:74px;text-align:center;font-size:13px;font-weight:600');status.setAttribute('aria-live','polite');
+ let pdf=null,loadingTask=null,renderTask=null,current=1,zoom=1,revision=0,closed=false;
+ const prev=button('‹ Anterior',()=>{if(current>1){current--;void render()}});
+ const next=button('Próxima ›',()=>{if(pdf&&current<pdf.numPages){current++;void render()}});
+ const smaller=button('−',()=>{if(zoom>1){zoom=Math.max(1,zoom-.25);void render()}});smaller.setAttribute('aria-label','Diminuir zoom');
+ const larger=button('+',()=>{if(zoom<2){zoom=Math.min(2,zoom+.25);void render()}});larger.setAttribute('aria-label','Aumentar zoom');
+ const zoomLabel=make('span','100%','font-size:12px;min-width:37px;text-align:center');
+ controls.append(prev,status,next,smaller,zoomLabel,larger);
+ const view=make('div','','flex:1 1 0;min-height:0;overflow:auto;background:#edf0f3;padding:8px;overscroll-behavior:contain;box-sizing:border-box');
+ const initial=make('p','Preparando as páginas do PDF…','text-align:center;padding:24px 10px;color:#52636c');initial.setAttribute('role','status');view.append(initial);
+ const footer=make('div','','display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;padding:10px;border-top:1px solid #e3e5e8;background:white');
+ const link=make('a','Abrir PDF','display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid #280b4b;border-radius:8px;color:#280b4b;font-weight:600;text-decoration:none;font-size:13px;min-height:40px;box-sizing:border-box');link.href=url;link.target='_blank';link.rel='noopener';
+ const save=button('Baixar PDF',()=>download(blob,name));footer.append(link,save);
+ shell.append(header,controls,view,footer);dialog.append(shell);document.body.append(dialog);
+ const update=()=>{prev.disabled=!pdf||current<=1;next.disabled=!pdf||current>=pdf.numPages;smaller.disabled=!pdf||zoom<=1;larger.disabled=!pdf||zoom>=2;status.textContent=pdf?'Página '+current+' / '+pdf.numPages:'Carregando…';zoomLabel.textContent=Math.round(zoom*100)+'%'};
+ const showError=()=>{if(closed)return;status.textContent='Prévia indisponível';view.replaceChildren(make('p','Não foi possível exibir as páginas neste dispositivo. O PDF foi gerado e pode ser aberto ou baixado pelos botões abaixo.','text-align:center;padding:24px 10px;color:#52636c'));prev.disabled=next.disabled=smaller.disabled=larger.disabled=true};
+ async function render(){
+  if(!pdf||closed)return;
+  const token=++revision;update();if(renderTask){try{renderTask.cancel()}catch{}renderTask=null}
+  try{
+   const page=await pdf.getPage(current);if(closed||token!==revision)return;
+   const base=page.getViewport({scale:1}),width=Math.max(160,view.clientWidth-16);
+   const viewport=page.getViewport({scale:(width/base.width)*zoom});
+   const ratio=Math.min(window.devicePixelRatio||1,2,Math.sqrt(6000000/(viewport.width*viewport.height)));
+   const canvas=make('canvas','','display:block;background:white;margin:0 auto;box-shadow:0 1px 5px #0002;max-width:none');
+   canvas.width=Math.max(1,Math.floor(viewport.width*ratio));canvas.height=Math.max(1,Math.floor(viewport.height*ratio));canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';canvas.setAttribute('aria-label','Página '+current+' do relatório');
+   const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Canvas indisponível');
+   const task=page.render({canvas,canvasContext:ctx,viewport,transform:[ratio,0,0,ratio,0,0]});renderTask=task;
+   await task.promise;if(closed||token!==revision)return;
+   renderTask=null;view.replaceChildren(canvas);view.scrollTop=0;view.scrollLeft=0;page.cleanup?.();
+  }catch(e){if(closed||token!==revision||e?.name==='RenderingCancelledException')return;showError()}
+ }
+ dialog.addEventListener('close',()=>{closed=true;revision++;try{renderTask?.cancel()}catch{}try{const cleanup=loadingTask?.destroy();cleanup?.catch?.(()=>{})}catch{}dialog.remove();URL.revokeObjectURL(url)},{once:true});
+ update();dialog.showModal();
+ try{
+  const lib=await loadPdfPreviewEngine();if(closed)return;
+  lib.GlobalWorkerOptions.workerSrc=PDF_PREVIEW_WORKER;
+  const bytes=new Uint8Array(await blob.arrayBuffer());if(closed)return;
+  loadingTask=lib.getDocument({data:bytes,isEvalSupported:false,useWasm:false,useSystemFonts:true,enableXfa:false});
+  pdf=await loadingTask.promise;if(closed)return;await render();
+ }catch(e){showError()}
 }
 /* Relatório A4 com paginação, fotos proporcionais e cabeçalho em todas as páginas. */
 async function exportReportDocuments(documents,ids=[],options={}){

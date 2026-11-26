@@ -5,6 +5,18 @@
   ],
   "builds": [
     {
+      "src": "api/pdf-preview-assets.mjs",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "node_modules/pdfjs-dist/legacy/build/pdf.min.mjs",
+          "node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+          "node_modules/pdfjs-dist/LICENSE",
+          "node_modules/pdfjs-dist/package.json"
+        ]
+      }
+    },
+    {
       "src": "api/personal-session.mjs",
       "use": "@vercel/node"
     },
@@ -66,6 +78,18 @@
     }
   ],
   "routes": [
+    {
+      "src": "/pdf-preview-assets/5.4.624/engine\\.mjs",
+      "dest": "/api/pdf-preview-assets.mjs?asset=engine"
+    },
+    {
+      "src": "/pdf-preview-assets/5.4.624/worker\\.mjs",
+      "dest": "/api/pdf-preview-assets.mjs?asset=worker"
+    },
+    {
+      "src": "/pdf-preview-assets/5.4.624/license\\.txt",
+      "dest": "/api/pdf-preview-assets.mjs?asset=license"
+    },
     {
       "src": "/api/personal-session",
       "dest": "/api/personal-session.mjs"
