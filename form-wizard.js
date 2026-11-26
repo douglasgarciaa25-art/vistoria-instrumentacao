@@ -115,8 +115,9 @@
   '#form .wizard-recent-areas,#form .wizard-status-shortcuts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;margin:0 0 4px}',
   '#form .wizard-recent-areas button,#form .wizard-status-shortcuts button{min-height:44px;padding:8px 12px;font-size:13px;flex:1 1 auto}',
   '#form .wizard-status-shortcuts button[aria-pressed="true"]{background:#351463;color:#fff;border-color:#351463}',
-  '#form[data-wizard-mode="quick"] .wizard-status-native select{width:100%}',
-  '#form[data-wizard-mode="quick"] .wizard-status-native{margin-bottom:0}',
+  '#form[data-wizard-mode="quick"] .wizard-status-native{display:none!important}',
+  '#form .wizard-status-shortcuts::before{content:"Situação";flex-basis:100%;font-size:13px;font-weight:600}',
+  '#form .wizard-status-shortcuts button{flex:1 1 43%}',
   '@media(max-width:600px){#form[data-wizard-mode="quick"] input:not([type="file"]),#form[data-wizard-mode="quick"] select,#form[data-wizard-mode="quick"] textarea{font-size:16px;min-height:44px}#form[data-wizard-mode="quick"] .photo .actions>*{flex:1 1 130px;min-height:48px}}',
   '#form .wizard-analysis{grid-column:1/-1;border:0;padding:0;margin:0;background:transparent}',
   '#form .wizard-analysis > summary,#form .wizard-analysis > p[hidden]{display:none!important}',
@@ -168,9 +169,9 @@
  if(statusField){const label=statusField.closest('label');label?.classList.add('wizard-status-native');label?.after(statusShortcuts);
   for(const option of statusField.options){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=option.textContent;button.setAttribute('aria-pressed','false');button.addEventListener('click',()=>{if(statusField.value===option.value)return;statusField.value=option.value;statusField.dispatchEvent(new Event('input',{bubbles:true}));statusField.dispatchEvent(new Event('change',{bubbles:true}));});statusShortcuts.append(button);statusButtons.push({button,value:option.value});}
  }
- function recentAreaValues(rows,currentArea,reportArea){const exclude=String(reportArea||'').trim().toLocaleLowerCase('pt-BR');const seen=new Set();return [...rows].reverse().map(row=>String(row.area||'').trim()).filter(value=>{const key=value.toLocaleLowerCase('pt-BR');if(!key||key===exclude||seen.has(key))return false;seen.add(key);return true}).slice(0,3);}
+ function recentAreaValues(rows,reportArea){const exclude=String(reportArea||'').trim().toLocaleLowerCase('pt-BR');const seen=new Set();return [...rows].reverse().map(row=>String(row.area||'').trim()).filter(value=>{const key=value.toLocaleLowerCase('pt-BR');if(!key||key===exclude||seen.has(key))return false;seen.add(key);return true}).slice(0,3);}
  let areaSignature='';
- function renderRecentAreas(){const values=quickMode&&!areaInput?.value.trim()?recentAreaValues(records,areaInput?.value,reportAreaInput?.value):[];const signature=JSON.stringify(values);recentAreas.hidden=!values.length;if(signature===areaSignature)return;areaSignature=signature;recentAreas.replaceChildren();for(const value of values){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=value;button.addEventListener('click',()=>{if(areaInput.value.trim())return;areaInput.value=value;areaInput.dispatchEvent(new Event('input',{bubbles:true}));});recentAreas.append(button);}}
+ function renderRecentAreas(){const values=quickMode&&!areaInput?.value.trim()?recentAreaValues(records,reportAreaInput?.value):[];const signature=JSON.stringify(values);recentAreas.hidden=!values.length;if(signature===areaSignature)return;areaSignature=signature;recentAreas.replaceChildren();for(const value of values){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=value;button.addEventListener('click',()=>{if(areaInput.value.trim())return;areaInput.value=value;areaInput.dispatchEvent(new Event('input',{bubbles:true}));});recentAreas.append(button);}}
  const nav=wizard.querySelector('.wizard-navigation');
  const stepButtons=steps.map((step,index)=>{
   const button=document.createElement('button');
