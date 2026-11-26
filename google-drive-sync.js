@@ -644,6 +644,25 @@
       if(status)status.textContent=archived?'Atualizada · versão local anterior preservada para revisão':'Local atualizado · Rev. '+revision;
     }
   }
+  // O Drive antigo removia src e o recolocava no fim do objeto. Recuperar a
+  // ordem histórica somente quando o SHA-256 original confirma todos os bytes.
+  async function confirmedTeamBase(document,expectedHash){
+    if(await digest(document)===expectedHash)return true;
+    if(!/^[a-f0-9]{64}$/.test(expectedHash||''))return false;
+    const groups=[...(document.records||[]).map(r=>r.photos),...(document.deletedPoints||[]).map(x=>x.point?.photos),document.pending?.photos].filter(Array.isArray);
+    if(!groups.some(g=>g.some(p=>p&&typeof p.src==='string')))return false;
+    for(let position=0;position<6;position++){
+      const copy=structuredClone(document);
+      const photos=[...(copy.records||[]).map(r=>r.photos),...(copy.deletedPoints||[]).map(x=>x.point?.photos),copy.pending?.photos].filter(Array.isArray);
+      for(const group of photos)for(let i=0;i<group.length;i++){
+        const p=group[i];if(!p||typeof p.src!=='string')continue;
+        const entries=Object.entries(p).filter(([key])=>key!=='src');
+        entries.splice(position,0,['src',p.src]);group[i]=Object.fromEntries(entries);
+      }
+      if(await digest(copy)===expectedHash)return true;
+    }
+    return false;
+  }
   async function syncTeam(receiveOnly=false){
     if(teamRunning||!validToken()||navigator.onLine===false)return;
     teamRunning=true;
@@ -663,9 +682,20 @@
       rememberTeamIds(remote);
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
+      // A fila também roda com o aplicativo aberto; o service worker só roda após fechar as janelas.
+      if(receiveOnly!==true&&window.VistoriaBackground?.run){
+        try{
+          const pending=(await window.VistoriaBackground.list()).some(j=>j.subject===member.google_subject&&j.state==='pending');
+          if(pending&&accessToken===runToken)await window.VistoriaBackground.run(member.google_subject);
+        }catch(e){failures.push('Fila automática: '+e.message);}
+      }
+      if(accessToken!==runToken||!validToken())return;
       const background=window.VistoriaBackground?await window.VistoriaBackground.list():[];
       for(const job of background)if(job.subject===member.google_subject&&job.state==='sent'&&baseline[job.id]?.revision===job.revision){baseline[job.id]={revision:job.newRevision,hash:job.hash};localStorage.setItem(key,JSON.stringify(baseline));}
       const queued=new Set(background.filter(j=>j.subject===member.google_subject&&j.state==='pending').map(j=>j.id));
+      const queuedConflicts=background.filter(j=>j.subject===member.google_subject&&j.state==='conflict');
+      if(queued.size)teamDeferred+=queued.size;
+      if(queuedConflicts.length){teamConflicts+=queuedConflicts.length;conflictFields.push('Fila: '+queuedConflicts.length+' envio(s) exigem revisão; versões preservadas');}
       let local=await reports();
       const remoteIdsForTrash=new Set(remote.map(x=>x.report_id));
       for(const row of local){
@@ -728,7 +758,16 @@
             try{
               const base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);
               const current=await reportRequest('GET',item.report_id);
-              if(base.revision!==previous.revision||await digest(base.document)!==previous.hash||current.revision!==item.revision)throw Error('Revisão-base não confirmada');
+              if(current.revision!==item.revision)throw Error('Revisão remota alterada; nova tentativa automática');
+              if(!validate({id:item.report_id,document:current.document}))throw Error('Revisão remota inválida');
+              if(await confirmedTeamBase(current.document,localHash)){
+                if(!await replaceTeamLocal(item,row,current.document,member)){teamDeferred++;continue;}
+                baseline[item.report_id]={revision:current.revision,hash:await digest(current.document)};
+                localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;markTeamRenewed(item.report_id,current.revision);
+                if(typeof refreshHistory==='function')await refreshHistory();
+                continue;
+              }
+              if(base.revision!==previous.revision||!await confirmedTeamBase(base.document,previous.hash))throw Error('Revisão-base não confirmada');
               const {mergeReport}=await import('./team-merge.mjs');
               const merged=mergeReport(base.document,row.document,current.document);
               if(merged.conflicts.length){
@@ -746,7 +785,7 @@
               markTeamRenewed(item.report_id,current.revision);
               if(typeof refreshHistory==='function')await refreshHistory();
             }catch(e){
-              teamConflicts++;conflictFields.push(item.report_id+': base ou revisão não confirmada');
+              teamConflicts++;conflictFields.push(item.report_id+': '+(e?.message||'base ou revisão não confirmada'));
             }
           }
           continue;
@@ -982,7 +1021,7 @@
         if(!original||!baseline)throw Error('Não existe uma revisão-base local confirmada. Nenhum dado foi alterado.');
         const originalHash=await digest(original.document);
         const [base,latest]=await Promise.all([reportRequest('GET',item.report_id,null,false,false,baseline.revision),reportRequest('GET',item.report_id)]);
-        if(base.revision!==baseline.revision||await digest(base.document)!==baseline.hash||latest.revision===baseline.revision)throw Error('Não há conflito de revisões confirmado.');
+        if(base.revision!==baseline.revision||!await confirmedTeamBase(base.document,baseline.hash)||latest.revision===baseline.revision)throw Error('Não há conflito de revisões confirmado.');
         const {mergeReport}=await import('./team-merge.mjs');
         const result=mergeReport(base.document,original.document,latest.document);
         if(!result.conflicts.length){await syncTeam();return;}
