@@ -22,8 +22,8 @@ test('Mostrar finalizadas lembra opção escolhida após sair, recarregar e volt
  assert.equal(vm.runInNewContext(snippet+';vistoriaShowFinalizedPreference()',{localStorage:{getItem(){throw Error('storage bloqueado')}}}),false,'Bloqueio de armazenamento não impede abrir');
  assert.match(source,/\$\('showFinalizedReports'\)\.checked=vistoriaShowFinalizedPreference\(\)/);
  assert.match(source,/vistoriaSaveFinalizedPreference\(\$\('showFinalizedReports'\)\.checked\)/);
- assert.match(cloud,/showFinalized:vistoriaShowFinalizedPreference\(\)/);
- assert.match(cloud,/disclosureState\.showFinalized=vistoriaShowFinalizedPreference\(\)/);
+ assert.match(cloud,/showFinalized:typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference\(\)/);
+ assert.match(cloud,/disclosureState\.showFinalized=typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference\(\)/);
  assert.match(cloud,/disclosureState\.showFinalized=vistoriaSaveFinalizedPreference\(showFinalized\.checked\)/);
 });
 test('PWA guarda todos os scripts efetivamente usados no modo offline',()=>{
