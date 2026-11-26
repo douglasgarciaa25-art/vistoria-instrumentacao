@@ -48,7 +48,7 @@
  }
  const storage=document.createElement('div');storage.id='view-cloud';storage.className='app-view';storage.innerHTML='<div class="view-heading"><div><p class="eyebrow">GOOGLE DRIVE</p><h2>Vistorias na nuvem Google</h2><p>Organize suas vistorias, acompanhe a equipe e sincronize com segurança.</p></div></div>';
  cloud.id='googleCloudHost';
- meta.id='identification';home.append(history);home.insertBefore($('app-public-info'),history);editor.append(meta,$('form'));report.append(review);const extras=document.createElement('details');extras.className='card cloud-extras';const extrasTitle=document.createElement('summary');extrasTitle.textContent='Backup e instalação do aplicativo';extras.append(extrasTitle,backup,install);storage.append(cloud,extras);oldLayout.remove();main.prepend(home,editor,report,storage);
+ meta.id='identification';home.append(history);editor.append(meta,$('form'));report.append(review);const extras=document.createElement('details');extras.className='card cloud-extras';const extrasTitle=document.createElement('summary');extrasTitle.textContent='Backup e instalação do aplicativo';extras.append(extrasTitle,backup,install);storage.append(cloud,extras);oldLayout.remove();main.prepend(home,editor,report,storage);
  // Secondary report settings are kept accessible without crowding the first step.
  const settings=document.createElement('details');settings.className='advanced';settings.innerHTML='<summary>Revisão, aprovações e marca d’água <span>Opcional</span></summary><div class="fields"></div>';
  for(const id of ['revision','watermark','approver','approvalDate','homologator','homologDate','revisionNote'])settings.lastElementChild.append($(id).closest('label'));meta.append(settings);
