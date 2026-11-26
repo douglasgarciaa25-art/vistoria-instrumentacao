@@ -365,3 +365,40 @@ test('arquivos obrigatórios do cache offline são publicados pelo Vercel',()=>{
  const html=readFileSync('index.html','utf8');
  for(const [,src] of html.matchAll(/<script[^>]*src=["']([^"']+)["']/g))assert.ok(files.includes('/'+src.replace(/^\//,'')),src+' deve estar no cache');
 });
+
+test('indicadores do relatório consolidam todos os pontos existentes, sem depender do relatório aberto',()=>{
+ const layout=readFileSync('layout.js','utf8');
+ const start=layout.indexOf(' function reportPointsAcrossSavedReports(');
+ const end=layout.indexOf(' function updateReportSummary(){',start);
+ assert.ok(start>0&&end>start,'Funções de consolidação devem existir');
+ const scope=vm.runInNewContext(layout.slice(start,end)+';({collect:reportPointsAcrossSavedReports,stats:reportManagementStats})');
+ const rows=[
+  {id:'vistoria-a',document:{records:[{tag:'A',status:'Corrigido'},{tag:'B',status:'Pendente'}]}},
+  {id:'vistoria-b',document:{records:[{tag:'C',status:'Em acompanhamento'},{tag:'D',status:'Sem pendência'}]}},
+  {id:'vistoria-c',document:{records:[{tag:'E',status:'Pendente'}]}}
+ ];
+ const before=JSON.stringify(rows);
+ const all=scope.collect(rows,'vistoria-vazia',[]);
+ assert.equal(all.length,5,'Resumo deve incluir pontos mesmo com relatório atual vazio');
+ let stats=scope.stats(all);
+ assert.equal(stats.total,5);
+ assert.equal(stats.done,2);
+ assert.equal(stats.progress,1);
+ assert.equal(stats.pending,2);
+ assert.equal(stats.rate,40);
+ assert.equal(JSON.stringify(rows),before,'Consolidar não altera as vistorias');
+ const current=[{tag:'A',status:'Corrigido'},{tag:'B',status:'Corrigido'}];
+ const adjusted=scope.collect(rows,'vistoria-a',current);
+ stats=scope.stats(adjusted);
+ assert.equal(stats.total,5,'Não duplica a vistoria em edição');
+ assert.equal(stats.done,3,'Usa situação mais recente do ponto atual');
+ assert.equal(stats.rate,60);
+ assert.equal(scope.collect(rows,'nova',current).length,7,'Inclui nova vistoria ainda não salva no histórico');
+ assert.equal(scope.stats([]).rate,null,'Sem registros mantém o estado vazio');
+ assert.match(layout,/reportManagementStats\\(reportPointsAcrossSavedReports\\(historyItems,activeReportId,records\\)\\)/);
+ assert.match(layout,/Indicadores gerais/);
+ assert.match(layout,/Acompanhamento de todos os pontos/);
+ assert.match(layout,/pontos nesta vistoria/);
+ assert.match(layout,/não selecionadas para PDF/);
+ assert.match(layout,/\\$\\('metricPoints'\\)\\.textContent=points\\.length/);
+});
