@@ -88,13 +88,13 @@
   if(!await change(job,{...patch,leaseUntil:Date.now()+120000},lease))throw Error('Fila alterada ou cancelada');
  }
  const successStatus=s=>s>=200&&s<300;
- async function run(){
+ async function run(expectedSubject=null){
   const jobs=(await list()).filter(j=>j.state==='pending');
   if(!jobs.length)return;
   const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
   if(!session.ok)return;
   const auth=await session.json();
-  if(!auth.subject||!auth.access_token)return;
+  if(!auth.subject||!auth.access_token||(expectedSubject!==null&&auth.subject!==expectedSubject))return;
   for(const job of jobs){
    if(job.subject!==auth.subject)continue;
    const lease=crypto.randomUUID();
