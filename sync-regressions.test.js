@@ -359,3 +359,30 @@ test('área de organização persistida no mesmo ID e exibida nas listas',()=>{
  assert.match(cloud,/vistoriaGroupRows\(ordered\.map/);
  assert.match(file('index.html'),/id="reportArea"/);
 });
+
+
+test('falha de download isolada não bloqueia outra vistoria e é recuperada no próximo ciclo',async()=>{
+ const vm=await import('node:vm'),src=file('google-drive-sync.js');
+ const code=src.slice(src.indexOf('  async function syncTeam('),src.indexOf("  window.addEventListener('online'"));
+ const remote=['falha','ok'].map(report_id=>({report_id,revision:1}));
+ const local=new Map(),cache=new Map(),messages=[];
+ const member={status:'approved',google_subject:'tech'};
+ let fail=true;
+ const context={teamRunning:false,accessToken:'token',navigator:{onLine:true},validToken:()=>true,queueMember:null,queueGeneration:0,
+  teamRequest:async()=>({member}),reportRequest:async(method,id)=>{if(!id)return {reports:remote};if(id==='falha'&&fail)throw Error('Drive temporariamente indisponível');return {revision:1,document:{hash:id}};},
+  rememberTeamIds:()=>{},localStorage:{getItem:k=>cache.get(k)||null,setItem:(k,v)=>cache.set(k,v)},window:{},reports:async()=>[...local.values()],isSharedTrashReport:()=>false,showPendingQueue:async()=>{},
+  db:{transaction:()=>({objectStore:()=>({get:key=>local.get(key)})})},idbReq:async v=>v,digest:async d=>d.hash,validate:()=>true,
+  replaceTeamLocal:async(item,row,document)=>{local.set(item.report_id,{id:item.report_id,document});return true;},
+  markTeamRenewed:()=>{},refreshHistory:async()=>{},setTeamSyncStatus:m=>messages.push(m),$:()=>null};
+ vm.createContext(context);await vm.runInContext(code+';syncTeam()',context);
+ assert.equal(local.size,1);assert.ok(local.has('ok'));assert.match(messages.at(-1),/Sincronização parcial/);assert.match(messages.at(-1),/ainda não recebidas: 1/);assert.match(messages.at(-1),/falha: Drive temporariamente indisponível/);
+ fail=false;await vm.runInContext('syncTeam()',context);
+ assert.equal(local.size,2);assert.match(messages.at(-1),/Equipe sincronizada/);assert.match(messages.at(-1),/ainda não recebidas: 0/);
+});
+test('resultado de sincronização permanece separado do cadastro de equipe',()=>{
+ const src=file('google-drive-sync.js');
+ assert.match(src,/id="gdrive-team-sync-result"/);
+ assert.match(src,/function setTeamSyncStatus\(message\)\{const status=\$\('gdrive-team-sync-result'\)/);
+ assert.match(src,/gdrive-team-refresh'\)\.onclick=async\(\)=>\{await syncTeam\(\);await showTeam\(\);\}/);
+ assert.doesNotMatch(src,/Sincronização solicitada\. Confira a fila/);
+});
