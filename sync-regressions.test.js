@@ -237,6 +237,35 @@ test('status geral só finaliza quando o usuário conclui a vistoria',async()=>{
  assert.equal(ctx.vistoriaVisible(d(['Corrigido'],'2026-11-24',{editing:null,fields:{tag:'novo'}}),false),true);
  assert.equal(ctx.vistoriaReportStatus(undefined).kind,'unknown');
 });
+test('salvar um ponto Corrigido finaliza automaticamente só quando todos estão encerrados',async()=>{
+ const vm=await import('node:vm'),src=file('history.js'),html=file('index.html');
+ const snippet=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('function refreshVistoriaCloudStatuses'));
+ const ctx=vm.createContext({});
+ vm.runInContext(snippet,ctx);
+ const stamp='2026-11-26T13:00:00Z';
+ const doc=(statuses,pending={editing:null,fields:{}})=>({
+  meta:{finalizedAt:''},records:statuses.map((status,i)=>({pointId:'id-'+i,tag:'T'+i,status,photos:[{src:'foto'+i}]})),pending
+ });
+ const mixed=doc(['Corrigido','Pendente']);
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',mixed,stamp),false);
+ assert.equal(mixed.meta.finalizedAt,'');
+ assert.equal(ctx.vistoriaReportStatus(mixed).kind,'pending');
+ const completed=doc(['Corrigido','Sem pendência']);
+ const original=JSON.stringify(completed.records);
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',completed,stamp),true);
+ assert.equal(completed.meta.finalizedAt,stamp);
+ assert.equal(ctx.vistoriaReportStatus(completed).kind,'done');
+ assert.equal(JSON.stringify(completed.records),original,'Fotos e identidade dos pontos não devem mudar');
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',completed,stamp),false,'Não sobrescreve a data anterior');
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Pendente',doc(['Corrigido']),stamp),false);
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Sem pendência',doc(['Corrigido']),stamp),false);
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',doc([]),stamp),false);
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',doc(['Corrigido'],{editing:0,fields:{}}),stamp),false);
+ assert.equal(ctx.vistoriaFinalizeOnSavedCorrection('Corrigido',doc(['Corrigido'],{editing:null,fields:{tag:'Rascunho'}}),stamp),false);
+ assert.match(html,/const autoFinalized=vistoriaFinalizeOnSavedCorrection\\(r\\.status,snapshot,new Date\\(\\)\\.toISOString\\(\\)\\)/);
+ assert.match(html,/if\\(autoFinalized\\)\\$\\('finalizedAt'\\)\\.value=snapshot\\.meta\\.finalizedAt/);
+ assert.match(html,/render\\(\\);save\\(\\);notify\\(autoFinalized\\?/);
+});
 test('um clique finaliza a vistoria e registra pontos como corrigidos sem perder a edição',async()=>{
  const vm=await import('node:vm'),src=file('history.js');
  const snippet=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('async function setVistoriaFinalized'));
