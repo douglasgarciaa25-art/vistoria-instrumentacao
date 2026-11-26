@@ -44,16 +44,17 @@
 
  const style=document.createElement('style');
  style.textContent=[
+  '#identification #meta[hidden],#identification > details[hidden],#view-editor .editor-steps[hidden],#form .wizard-pending[hidden],#form .wizard-pending button[hidden]{display:none!important}',
   '#form [data-wizard-hidden="true"],#form .wizard-footer button[hidden],#form .wizard-more[hidden]{display:none!important}',
-  '#form .wizard-box{margin:14px 0 18px;background:#fff;border:1px solid #e5dfec;border-radius:15px;padding:17px;box-shadow:0 2px 12px #30105d08}',
+  '#form .wizard-box{margin:8px 0 14px;background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}',
   '#form .wizard-eyebrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px;color:#6f607c;font-weight:700;letter-spacing:.3px}',
-  '#form .wizard-title{font-size:19px;line-height:1.28;color:#321653;margin:11px 0 6px;font-weight:700}',
+  '#form .wizard-title{font-size:19px;line-height:1.28;color:#321653;margin:7px 0 4px;font-weight:700}',
   '#form .wizard-question{margin:0;font-size:13px;color:#372b43;font-weight:650}',
   '#form .wizard-caption{font-size:12px;color:#696173;line-height:1.55;margin:6px 0 0}',
-  '#form .wizard-progress{width:100%;height:8px;accent-color:#351463;margin:9px 0 5px}',
+  '#form .wizard-progress{width:100%;height:5px;accent-color:#351463;margin:5px 0 2px}',
   '#form .wizard-pending{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;color:#59476b}',
   '#form .wizard-pending button{min-height:40px;padding:8px 12px;font-size:12px}',
-  '#form .wizard-navigation{margin:14px 0 0;border-top:1px solid #eee9f2;padding-top:10px}',
+  '#form .wizard-navigation{margin:8px 0 0;border-top:0;padding-top:0}',
   '#form .wizard-navigation summary{cursor:pointer;font-size:12px;color:#513c64;font-weight:650}',
   '#form .wizard-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:11px}',
   '#form .wizard-steps button{min-height:39px;font-size:11px;padding:8px 9px;line-height:1.3;background:#f5f1f8;color:#4b3a5a;border:1px solid #e4dcea;text-align:left;justify-content:flex-start}',
@@ -63,25 +64,36 @@
   '#form .wizard-footer{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center;margin-top:16px;padding-top:15px;border-top:1px solid #e9e5ee}',
   '#form .wizard-footer button{min-width:0;width:100%;min-height:47px}',
   '#form .wizard-footer p{grid-column:1/-1;grid-row:1;font-size:11px;line-height:1.45;color:#747082;margin:0}',
-  '#form>.fields{row-gap:15px}',
+  '#form>.fields{row-gap:12px}',
+  '#form > .step[hidden],#form > p.muted[hidden]{display:none!important}',
+  '#form > .wizard-more{margin:10px 0 0;min-height:40px}',
+  '#form .wizard-pending{margin-top:5px}',
+  '#form .wizard-caption{margin-top:3px}',
+  '#form .wizard-footer{margin-top:12px;padding-top:10px}',
+  '#form .wizard-footer button:disabled{opacity:.45}',
+  '#form .wizard-quick{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}',
+  '#form .wizard-quick[hidden],#form .wizard-question[hidden],#form .wizard-caption[hidden]{display:none!important}',
+  '#form .wizard-quick button{min-height:44px;font-size:13px}',
+  '#form .wizard-footer button[hidden]{display:none!important}',
+  '@media(max-width:600px){#form>.fields{grid-template-columns:minmax(0,1fr)}#form .wizard-title{font-size:18px}#form .wizard-footer button{min-height:48px}}',
   '#form .photo .thumbs{margin-top:12px}',
   '@media(min-width:760px){#form .wizard-steps{grid-template-columns:repeat(3,minmax(0,1fr))}}',
   '#identification .wizard-meta-toggle{width:100%;text-align:left;justify-content:flex-start;line-height:1.4;font-size:12px;min-height:46px}',
   '#identification #meta{margin-top:15px}',
-  '@media(max-width:450px){#form .wizard-box{padding:14px}#form .wizard-title{font-size:18px}#form .wizard-steps button{font-size:11px}#form .wizard-footer{gap:8px}}'
+  '@media(max-width:450px){#form .wizard-box{padding:0}#form .wizard-title{font-size:18px}#form .wizard-steps button{font-size:11px}#form .wizard-footer{gap:8px}}'
  ].join('\n');
  document.head.append(style);
 
  const wizard=document.createElement('section');
  wizard.id='vistoriaWizard';wizard.className='wizard-box';
  wizard.setAttribute('aria-label','Assistente de preenchimento em campo');
- wizard.innerHTML='<div class="wizard-eyebrow"><span>ASSISTENTE DE CAMPO</span><span id="wizardCounter" role="status" aria-live="polite" aria-atomic="true">Etapa 1 de 5</span></div>'
+ wizard.innerHTML='<div class="wizard-eyebrow"><span>PREENCHIMENTO DO PONTO</span><span id="wizardCounter" role="status" aria-live="polite" aria-atomic="true">Etapa 1 de 5</span></div>'
   +'<progress class="wizard-progress" max="5" value="1" aria-label="Progresso do preenchimento"></progress>'
   +'<h3 class="wizard-title" id="wizardTitle" tabindex="-1"></h3>'
   +'<p class="wizard-question" id="wizardQuestion"></p>'
   +'<p class="wizard-caption" id="wizardCaption"></p>'
   +'<div class="wizard-pending"><span id="wizardPendingCount" role="status" aria-live="polite"></span><button type="button" class="secondary" id="wizardGoPending" hidden>Ir para próximo pendente</button></div>'
-  +'<details class="wizard-navigation" id="wizardNavigation"><summary>Ver todas as etapas</summary><div class="wizard-steps" role="group" aria-label="Selecionar etapa"></div></details>'
+  +'<details class="wizard-navigation" id="wizardNavigation"><summary>Ir para outra etapa</summary><div class="wizard-steps" role="group" aria-label="Selecionar etapa"></div></details>'
   +'<button type="button" class="secondary wizard-more" id="wizardMore" aria-expanded="false" hidden></button>';
  fields.before(wizard);
  const nav=wizard.querySelector('.wizard-navigation');
@@ -108,14 +120,25 @@
   stepButtons[target].focus();
  });
  const more=wizard.querySelector('#wizardMore');
+ // A ação de opções fica junto aos campos, sem ocupar o cabeçalho.
  const footer=document.createElement('div');
  footer.className='wizard-footer';
  footer.innerHTML='<button type="button" class="secondary" id="wizardBack">Voltar</button>'
   +'<p id="wizardHint">As alterações permanecem no rascunho.</p>'
-  +'<button type="button" id="wizardNext">Avançar</button>';
+  +'<button type="button" id="wizardNext">Avançar</button>'
+  +'<div class="wizard-quick" id="wizardQuick"><button type="button" class="secondary" id="wizardPhotos">Fotos</button><button type="button" id="wizardSavePoint">Salvar ponto</button></div>';
  form.append(footer);
+ // Mantém as opções imediatamente antes dos campos que elas revelam.
+ fields.after(more);
+ const intro=form.querySelector(':scope > p.muted');
+ if(intro)intro.hidden=true;
+ const sectionLabel=form.querySelector(':scope > .step');
+ if(sectionLabel)sectionLabel.hidden=true;
  const back=footer.querySelector('#wizardBack');
  const next=footer.querySelector('#wizardNext');
+ const quick=footer.querySelector('#wizardQuick');
+ const quickSave=footer.querySelector('#wizardSavePoint');
+ const quickPhotos=footer.querySelector('#wizardPhotos');
  const expanded=steps.map(()=>false);
  const essentials={0:['tag','area'],1:['problem']};
  function requiredFields(index){
@@ -157,7 +180,7 @@
   const title=document.getElementById('title')?.value.trim()||'Vistoria sem título';
   const os=document.getElementById('workOrder')?.value.trim();
   const label=(number||title)+(os?' · OS '+os:'');
-  reportToggle.textContent=(reportExpanded?'− Recolher':'＋ Conferir / editar')+' dados do relatório · '+label.slice(0,65);
+  reportToggle.textContent=(reportExpanded?'− Ocultar dados do relatório':'＋ Dados do relatório')+' · '+label.slice(0,65);
  }
  function setReportExpanded(open){
   if(!reportToggle)return;
@@ -193,8 +216,12 @@
   wizard.querySelector('#wizardTitle').textContent=steps[current].title;
   wizard.querySelector('#wizardQuestion').textContent=steps[current].question;
   wizard.querySelector('#wizardCaption').textContent=steps[current].hint;
+  wizard.querySelector('#wizardQuestion').hidden=true;
+  wizard.querySelector('#wizardCaption').hidden=current!==steps.length-1;
   const pending=missingFields();
   const stagePending=pending.filter(item=>item.index===current).length;
+  // Evita mensagens repetidas: o atalho aparece apenas quando há pendências.
+  wizard.querySelector('.wizard-pending').hidden=!pending.length;
   wizard.querySelector('#wizardPendingCount').textContent=pending.length
    ?pending.length+' campo(s) essencial(is) pendente(s)':'Campos essenciais preenchidos';
   wizard.querySelector('#wizardGoPending').hidden=!pending.length;
@@ -211,12 +238,16 @@
   const hasOptions=[...group.values()].some(config=>config.step===current&&config.optional);
   more.hidden=!hasOptions;
   more.setAttribute('aria-expanded',String(expanded[current]));
-  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+' opções: '+steps[current].more;
+  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+' campos adicionais';
+  more.title=steps[current].more;
   back.disabled=current===0;
+  quick.hidden=current===steps.length-1;
+  quickSave.textContent=document.getElementById('submit')?.textContent==='Salvar alteração'?'Salvar alteração':'Salvar ponto';
+  next.textContent=current===steps.length-2?'Ir para fotos':'Avançar';
   next.hidden=current===steps.length-1;
   footer.querySelector('#wizardHint').textContent=current===steps.length-1
    ?'Confira as fotos e toque em Adicionar ao relatório ou Salvar alteração.'
-   :'Você pode voltar e corrigir qualquer etapa sem perder o que digitou.';
+   :'Rascunho mantido ao avançar ou voltar.';
  }
  function setStep(index,scroll=false){
   current=Math.max(0,Math.min(steps.length-1,index));
@@ -253,6 +284,16 @@
   const target=pending.find(item=>item.index>=current)||pending[0];
   openField(target.id,target.index);
  });
+ // O atalho usa a mesma validação e o mesmo submit do fluxo original.
+ function savePointDirect(){
+  const submit=document.getElementById('submit');
+  if(!submit||submit.disabled)return;
+  for(let index=0;index<steps.length-1;index++)if(!validate(index))return;
+  setStep(steps.length-1);
+  form.requestSubmit(submit);
+ }
+ quickSave.addEventListener('click',savePointDirect);
+ quickPhotos.addEventListener('click',()=>setStep(steps.length-1,true));
  back.addEventListener('click',()=>setStep(current-1,true));
  next.addEventListener('click',()=>{if(validate(current))setStep(current+1,true)});
  more.addEventListener('click',()=>{expanded[current]=!expanded[current];render()});
