@@ -239,7 +239,7 @@ test('status geral só finaliza quando o usuário conclui a vistoria',async()=>{
 });
 test('um clique finaliza a vistoria e registra pontos como corrigidos sem perder a edição',async()=>{
  const vm=await import('node:vm'),src=file('history.js');
- const snippet=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('function refreshVistoriaCloudStatuses'));
+ const snippet=src.slice(src.indexOf('function vistoriaAllPointsClosed'),src.indexOf('async function setVistoriaFinalized'));
  const ctx=vm.createContext({itemKeys:['tag','area','problem','status','completionDate','completionWork'],structuredClone,today:()=> '2026-11-26'});
  vm.runInContext(snippet,ctx);
  const original={meta:{title:'Vistoria'},records:[{tag:'C270 BA01',area:'Moagem',problem:'Condição',status:'Pendente',photos:[{src:'original'}]}],pending:{editing:0,fields:{tag:'C270 BA01',area:'Moagem',problem:'Reparo executado',status:'Pendente'},photos:[{src:'foto nova'}]}};
