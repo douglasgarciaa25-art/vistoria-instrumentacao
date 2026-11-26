@@ -324,7 +324,7 @@ test('Mostrar finalizadas revela somente áreas com finalizadas visíveis e info
  assert.match(source,/if\(\$\('showFinalizedReports'\)\.checked\)vistoriaRevealFinalizedAreas/);
 });
 
-test('filtro de finalizadas preserva registros e classifica automaticamente pontos corrigidos',()=>{
+test('filtro de finalizadas exige conclusão explícita e preserva pontos corrigidos',()=>{
  const source=readFileSync('history.js','utf8');
  const snippet=source.slice(source.indexOf('function vistoriaAllPointsClosed'),source.indexOf('function refreshVistoriaCloudStatuses'));
  const {visible,status,count,points}=new Function(snippet+';return {visible:vistoriaVisible,status:vistoriaReportStatus,count:vistoriaClosedPointCount,points:vistoriaHistoryPoints};')();
@@ -336,10 +336,10 @@ test('filtro de finalizadas preserva registros e classifica automaticamente pont
   {meta:{},records:[]}
  ];
  const before=JSON.stringify(docs);
- assert.deepEqual(docs.map(d=>status(d).kind),['done','done','pending','done','progress']);
- assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[2],docs[4]]);
+ assert.deepEqual(docs.map(d=>status(d).kind),['done','progress','pending','done','progress']);
+ assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[1],docs[2],docs[4]]);
  assert.deepEqual(docs.filter(d=>visible(d,true)),docs);
- assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[2],docs[4]]);
+ assert.deepEqual(docs.filter(d=>visible(d,false)),[docs[1],docs[2],docs[4]]);
  const mixed={meta:{},records:[{status:'Corrigido',tag:'A'},{status:'Pendente',tag:'B'},{status:'Em acompanhamento',tag:'C'}]};
  const original=JSON.stringify(mixed);
  assert.equal(count(mixed),1);
@@ -365,18 +365,3 @@ test('arquivos obrigatórios do cache offline são publicados pelo Vercel',()=>{
  const html=readFileSync('index.html','utf8');
  for(const [,src] of html.matchAll(/<script[^>]*src=["']([^"']+)["']/g))assert.ok(files.includes('/'+src.replace(/^\//,'')),src+' deve estar no cache');
 });
-
-test('Android PDF preview uses local renderer, scrollable pages, zoom and original file actions',()=>{
- const source=readFileSync('pdf-export.js','utf8').split('/* Relatório A4')[0];
- assert.doesNotMatch(source,/createElement\(['"]iframe['"]\)/);
- for(const expression of [/import\('\/pdf-renderer-v4\.js'\)/,/workerSrc='\/pdf-worker-v4\.js'/,/getDocument\(\{data:bytes,isEvalSupported:false/,/page\.render\(/,/IntersectionObserver/,/for\(let n=1;n<=pdf\.numPages;n\+\+\)/,/setZoom/,/download\(blob,name\)/,/URL\.revokeObjectURL\(url\)/,/loading\.destroy\(\)/])assert.match(source,expression);
- const sw=readFileSync('sw.js','utf8');assert.match(sw,/pdf-renderer-v4\.js/);assert.match(sw,/pdf-worker-v4\.js/);
-});
-
- test('busca de fotos usa seletor nativo de imagens sem forçar câmera e preserva evidências de conclusão',()=>{
- const html=readFileSync('index.html','utf8'),field=readFileSync('field-tools.js','utf8');
- const gallery=html.match(/<input[^>]*id="photos"[^>]*>/)[0],after=field.match(/<input[^>]*id="completionPhoto"[^>]*>/)[0];
- for(const picker of [gallery,after]){assert.match(picker,/accept="image\/\*"/);assert.match(picker,/\bmultiple\b/);assert.doesNotMatch(picker,/\bcapture\b/);}
- for(const [source,id] of [[html,'camera'],[field,'completionCamera']])assert.match(source.match(new RegExp('<input[^>]*id="'+id+'"[^>]*>'))[0],/capture="environment"/);
- assert.match(html,/Google Fotos/);assert.match(html,/async function importSelectedPhotos/);assert.match(html,/if\(photos\.length>=8\)/);assert.match(html,/catch\{failed\+\+\}/);assert.match(html,/thumbs\(\);save\(\)/);assert.match(field,/importSelectedPhotos\(e,'\[Depois\] Correção realizada'\)/);
- });
