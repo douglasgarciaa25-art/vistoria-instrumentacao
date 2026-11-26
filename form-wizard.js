@@ -215,6 +215,7 @@
  }
  let current=0;
  let quickMode=true;
+ let quickExpanded=false;
  function isQuickVisible(config,corrected,details){
   if(config.step===4)return true;
   if(config.step===2)return details;
@@ -283,7 +284,7 @@
   useArea.hidden=!reportAreaInput?.value.trim()||Boolean(areaInput?.value.trim());
   for(const [node,config] of group){
    node.dataset.wizardHidden=String(config.step!==current||(config.optional&&!expanded[current]));
-   if(quickMode)node.dataset.wizardHidden=String(!isQuickVisible(config,corrected,expanded[0]));
+   if(quickMode)node.dataset.wizardHidden=String(!isQuickVisible(config,corrected,quickExpanded));
   }
   if(corrected&&quickMode){const completion=form.querySelector('.completion');if(completion)completion.open=true;}
   const submitButton=document.getElementById('submit');
@@ -316,7 +317,8 @@
   const hasOptions=[...group.values()].some(config=>config.step===current&&config.optional);
   more.hidden=!quickMode&&!hasOptions;
   more.setAttribute('aria-expanded',String(expanded[current]));
-  more.textContent=(expanded[current]?'− Ocultar':'＋ Mostrar')+(!quickMode&&current===2?' ferramentas adicionais':' campos adicionais');
+  if(quickMode)more.setAttribute('aria-expanded',String(quickExpanded));
+  more.textContent=((quickMode?quickExpanded:expanded[current])?'− Ocultar':'＋ Mostrar')+(!quickMode&&current===2?' ferramentas adicionais':' campos adicionais');
   more.title=steps[current].more;
   back.disabled=current===0;
   quick.hidden=current===steps.length-1;
@@ -336,13 +338,12 @@
   }
  }
  function openField(id,index){
-  if(quickMode)expanded[0]=true;
-  expanded[index]=true;
-  setStep(index,true);
+  if(quickMode){quickExpanded=true;render();}else{expanded[index]=true;setStep(index,true);}
   const input=document.getElementById(id);
   const details=input?.closest('details');
   if(details)details.open=true;
   if(input)input.focus({preventScroll:true});
+  if(quickMode&&input)input.scrollIntoView({block:'center',behavior:'auto'});
   if(typeof notify==='function')notify('Preencha: '+(input?.closest('label')?.textContent||id).trim().slice(0,90));
  }
  function validate(index){
@@ -375,7 +376,7 @@
  quickPhotos.addEventListener('click',()=>setStep(steps.length-1,true));
  back.addEventListener('click',()=>setStep(current-1,true));
  next.addEventListener('click',()=>{if(validate(current))setStep(current+1,true)});
- more.addEventListener('click',()=>{expanded[current]=!expanded[current];render()});
+ more.addEventListener('click',()=>{if(quickMode)quickExpanded=!quickExpanded;else expanded[current]=!expanded[current];render()});
  // O PDF usa analysisHistory: registra o texto digitado ao salvar, sem alterar a situação.
  function recordAnalysisOnSave(){
   if(!analysisDraft||!analysisHistory)return false;
@@ -419,19 +420,17 @@
   if(event.target!==first)return;
   const holder=[...group.keys()].find(node=>node.contains(event.target));
   const stage=holder?group.get(holder).step:0;
-  if(quickMode)expanded[0]=true;
-  expanded[stage]=true;
-  setStep(stage,true);
+  if(quickMode){quickExpanded=true;render();event.target.closest('details')?.setAttribute('open','');event.target.scrollIntoView({block:'center',behavior:'auto'});}else{expanded[stage]=true;setStep(stage,true);}
  },true);
  document.getElementById('status')?.addEventListener('change',()=>{
   if(document.getElementById('status').value==='Corrigido')expanded[3]=true;
   render();
  });
  const oldReset=reset;
- reset=function(){const result=oldReset.apply(this,arguments);expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
+ reset=function(){const result=oldReset.apply(this,arguments);quickExpanded=false;expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
  const oldFill=fill;
- fill=function(){const result=oldFill.apply(this,arguments);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
- document.addEventListener('vistoria-point-editor-opened',()=>{expanded.fill(false);revealFilledOptions();setStep(0)});
+ fill=function(){const result=oldFill.apply(this,arguments);quickExpanded=false;form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
+ document.addEventListener('vistoria-point-editor-opened',()=>{quickExpanded=false;expanded.fill(false);revealFilledOptions();setStep(0)});
  document.getElementById('savedPointPicker')?.addEventListener('change',()=>{
   revealFilledOptions();setStep(0);
  });
