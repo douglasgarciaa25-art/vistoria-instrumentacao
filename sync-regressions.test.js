@@ -26,6 +26,28 @@ test('Mostrar finalizadas lembra opção escolhida após sair, recarregar e volt
  assert.match(cloud,/disclosureState\.showFinalized=typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference\(\)/);
  assert.match(cloud,/disclosureState\.showFinalized=vistoriaSaveFinalizedPreference\(showFinalized\.checked\)/);
 });
+test('Salvar e atualizar aguarda só edição local e permite atualização com Drive sincronizando',async()=>{
+ const vm=await import('node:vm'),source=file('enhancements.js');
+ const start=source.indexOf('  async function waitForLocalUpdateIdle(){');
+ const end=source.indexOf('  action.onclick=async()=>{',start);
+ assert.ok(start>0&&end>start,'Auxiliar de atualização não encontrado');
+ const context=vm.createContext({busy:0,historyBusy:false,setTimeout:(cb)=>cb(),Promise});
+ const wait=vm.runInContext(source.slice(start,end)+';waitForLocalUpdateIdle',context);
+ await wait();
+ context.busy=1;
+ await assert.rejects(wait(),/edição ou foto em processamento/,'Não força recarga em upload de foto ainda ativo');
+ context.busy=0;context.historyBusy=true;
+ await assert.rejects(wait(),/edição ou foto em processamento/,'Não força recarga durante ação local');
+ context.historyBusy=false;
+ await wait();
+ const handler=source.slice(end,source.indexOf('\n  };',end)+5);
+ assert.ok(handler.includes('await persistCurrent();'),'Preserva salvamento antes da atualização');
+ assert.ok(handler.includes('location.reload();'),'Recarrega apenas após salvar');
+ assert.ok(handler.includes('await waitForLocalUpdateIdle();'),'Espera o editor local');
+ assert.doesNotMatch(handler,/VistoriaGoogleDrive\?\.getState\(\)\?\.busy/,'Sincronização Drive não bloqueia atualização local');
+ assert.doesNotMatch(handler,/Aguarde a operação atual e tente novamente/,'Não exibe aviso antigo por sincronização de fundo');
+ assert.match(handler,/await persistCurrent\(\);\s*message\.textContent='Vistoria salva no aparelho/);
+});
 test('PWA guarda todos os scripts efetivamente usados no modo offline',()=>{
  const scripts=[...file('index.html').matchAll(/<script src="([^"]+)"/g)].map(match=>match[1]);
  const sw=file('sw.js');
