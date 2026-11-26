@@ -426,3 +426,25 @@ test('identidade pública própria e transparência OAuth permanecem acessíveis
  assert.match(privacy,/Uso Limitado/);
  assert.match(readFileSync('google2fd58006cf13a852.html','utf8'),/google-site-verification: google2fd58006cf13a852.html/);
 });
+
+
+test('Identidade pública própria: ícones PNG, cabeçalho, manifesto e cache coerentes',()=>{
+ const manifest=JSON.parse(readFileSync('manifest.webmanifest','utf8'));
+ const html=readFileSync('index.html','utf8');
+ const about=readFileSync('sobre.html','utf8');
+ const sw=readFileSync('sw.js','utf8');
+ assert.equal(manifest.id,'/');
+ assert.equal(manifest.start_url,'/');
+ assert.equal(manifest.scope,'/');
+ for(const size of [192,512]){
+  const path='/vistoria-icon-'+size+'.png';
+  assert.ok(manifest.icons.some(icon=>icon.src===path&&icon.sizes===size+'x'+size&&icon.type==='image/png'));
+  const png=readFileSync('.'+path);
+  assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+  assert.equal(png.readUInt32BE(16),size);
+  assert.equal(png.readUInt32BE(20),size);
+  assert.ok(sw.includes(path));
+ }
+ for(const source of [html,about]) assert.ok(source.includes('src="/vistoria-icon-192.png" alt="Logotipo Vistoria Técnica"'));
+ assert.ok(html.includes('rel="apple-touch-icon" href="/vistoria-icon-192.png"'));
+});
