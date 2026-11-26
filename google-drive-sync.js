@@ -756,7 +756,6 @@
             // Conciliação automática inclusive com editor aberto, se estiver integralmente salvo.
             if(!await activeMatchesSaved(item.report_id,localHash)){teamDeferred++;continue;}
             try{
-              const base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);
               const current=await reportRequest('GET',item.report_id);
               if(current.revision!==item.revision)throw Error('Revisão remota alterada; nova tentativa automática');
               if(!validate({id:item.report_id,document:current.document}))throw Error('Revisão remota inválida');
@@ -767,6 +766,7 @@
                 if(typeof refreshHistory==='function')await refreshHistory();
                 continue;
               }
+              const base=await reportRequest('GET',item.report_id,null,false,false,previous.revision);
               if(base.revision!==previous.revision||!await confirmedTeamBase(base.document,previous.hash))throw Error('Revisão-base não confirmada');
               const {mergeReport}=await import('./team-merge.mjs');
               const merged=mergeReport(base.document,row.document,current.document);
