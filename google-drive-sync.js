@@ -1229,5 +1229,5 @@
     if(!response.ok)throw Error(payload.error||'Revisão técnica indisponível no momento.');
     return payload;
   }
-  window.VistoriaGoogleDrive={sync,disconnect,reviewTechnical,markPdfLocal:rememberLocalCopy,receiveForPdf:async()=>{await syncTeam(true);await sync(true);},getState:()=>({enabled,folderId,lastStatus,hadErrors})};
+  window.VistoriaGoogleDrive={sync,disconnect,reviewTechnical,markPdfLocal:rememberLocalCopy,receiveForPdf:async()=>{await syncTeam(true);await sync(true);},getState:()=>({enabled,folderId,lastStatus,hadErrors,busy:running||teamRunning||queueRunning})};
 })();
