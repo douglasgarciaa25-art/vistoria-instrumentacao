@@ -111,7 +111,12 @@
   '#form[data-wizard-mode="quick"] .photo > p.muted{display:none}',
   '#form[data-wizard-mode="quick"] #submit{min-height:50px;flex:1}',
   '#form .wizard-area-use{min-height:40px;align-self:end}',
-  '#form .wizard-area-use[hidden],#form #wizardQuickDiagnostics[hidden]{display:none!important}',
+  '#form .wizard-area-use[hidden],#form #wizardQuickDiagnostics[hidden],#form .wizard-recent-areas[hidden],#form .wizard-status-shortcuts[hidden]{display:none!important}',
+  '#form .wizard-recent-areas,#form .wizard-status-shortcuts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;margin:0 0 4px}',
+  '#form .wizard-recent-areas button,#form .wizard-status-shortcuts button{min-height:44px;padding:8px 12px;font-size:13px;flex:1 1 auto}',
+  '#form .wizard-status-shortcuts button[aria-pressed="true"]{background:#351463;color:#fff;border-color:#351463}',
+  '#form[data-wizard-mode="quick"] .wizard-status-native select{width:100%}',
+  '#form[data-wizard-mode="quick"] .wizard-status-native{margin-bottom:0}',
   '@media(max-width:600px){#form[data-wizard-mode="quick"] input:not([type="file"]),#form[data-wizard-mode="quick"] select,#form[data-wizard-mode="quick"] textarea{font-size:16px;min-height:44px}#form[data-wizard-mode="quick"] .photo .actions>*{flex:1 1 130px;min-height:48px}}',
   '#form .wizard-analysis{grid-column:1/-1;border:0;padding:0;margin:0;background:transparent}',
   '#form .wizard-analysis > summary,#form .wizard-analysis > p[hidden]{display:none!important}',
@@ -155,6 +160,17 @@
  const useArea=document.createElement('button');useArea.type='button';useArea.className='secondary wizard-area-use';useArea.textContent='Usar área da vistoria';
  if(areaInput){areaInput.closest('label')?.after(useArea);group.set(useArea,{step:0,optional:false});}
  useArea.addEventListener('click',()=>{if(!areaInput||areaInput.value.trim()||!reportAreaInput?.value.trim())return;areaInput.value=reportAreaInput.value.trim();areaInput.dispatchEvent(new Event('input',{bubbles:true}));});
+ // Sugestões apenas da vistoria aberta; não transporta dados de outro relatório.
+ const recentAreas=document.createElement('div');recentAreas.className='wizard-recent-areas';recentAreas.setAttribute('aria-label','Áreas recentes desta vistoria');useArea.after(recentAreas);
+ const statusField=document.getElementById('status');
+ const statusShortcuts=document.createElement('div');statusShortcuts.className='wizard-status-shortcuts';statusShortcuts.setAttribute('role','group');statusShortcuts.setAttribute('aria-label','Selecionar situação do ponto');
+ const statusButtons=[];
+ if(statusField){const label=statusField.closest('label');label?.classList.add('wizard-status-native');label?.after(statusShortcuts);
+  for(const option of statusField.options){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=option.textContent;button.setAttribute('aria-pressed','false');button.addEventListener('click',()=>{if(statusField.value===option.value)return;statusField.value=option.value;statusField.dispatchEvent(new Event('input',{bubbles:true}));statusField.dispatchEvent(new Event('change',{bubbles:true}));});statusShortcuts.append(button);statusButtons.push({button,value:option.value});}
+ }
+ function recentAreaValues(rows,currentArea,reportArea){const exclude=String(reportArea||'').trim().toLocaleLowerCase('pt-BR');const seen=new Set();return [...rows].reverse().map(row=>String(row.area||'').trim()).filter(value=>{const key=value.toLocaleLowerCase('pt-BR');if(!key||key===exclude||seen.has(key))return false;seen.add(key);return true}).slice(0,3);}
+ let areaSignature='';
+ function renderRecentAreas(){const values=quickMode&&!areaInput?.value.trim()?recentAreaValues(records,areaInput?.value,reportAreaInput?.value):[];const signature=JSON.stringify(values);recentAreas.hidden=!values.length;if(signature===areaSignature)return;areaSignature=signature;recentAreas.replaceChildren();for(const value of values){const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=value;button.addEventListener('click',()=>{if(areaInput.value.trim())return;areaInput.value=value;areaInput.dispatchEvent(new Event('input',{bubbles:true}));});recentAreas.append(button);}}
  const nav=wizard.querySelector('.wizard-navigation');
  const stepButtons=steps.map((step,index)=>{
   const button=document.createElement('button');
@@ -216,6 +232,7 @@
  let current=0;
  let quickMode=true;
  let quickExpanded=false;
+ let quickDiagnosis=false;
  function isQuickVisible(config,corrected,details){
   if(config.step===4)return true;
   if(config.step===2)return details;
@@ -225,7 +242,7 @@
  function setMode(quick,step=0){quickMode=Boolean(quick);if(!quickMode)setStep(step,true);else{current=0;render();}}
  modeQuick.addEventListener('click',()=>setMode(true));
  modeGuide.addEventListener('click',()=>setMode(false,current));
- quickDiagnostics.addEventListener('click',()=>setMode(false,2));
+ quickDiagnostics.addEventListener('click',()=>{if(quickExpanded){quickExpanded=false;quickDiagnosis=false;}else quickDiagnosis=!quickDiagnosis;render();if(quickDiagnosis)analysisDraft?.scrollIntoView({block:'center',behavior:'auto'});});
  // Os dados gerais continuam editáveis, mas não ocupam a tela toda durante o campo.
  const reportPanel=document.getElementById('identification');
  const reportFields=document.getElementById('meta');
@@ -282,9 +299,14 @@
   form.dataset.wizardMode=quickMode?'quick':'guided';
   modeQuick.setAttribute('aria-pressed',String(quickMode));modeGuide.setAttribute('aria-pressed',String(!quickMode));modeHelp.hidden=!quickMode;quickDiagnostics.hidden=!quickMode;
   useArea.hidden=!reportAreaInput?.value.trim()||Boolean(areaInput?.value.trim());
+  renderRecentAreas();
+  statusShortcuts.hidden=!quickMode||!statusField;
+  for(const {button,value} of statusButtons)button.setAttribute('aria-pressed',String(statusField.value===value));
+  quickDiagnostics.textContent=(quickDiagnosis||quickExpanded?'− Ocultar':'＋ Adicionar')+' diagnóstico';
+  quickDiagnostics.setAttribute('aria-expanded',String(quickDiagnosis||quickExpanded));
   for(const [node,config] of group){
    node.dataset.wizardHidden=String(config.step!==current||(config.optional&&!expanded[current]));
-   if(quickMode)node.dataset.wizardHidden=String(!isQuickVisible(config,corrected,quickExpanded));
+   if(quickMode)node.dataset.wizardHidden=String(!(isQuickVisible(config,corrected,quickExpanded)||(quickDiagnosis&&config.step===2&&!config.optional)));
   }
   if(corrected&&quickMode){const completion=form.querySelector('.completion');if(completion)completion.open=true;}
   const submitButton=document.getElementById('submit');
@@ -427,10 +449,10 @@
   render();
  });
  const oldReset=reset;
- reset=function(){const result=oldReset.apply(this,arguments);quickExpanded=false;expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
+ reset=function(){const result=oldReset.apply(this,arguments);quickExpanded=false;quickDiagnosis=false;expanded.fill(false);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));setStep(0);return result};
  const oldFill=fill;
- fill=function(){const result=oldFill.apply(this,arguments);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));quickExpanded=false;expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
- document.addEventListener('vistoria-point-editor-opened',()=>{quickExpanded=false;expanded.fill(false);revealFilledOptions();setStep(0)});
+ fill=function(){const result=oldFill.apply(this,arguments);form.querySelectorAll('[aria-invalid="true"]').forEach(el=>el.removeAttribute('aria-invalid'));quickExpanded=false;quickDiagnosis=false;expanded.fill(false);revealFilledOptions();setStep(0);setReportExpanded(false);return result};
+ document.addEventListener('vistoria-point-editor-opened',()=>{quickExpanded=false;quickDiagnosis=false;expanded.fill(false);revealFilledOptions();setStep(0)});
  document.getElementById('savedPointPicker')?.addEventListener('change',()=>{
   revealFilledOptions();setStep(0);
  });
