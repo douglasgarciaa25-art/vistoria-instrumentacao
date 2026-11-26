@@ -41,5 +41,41 @@
  document.addEventListener('vistoria-saved',()=>{dirty=false;$('localProtection').textContent='Salvo no aparelho · '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});cloudStatus().catch(()=>{$('cloudProtection').textContent='Não foi possível conferir a cópia na nuvem'});if(!trash.open&&$('trashList').childElementCount===0)window.refreshTrash().catch(()=>{})});
  new MutationObserver(()=>{if(/indisponível|Falha|Não foi/i.test($('saveState').textContent))$('localProtection').textContent=$('saveState').textContent}).observe($('saveState'),{childList:true});
  if(historyReady){$('localProtection').textContent='Salvo no aparelho';cloudStatus().catch(()=>{});window.refreshTrash().catch(()=>{})}
- if('serviceWorker' in navigator){let waiting=null,requested=false;navigator.serviceWorker.getRegistration().then(reg=>{if(!reg)return;const check=()=>{if(reg.waiting){waiting=reg.waiting;updates.hidden=false}};check();reg.addEventListener('updatefound',()=>{const w=reg.installing;w?.addEventListener('statechange',check)})});$('applyUpdate').onclick=async()=>{if(!waiting)return;if(busy||historyBusy||cloudWorking)return notify('Aguarde a operação em andamento antes de atualizar.');$('applyUpdate').disabled=true;try{await persistCurrent();requested=true;waiting.postMessage({type:'ACTIVATE_UPDATE'});$('applyUpdate').textContent='Atualizando…'}catch(e){$('applyUpdate').disabled=false;notify('Não foi possível salvar. A atualização foi cancelada.')}};navigator.serviceWorker.addEventListener('controllerchange',()=>{if(requested)location.reload()})}
+ if('serviceWorker' in navigator){
+  const action=$('applyUpdate');
+  const message=updates.querySelector('span');
+  let requested=false,registration=null;
+  function check(){if(!requested)updates.hidden=!registration?.waiting}
+  function attach(reg){if(!reg||registration===reg)return;registration=reg;check();reg.addEventListener('updatefound',()=>{const w=reg.installing;w?.addEventListener('statechange',check)});}
+  navigator.serviceWorker.getRegistration().then(attach).catch(()=>{});
+  navigator.serviceWorker.ready.then(attach).catch(()=>{});
+  action.onclick=async()=>{
+   if(requested)return;
+   if(busy||historyBusy||window.VistoriaGoogleDrive?.getState()?.busy){message.textContent='Aguarde a operação atual e tente novamente.';return notify(message.textContent);}
+   requested=true;action.disabled=true;action.textContent='Salvando…';message.textContent='Salvando a vistoria neste aparelho.';
+   try{
+    await persistCurrent();
+    if(busy||historyBusy||window.VistoriaGoogleDrive?.getState()?.busy)throw Error('Outra operação foi iniciada. Tente novamente.');
+    const reg=await navigator.serviceWorker.getRegistration();
+    const worker=reg?.waiting;
+    if(!worker){location.reload();return;}
+    action.textContent='Atualizando…';message.textContent='Vistoria salva. Instalando a atualização.';
+    await new Promise((resolve,reject)=>{
+     let timer;
+     const cleanup=()=>{clearTimeout(timer);navigator.serviceWorker.removeEventListener('controllerchange',changed);worker.removeEventListener('statechange',stateChanged)};
+     const finish=()=>{cleanup();resolve()};
+     const fail=()=>{cleanup();reject(Error('A atualização não foi ativada. Tente novamente ou feche as outras janelas do aplicativo.'))};
+     const changed=()=>finish();
+     const stateChanged=()=>{if(worker.state==='activated')finish();else if(worker.state==='redundant')fail()};
+     navigator.serviceWorker.addEventListener('controllerchange',changed);
+     worker.addEventListener('statechange',stateChanged);
+     timer=setTimeout(()=>{if(worker.state==='activated')finish();else fail()},12000);
+     try{worker.postMessage({type:'ACTIVATE_UPDATE'});stateChanged()}catch(e){cleanup();reject(e)}
+    });
+    if(busy||historyBusy||window.VistoriaGoogleDrive?.getState()?.busy)throw Error('Operação iniciada durante a atualização. Salve e tente novamente.');
+    await persistCurrent();
+    location.reload();
+   }catch(e){requested=false;action.disabled=false;action.textContent='Salvar e atualizar';message.textContent=e.message;updates.hidden=false;notify('Não foi possível concluir a atualização: '+e.message)}
+  };
+ }
 })();
