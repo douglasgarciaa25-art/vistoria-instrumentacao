@@ -475,3 +475,20 @@ test('seleção entre vistorias mantém IDs e referências e não exporta pontos
  scope='current';
  assert.equal(vm.runInContext('scopedRows().length',context),2);
 });
+
+
+test('indicadores filtram área cadastrada, localização, equipamento, situação e período',()=>{
+ const source=readFileSync('management-tools.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ const fn=source.slice(source.indexOf('function indicatorFilter('),source.indexOf('function rows()'));
+ const apply=new Function(fn+';return indicatorFilter;')();
+ const data=[{area:'BV',m:{date:'2026-11-20'},p:{area:'Concentração BV',tag:'C210',equipment:'Válvula',status:'Corrigido'}},{area:'BV',m:{date:'2026-11-21'},p:{area:'Concentração BV',tag:'C240',status:'Pendente'}},{area:'BVO',m:{date:'2026-11-25'},p:{area:'Britagem',tag:'C210',status:'Sem pendência'}}];
+ const original=JSON.stringify(data);
+ assert.equal(apply(data,{area:'bv',sub:'concentração bv',equipment:'valvula',status:'finalizados',from:'2026-11-20',to:'2026-11-20'}).length,1);
+ assert.equal(apply(data,{status:'finalizados'}).length,2);
+ assert.equal(apply(data,{area:'bv',status:'Pendente'}).length,1);
+ assert.equal(apply(data,{from:'2026-11-22'}).length,1);
+ assert.equal(JSON.stringify(data),original);
+ assert.match(source,/vistoriaAreaCatalog\(\)/);
+ assert.match(source,/\.\.\.rows\(\)\.map/);
+});
