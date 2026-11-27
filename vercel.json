@@ -5,6 +5,10 @@
   ],
   "builds": [
     {
+      "src": "api/weekly-sheet.mjs",
+      "use": "@vercel/node"
+    },
+    {
       "src": "api/team-trash-retention.mjs",
       "use": "@vercel/node",
       "config": {
@@ -96,6 +100,10 @@
     }
   ],
   "routes": [
+    {
+      "src": "/api/weekly-sheet",
+      "dest": "/api/weekly-sheet.mjs"
+    },
     {
       "src": "/api/team-trash-retention",
       "dest": "/api/team-trash-retention.mjs"
