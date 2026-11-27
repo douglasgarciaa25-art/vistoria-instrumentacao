@@ -10,7 +10,7 @@
  $('planCount').textContent=actionRows.length+' pendência(s) encontrada(s)';$('planList').innerHTML=actionRows.map(({record:r,ref},i)=>'<article class="entry"><div class="plan-title"><h3>'+esc(r.tag)+' · '+esc(r.area)+'</h3><span class="badge">'+esc(r.priority)+'</span></div><p>'+esc(r.problem)+'</p><p><b>Ação:</b> '+esc(r.action||'A definir')+'</p><p class="'+(late(r)?'deadline-alert':'muted')+'">'+esc(r.owner||'Responsável a definir')+' · '+(r.deadline?(late(r)?'Vencido: ':'Prazo: ')+esc(datefmt(r.deadline)):'Sem prazo')+'</p><p class="muted">'+esc(ref)+' · '+esc(r.status)+'</p><button type="button" class="secondary" data-plan-open="'+i+'">Abrir ponto para tratar</button></article>').join('')||'<p class="empty">Nenhuma pendência com estes filtros.</p>'}
  ['planOwner','planPriority','planDeadline'].forEach(id=>$(id).addEventListener('input',refreshPlan));plan.addEventListener('toggle',()=>{if(plan.open)refreshPlan()});
  $('planList').onclick=e=>{const i=e.target.dataset.planOpen;if(i===undefined)return;const target=actionRows[+i];if(!target)return;guarded(async()=>{await persistCurrent();const row=await requestResult(db.transaction('reports').objectStore('reports').get(target.id));if(!row)return notify('Esta vistoria não está mais no histórico.');reset();activeReportId=row.id;fill(row.document);await persistCurrent();document.querySelector('[data-view="review"]').click();const button=$('entries').querySelector('[data-edit="'+target.index+'"]');if(button)button.click()})};
- const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><label>Origem<select id="reportScope"><option value="current">Vistoria atual</option><option value="all">Todas as vistorias</option></select></label><label>Buscar ponto<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
+ const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><p class="muted report-origin">Origem: <strong>Todas as vistorias</strong></p><label>Buscar ponto<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
  function reportPointMatches(r,query,status){
   const normalized=String(query||'').trim().toLocaleLowerCase('pt-BR');
   const closed=['Corrigido','Sem pendência'].includes(r.status);
@@ -34,9 +34,25 @@
  const currentKey=r=>pointKey(activeReportId,r.pointId);
  function scopedRows(){
   const active=data(), result=[];
-  const add=(id,doc)=>{for(const [i,r] of (doc.records||[]).entries())if(r.pointId)result.push({r,i,id,doc,key:pointKey(id,r.pointId)})};
+  const add=(id,source)=>{
+   // Registros antigos ainda não abertos podem não ter pointId. Normaliza somente
+   // uma cópia de leitura, sem escrever no histórico ou alterar a sincronização.
+   const points=source.records||[], used=new Set();
+   const normalized=points.map((r,i)=>{
+    if(!r||typeof r!=='object')return r;
+    let key=typeof r.pointId==='string'&&r.pointId.trim()?r.pointId:'';
+    if(!key||used.has(key)){
+     key='legacy:'+String(id||'unknown')+':'+(i+1);
+     while(used.has(key))key+=':legacy';
+    }
+    used.add(key);
+    return key===r.pointId?r:{...r,pointId:key};
+   });
+   const doc={...source,records:normalized};
+   for(const [i,r] of normalized.entries())if(r?.pointId)result.push({r,i,id,doc,key:pointKey(id,r.pointId)});
+  };
   add(activeReportId,active);
-  if($('reportScope').value==='all')for(const row of historyItems)if(row.id!==activeReportId&&row.document)add(row.id,row.document);
+  for(const row of historyItems)if(row.id!==activeReportId&&row.document)add(row.id,row.document);
   return result;
  }
  function selectedRows(){return scopedRows().filter(row=>selectedPoints.has(row.key))}
@@ -156,7 +172,7 @@
   invalidateSummary();filterReport();
  }
  $('reportStatusFilter').onchange=applyScopeOrStatus;
- $('reportScope').onchange=applyScopeOrStatus;
+
  $('onlySelectedPoints').onchange=filterReport;
  $('togglePointSelection').onclick=()=>{selectionDialog.showModal();filterReport()};
  $('closePointSelection').onclick=$('confirmPointSelection').onclick=()=>selectionDialog.close();
