@@ -1,4 +1,4 @@
-const CACHE='vistoria-shell-v119-identificacao-lixeira';
+const CACHE='vistoria-shell-v120-atualizacao-unificada';
 importScripts('/background-sync.js');
 const FILES=['/background-sync.js','/point-identity.js','/point-trash.js','/management-tools.js','/voice-dictation.js','/trash-actions.js','/export-current.js','/point-actions.js','/pdf-import.js','/analysis-progress.js','/descritivo-core.js','/descritivo-guiado.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/photo-order.js','/enhancements.js','/layout.css','/cloud-dashboard.css','/layout.js','/google-drive-sync.js','/team-merge.mjs','/team-live.mjs','/','/index.html','/history.js','/form-wizard.js','/pdf-export.js','/improvements.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/vistoria-icon-192.png','/vistoria-icon-512.png','/vistoria-logo.svg'];
 const PDF_ASSET_CACHE='vistoria-pdf-preview-5.4.624';
@@ -31,7 +31,7 @@ self.addEventListener('fetch',event=>{
   }
  })());
 });
-self.addEventListener('message',event=>{if(event.data?.type==='ACTIVATE_UPDATE')self.skipWaiting()});
+self.addEventListener('message',event=>{if(event.data?.type==='ACTIVATE_UPDATE')event.waitUntil(self.skipWaiting())});
 
 self.addEventListener('sync',event=>{if(event.tag==='vistoria-resume')event.waitUntil((async()=>{const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)client.postMessage({type:'VISTORIA_RESUME'});})());});
 
