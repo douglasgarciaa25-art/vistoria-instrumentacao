@@ -4,6 +4,33 @@ import {pointChanges} from '../point-audit-core.mjs';
 import {applyReportDelta,canonicalReport} from '../team-merge.mjs';
 import {parseTeamOsQuery,scanTeamOsPage} from '../team-os-search.mjs';
 import {createPrivateReport,readPrivateReport} from '../team-drive.mjs';
+// Resumo da revisão excluída, sem transferir fotos nem o documento completo.
+export async function trashSummary(row,{db=teamDb,read=readPrivateReport}={}){
+ const clean=(v,n=180)=>typeof v==='string'?v.trim().slice(0,n):'';
+ const result={report_id:row.report_id,revision:row.revision,title:'',number:'',tags:[],point_count:null,deleted_by:null};
+ const id=encodeURIComponent(row.report_id);
+ const [doc,audit]=await Promise.allSettled([
+  row.drive_file_id?read(row.drive_file_id,{withPhotos:false}):Promise.resolve(null),
+  db('vistoria_audit?report_id=eq.'+id+'&action=eq.delete&revision=eq.'+encodeURIComponent(row.revision)+'&select=actor_name,actor_subject&order=occurred_at.desc&limit=1')
+ ]);
+ if(doc.status==='fulfilled'&&doc.value){
+  const d=doc.value;
+  result.title=clean(d.meta?.title);result.number=clean(d.meta?.number,100);
+  const points=Array.isArray(d.records)?d.records:[];
+  const removed=Array.isArray(d.deletedPoints)?d.deletedPoints.map(x=>x?.point):[];
+  result.tags=[...new Set([...points,...removed].map(p=>clean(p?.tag,80)).filter(Boolean))].slice(0,20);
+  result.point_count=points.length;
+ }
+ if(audit.status==='fulfilled'&&audit.value?.[0]){
+  const event=audit.value[0];
+  result.deleted_by=clean(event.actor_name)||null;
+  if(!result.deleted_by&&event.actor_subject){
+   try{const members=await db('vistoria_members?google_subject=eq.'+encodeURIComponent(event.actor_subject)+'&select=email&limit=1');result.deleted_by=clean(members?.[0]?.email)||null;}catch{}
+  }
+ }
+ result.partial=doc.status==='rejected'||audit.status==='rejected'||!result.deleted_by;
+ return result;
+}
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  const reply=(s,b)=>res.status(s).json(b);
@@ -41,6 +68,13 @@ export default async function handler(req,res){
  if(req.method==='GET'){
  if(req.query?.state==='1')return old?reply(200,{report_id:id,revision:old.revision,deleted_at:old.deleted_at||null,...(old.purged_at?{purged_at:old.purged_at,purge_completed_at:old.purge_completed_at||null}:{})}):reply(404,{error:'Vistoria não encontrada'});
  if(old?.purged_at)return reply(410,{error:'Prazo de 30 dias encerrado'});
+ if(req.query?.['trash-details']==='1'){
+  if(!old?.deleted_at)return reply(404,{error:'Vistoria não está na lixeira'});
+  const summary=await trashSummary(old);
+  const latest=(await teamDb(filter))[0];
+  if(!latest?.deleted_at||latest.purged_at||latest.revision!==old.revision)return reply(409,{error:'Estado da lixeira alterado'});
+  return reply(200,summary);
+ }
  if(!old||(old.deleted_at&&!(req.query?.history==='1')))return reply(404,{error:'Vistoria não encontrada'});
  if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,actor_name,drive_file_id&order=occurred_at.desc');const pointHistory=await teamDb('vistoria_point_audit?report_id=eq.'+encodeURIComponent(id)+'&select=point_id,action,revision,occurred_at,actor_subject,actor_name,tag_snapshot,work_order_snapshot,previous_status,current_status&order=occurred_at.desc&limit=500');const members=await teamDb('vistoria_members?select=google_subject,email');const names=new Map(members.map(v=>[v.google_subject,v.email]));return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,actor_email:names.get(event.actor_subject)||null,available:!!drive_file_id})),pointHistory:pointHistory.map(event=>({...event,actor_email:names.get(event.actor_subject)||null}))});}
  let fileId=old.drive_file_id;let selectedRevision=old.revision;

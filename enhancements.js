@@ -26,10 +26,17 @@
   const cached=rows.filter(r=>!local.includes(r)&&!shared.has(r.id));
   const format=(d)=>esc(new Date(d||0).toLocaleString('pt-BR'));
   const remaining=d=>Math.max(0,Math.ceil((Date.parse(d)+30*86400000-Date.now())/86400000));
-  const show=(id,row,item,team)=>'<div class="entry"><h3>'+esc(row?.document?.meta?.number||row?.document?.meta?.title||('Vistoria '+id.slice(0,8)))+'</h3><p class="muted">'+(team?'Lixeira da equipe':'Lixeira deste aparelho')+' · '+(item?'Excluída em '+format(item.deleted_at):'Removida em '+format(row?.deletedAt))+(row?' · '+row.document.records.length+' ponto(s)':'')+' · '+remaining(item?.deleted_at||row?.deletedAt)+' dia(s) para exclusão definitiva</p>'+((!team||index.admin)&&remaining(item?.deleted_at||row?.deletedAt)>0?'<button type="button" data-restore-trash="'+esc(id)+'">'+(team?'Restaurar na equipe':'Restaurar formulário')+'</button>':'<p class="muted">Restauração indisponível ou prazo encerrado.</p>')+'</div>';
+  const show=(id,row,item,team)=>{
+   const doc=row?.document,localTags=[...new Set((doc?.records||[]).map(p=>p.tag).filter(Boolean))];
+   const tags=item?.tags?.length?item.tags:localTags,title=item?.title||doc?.meta?.title||'',number=item?.number||doc?.meta?.number||'';
+   const date=item?.deleted_at||row?.deletedAt,days=remaining(date),count=item?.point_count??doc?.records?.length;
+   const heading=tags.length?tags.join(' · '):title||number||'Vistoria sem identificação';
+   const description=[title!==heading?title:'',number!==heading?number:''].filter(Boolean).join(' · ');
+   return '<div class="entry"><h3>'+esc(heading)+'</h3>'+(description?'<p>'+esc(description)+'</p>':'')+'<p class="muted">'+(team?'Lixeira da equipe':'Lixeira deste aparelho')+' · '+(Number.isInteger(count)?count+' ponto(s) · ':'')+'Excluída em '+format(date)+'</p>'+(team?'<p class="muted">Excluída por: '+esc(item?.deleted_by||'Não registrado')+'</p>':'')+'<p><strong>'+days+' dia(s) para exclusão definitiva</strong></p>'+((!team||index.admin)&&days>0?'<button type="button" data-restore-trash="'+esc(id)+'">'+(team?'Restaurar na equipe':'Restaurar formulário')+'</button>':'<p class="muted">Restauração indisponível ou prazo encerrado.</p>')+'</div>';
+  };
   $('trashCount').textContent=local.length+shared.size+cached.length;$('emptyTrash').disabled=local.length===0;
   $('trashSyncState').textContent=index.stamp?'Lixeira da equipe consultada em '+new Date(index.stamp).toLocaleTimeString('pt-BR'):'Lixeira compartilhada: aguardando conexão e confirmação.';
-  $('trashList').innerHTML=[...Array.from(shared.values(),item=>show(item.report_id,byId.get(item.report_id),item,true)),...cached.map(r=>show(r.id,r,null,true)),...local.map(r=>show(r.id,r,null,false))].join('')||'<p class="muted">A lixeira está vazia.</p>';
+  $('trashList').innerHTML=[...Array.from(shared.values(),item=>({id:item.report_id,row:byId.get(item.report_id),item,team:true})),...cached.map(row=>({id:row.id,row,item:null,team:true})),...local.map(row=>({id:row.id,row,item:null,team:false}))].sort((a,b)=>Date.parse(b.item?.deleted_at||b.row?.deletedAt)-Date.parse(a.item?.deleted_at||a.row?.deletedAt)).map(x=>show(x.id,x.row,x.item,x.team)).join('')||'<p class="muted">A lixeira está vazia.</p>';
  };
  $('syncTrash').onclick=async()=>{const b=$('syncTrash');b.disabled=true;try{if(!window.VistoriaTeamTrash?.sync)throw Error('Sincronização da equipe indisponível.');await window.VistoriaTeamTrash.sync();await window.refreshTrash()}catch(e){notify(e.message)}finally{b.disabled=false}};
  $('emptyTrash').onclick=()=>guarded(async()=>{
