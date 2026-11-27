@@ -1254,7 +1254,7 @@
       localStorage.setItem(key,JSON.stringify(baseline));await showTeam();
     });
   }
-  let teamViewGeneration=0;
+  let teamViewGeneration=0,adminPanelOpen=false;
   async function showTeam(){
     const generation=++teamViewGeneration;
     const target=$('gdrive-team-users'),status=$('gdrive-team-status');
@@ -1267,14 +1267,27 @@
       if(member?.status!=='approved'){setTeamSyncStatus('');return;}
       try{await showReports(member,box,status)}catch(e){status.textContent=e.message;}
       if(member.role!=='admin')return;
-      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
+      const adminPanel=document.createElement('details');adminPanel.className='cloud-disclosure cloud-admin-panel';const adminTitle=document.createElement('summary');adminTitle.textContent='Administração de usuários';adminPanel.append(adminTitle);adminPanel.open=adminPanelOpen;adminPanel.addEventListener('toggle',()=>{if(adminPanel.isConnected)adminPanelOpen=adminPanel.open});box.append(adminPanel);const authorize=document.createElement('button');authorize.type='button';authorize.textContent='Autorizar Google Drive da equipe';
       authorize.onclick=async()=>{try{const r=await fetch('/api/team-drive-authorize',{method:'POST',headers:{Authorization:'Bearer '+accessToken}});const d=await r.json();if(!r.ok)throw Error(d.error);location.assign(d.url)}catch(e){status.textContent=e.message}};
       adminPanel.append(authorize);
-      const {members}=await teamRequest('GET',null,true);
+      const addUser=document.createElement('button');addUser.type='button';addUser.textContent='+ Adicionar usuário';adminPanel.append(addUser);
+      const inviteForm=document.createElement('form');inviteForm.hidden=true;inviteForm.className='cloud-member-row';adminPanel.append(inviteForm);
+      const emailLabel=document.createElement('label');emailLabel.textContent='E-mail da conta Google';const emailInput=document.createElement('input');emailInput.type='email';emailInput.required=true;emailInput.maxLength=254;emailInput.autocomplete='off';emailInput.placeholder='tecnico@exemplo.com';emailLabel.append(emailInput);inviteForm.append(emailLabel);
+      const nameLabel=document.createElement('label');nameLabel.textContent='Nome completo do técnico';const nameInput=document.createElement('input');nameInput.required=true;nameInput.minLength=3;nameInput.maxLength=100;nameLabel.append(nameInput);inviteForm.append(nameLabel);
+      const hint=document.createElement('p');hint.textContent='O acesso será liberado quando o técnico entrar com exatamente esta conta Google verificada.';inviteForm.append(hint);
+      const inviteSubmit=document.createElement('button');inviteSubmit.type='submit';inviteSubmit.textContent='Autorizar usuário';inviteForm.append(inviteSubmit);
+      const inviteStatus=document.createElement('p');inviteStatus.setAttribute('role','status');inviteForm.append(inviteStatus);
+      addUser.onclick=()=>{inviteForm.hidden=!inviteForm.hidden;if(!inviteForm.hidden)emailInput.focus()};
+      inviteForm.onsubmit=async e=>{e.preventDefault();inviteSubmit.disabled=true;try{await teamRequest('POST',{action:'invite',email:emailInput.value,name:nameInput.value});adminPanelOpen=true;await showTeam();status.textContent='Usuário pré-autorizado. Basta entrar com a conta Google cadastrada.';}catch(err){inviteStatus.textContent=err.message}finally{inviteSubmit.disabled=false}};
+      const {members,invites=[]}=await teamRequest('GET',null,true);
+      for(const inv of invites){
+        const row=document.createElement('div');row.className='cloud-member-row';const info=document.createElement('p');info.textContent=inv.technician_name+' — '+inv.email+' — Pré-autorizado · aguardando primeiro acesso';row.append(info);
+        const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Cancelar autorização';revoke.onclick=async()=>{if(!confirm('Cancelar a autorização de '+inv.email+'?'))return;revoke.disabled=true;try{await teamRequest('POST',{action:'revoke-invite',email:inv.email});adminPanelOpen=true;await showTeam()}catch(err){status.textContent=err.message;revoke.disabled=false}};row.append(revoke);adminPanel.append(row);
+      }
       for(const m of members){
-        const row=document.createElement('div');row.textContent=m.email+' — '+m.status+' — '+(m.technician_name||'Nome não registrado')+' ';
+        const row=document.createElement('div');row.textContent=m.email+' — '+({approved:'Aprovado',pending:'Pendente',blocked:'Bloqueado'}[m.status]||m.status)+' — '+(m.technician_name||'Nome não registrado')+' ';
         if(m.status==='approved'){const b=document.createElement('button');b.type='button';b.textContent='Cadastrar nome do técnico';b.onclick=async()=>{const name=prompt('Nome completo do técnico aprovado (vinculado à conta Google '+m.email+'):',m.technician_name||'');if(name===null)return;try{await teamRequest('POST',{action:'set-name',subject:m.google_subject,name});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);}
-        if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']]){
+        if(m.role!=='admin')for(const [label,value] of [['Aprovar','approved'],['Bloquear','blocked']].filter(([,value])=>m.status!==value)){
           const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=async()=>{try{await teamRequest('POST',{subject:m.google_subject,status:value});await showTeam()}catch(e){status.textContent=e.message}};row.append(b);
         }
         row.className='cloud-member-row';adminPanel.append(row);

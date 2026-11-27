@@ -13,11 +13,27 @@ export default async function handler(req,res){
  await teamDb('vistoria_members',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify({google_subject:identity.subject,email:identity.email,role:admin?'admin':'technician',status:admin?'approved':'pending'})});
  member=await memberFor(identity);
  }
+ if(member?.status==='pending'&&member.role==='technician'){
+  const claim=await teamDb('rpc/vistoria_invite_action',{method:'POST',body:JSON.stringify({p_action:'claim',p_actor:identity.subject,p_email:identity.email,p_name:null})});
+  if(claim==='claimed')member=await memberFor(identity);
+ }
  return reply(200,{member});
  }
  if(req.method==='GET'&&req.query?.list!=='1')return reply(200,{member});
  if(member?.status!=='approved'||member.role!=='admin')return reply(403,{error:'Acesso administrativo necessário.'});
- if(req.method==='GET')return reply(200,{members:await teamDb('vistoria_members?select=google_subject,email,role,status,technician_name,requested_at&order=requested_at.desc')});
+ if(req.method==='GET'){
+  const [members,invites]=await Promise.all([teamDb('vistoria_members?select=google_subject,email,role,status,technician_name,requested_at&order=requested_at.desc'),teamDb('vistoria_user_invites?claimed_at=is.null&revoked_at=is.null&select=email,technician_name,created_at&order=created_at.desc')]);
+  return reply(200,{members,invites});
+ }
+ if(req.method==='POST'&&['invite','revoke-invite'].includes(req.body?.action)){
+  const email=String(req.body.email||'').trim().toLowerCase();
+  const name=String(req.body.name||'').normalize('NFC').trim().replace(/\s+/g,' ');
+  const invite=req.body.action==='invite';
+  if(email.length>254||!/^[a-z0-9._+%-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)||(invite&&(name.length<3||name.length>100||/[\x00-\x1f<>]/.test(name))))return reply(400,{error:'Informe e-mail e nome válidos.'});
+  const result=await teamDb('rpc/vistoria_invite_action',{method:'POST',body:JSON.stringify({p_action:invite?'invite':'revoke',p_actor:identity.subject,p_email:email,p_name:invite?name:null})});
+  if(['invited','revoked'].includes(result))return reply(200,{ok:true});
+  return reply(result==='forbidden'?403:result==='invalid'?400:409,{error:({registered:'Usuário já cadastrado. Utilize a lista de usuários para administrar seu acesso.',exists:'E-mail já autorizado previamente.',missing:'Autorização não encontrada ou já utilizada.',forbidden:'Acesso administrativo necessário.'})[result]||'Não foi possível alterar a autorização.'});
+ }
  if(req.method==='POST'&&req.body?.action==='set-name'){
  const subject=String(req.body.subject||'');
  const name=String(req.body.name||'').normalize('NFC').trim().replace(/\s+/g,' ');
