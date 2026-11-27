@@ -42,6 +42,18 @@
   else if(child.classList.contains('actions')&&child.querySelector('#submit'))group.set(child,{step:4,optional:false});
  }
 
+ // Agrupa visualmente sem recriar controles, valores ou eventos.
+ const quickHeadings=[];
+ const quickSections=[['Identificação do equipamento','tag'],['Condição e situação','condition'],['Impacto e consequências','impact'],['Ação e acompanhamento','action']];
+ for(const [title,id] of quickSections){
+  const label=document.getElementById(id)?.closest('label');
+  if(!label||label.parentElement!==fields)continue;
+  const heading=document.createElement('h3');heading.className='quick-section-title';heading.textContent=title;heading.hidden=true;label.before(heading);quickHeadings.push(heading);
+ }
+ const analysis=document.getElementById('analysisDraft')?.closest('details');
+ const editor=document.getElementById('view-editor');
+ const submitRow=document.getElementById('submit').closest('.actions');
+ submitRow?.classList.add('quick-save-row');
  const style=document.createElement('style');
  style.textContent=[
   '#identification #meta[hidden],#identification > details[hidden],#view-editor .editor-steps[hidden],#form .wizard-pending[hidden],#form .wizard-pending button[hidden]{display:none!important}',
@@ -103,6 +115,7 @@
  try{quickMode=localStorage.getItem('vistoria.formMode')!=='guided'}catch{}
  function changeMode(quick){
   quickMode=quick;
+  if(quick&&analysis&&!document.getElementById('analysisDraft')?.value.trim())analysis.open=false;
   try{localStorage.setItem('vistoria.formMode',quick?'quick':'guided')}catch{}
   render();
  }
@@ -215,6 +228,9 @@
   if(document.getElementById('status')?.value==='Corrigido')expanded[3]=true;
  }
  function render(){
+  form.dataset.fillMode=quickMode?'quick':'guided';
+  if(editor)editor.dataset.fillMode=form.dataset.fillMode;
+  for(const heading of quickHeadings)heading.hidden=!quickMode;
   wizard.hidden=quickMode;
   footer.hidden=quickMode;
   modeBar.querySelector('#wizardQuickMode').setAttribute('aria-pressed',String(quickMode));
@@ -356,5 +372,6 @@
    });
   }
  },true);
+ if(quickMode&&analysis&&!document.getElementById('analysisDraft')?.value.trim())analysis.open=false;
  render();
 })();
