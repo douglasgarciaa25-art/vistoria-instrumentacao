@@ -10,7 +10,7 @@
  $('planCount').textContent=actionRows.length+' pendência(s) encontrada(s)';$('planList').innerHTML=actionRows.map(({record:r,ref},i)=>'<article class="entry"><div class="plan-title"><h3>'+esc(r.tag)+' · '+esc(r.area)+'</h3><span class="badge">'+esc(r.priority)+'</span></div><p>'+esc(r.problem)+'</p><p><b>Ação:</b> '+esc(r.action||'A definir')+'</p><p class="'+(late(r)?'deadline-alert':'muted')+'">'+esc(r.owner||'Responsável a definir')+' · '+(r.deadline?(late(r)?'Vencido: ':'Prazo: ')+esc(datefmt(r.deadline)):'Sem prazo')+'</p><p class="muted">'+esc(ref)+' · '+esc(r.status)+'</p><button type="button" class="secondary" data-plan-open="'+i+'">Abrir ponto para tratar</button></article>').join('')||'<p class="empty">Nenhuma pendência com estes filtros.</p>'}
  ['planOwner','planPriority','planDeadline'].forEach(id=>$(id).addEventListener('input',refreshPlan));plan.addEventListener('toggle',()=>{if(plan.open)refreshPlan()});
  $('planList').onclick=e=>{const i=e.target.dataset.planOpen;if(i===undefined)return;const target=actionRows[+i];if(!target)return;guarded(async()=>{await persistCurrent();const row=await requestResult(db.transaction('reports').objectStore('reports').get(target.id));if(!row)return notify('Esta vistoria não está mais no histórico.');reset();activeReportId=row.id;fill(row.document);await persistCurrent();document.querySelector('[data-view="review"]').click();const button=$('entries').querySelector('[data-edit="'+target.index+'"]');if(button)button.click()})};
- const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><label>Buscar ponto neste relatório<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
+ const search=document.createElement('div');search.className='report-search';search.innerHTML='<div class="report-filters"><label>Origem<select id="reportScope"><option value="current">Vistoria atual</option><option value="all">Todas as vistorias</option></select></label><label>Buscar ponto<input type="search" id="reportSearch" placeholder="TAG, OS, área ou descrição"></label><label>Situação<select id="reportStatusFilter"><option value="">Todos os pontos</option><option value="Pendente">Pendentes</option><option value="Em acompanhamento">Em acompanhamento</option><option value="finalizados">Finalizados</option></select></label></div><p id="reportSearchCount" class="muted" aria-live="polite"></p>';$('entries').before(search);
  function reportPointMatches(r,query,status){
   const normalized=String(query||'').trim().toLocaleLowerCase('pt-BR');
   const closed=['Corrigido','Sem pendência'].includes(r.status);
@@ -30,7 +30,46 @@
  document.body.append(selectionDialog);$('selectionDialogFilters').append(search);
  const dock=document.createElement('div');dock.className='report-export-dock';dock.append($('pdfSelectedPoints'));$('view-review').insertBefore(dock,$('entries').closest('.card'));
  const emptySelection=document.createElement('p');emptySelection.className='report-empty-selection';emptySelection.textContent='Escolha os pontos para montar a prévia.';$('entries').before(emptySelection);
- window.VistoriaReportSelection=()=>records.filter(r=>selectedPoints.has(r.pointId));
+ const pointKey=(reportId,pointId)=>JSON.stringify([reportId,pointId]);
+ const currentKey=r=>pointKey(activeReportId,r.pointId);
+ function scopedRows(){
+  const active=data(), result=[];
+  const add=(id,doc)=>{for(const [i,r] of (doc.records||[]).entries())if(r.pointId)result.push({r,i,id,doc,key:pointKey(id,r.pointId)})};
+  add(activeReportId,active);
+  if($('reportScope').value==='all')for(const row of historyItems)if(row.id!==activeReportId&&row.document)add(row.id,row.document);
+  return result;
+ }
+ function selectedRows(){return scopedRows().filter(row=>selectedPoints.has(row.key))}
+ window.VistoriaReportSelection=()=>selectedRows().map(({r})=>r);
+ window.VistoriaSelectedReportRows=selectedRows;
+ function selectedSnapshots(){
+  const groups=new Map();
+  for(const row of selectedRows()){
+   if(!groups.has(row.id))groups.set(row.id,{doc:row.doc,ids:new Set()});
+   groups.get(row.id).ids.add(row.r.pointId);
+  }
+  return [...groups.values()].map(({doc,ids})=>selectedReportSnapshot(doc,ids)).filter(Boolean);
+ }
+ const otherPreview=document.createElement('div');
+ otherPreview.id='otherSelectedPoints';
+ $('entries').after(otherPreview);
+ function renderSelectedPreview(){
+  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{
+   const r=records[i];entry.hidden=!r||!selectedPoints.has(currentKey(r));
+  });
+  otherPreview.replaceChildren();
+  for(const row of selectedRows().filter(row=>row.id!==activeReportId)){
+   const {r,doc,i}=row, article=document.createElement('article');article.className='entry';
+   const h=document.createElement('h3');h.textContent='Ponto '+String(i+1).padStart(2,'0')+' · '+(r.tag||'TAG não informada');article.append(h);
+   const source=document.createElement('p');source.className='muted';source.textContent=[doc.meta?.number,doc.meta?.workOrder?'OS '+doc.meta.workOrder:'',r.area,r.status,r.priority].filter(Boolean).join(' · ');article.append(source);
+   const problem=document.createElement('p');problem.textContent=r.problem||'Sem descrição';article.append(problem);
+   for(const [label,value] of reportPointDetails(r)){const p=document.createElement('p');p.textContent=label+': '+value;article.append(p)}
+   if(r.photos?.length){const b=document.createElement('button');b.type='button';b.className='secondary';b.textContent='Ver fotos / comparar';b.onclick=()=>openPhotos(r.photos,r.tag);article.append(b)}
+   otherPreview.append(article);
+  }
+  emptySelection.hidden=selectedPoints.size>0;
+  $('makeSummary').disabled=!selectedPoints.size;
+ }
  function selectedReportSnapshot(doc,ids){
   const indices=doc.records.map((r,i)=>ids.has(r.pointId)?i:-1).filter(i=>i>=0);
   if(!indices.length)return null;
@@ -49,10 +88,12 @@
   return false;
  }
  function updatePointSelection(){
-  const available=new Set(records.map(r=>r.pointId).filter(Boolean));
+  const rows=scopedRows();
+  const status=$('reportStatusFilter').value;
+  const available=new Set(rows.filter(({r})=>reportPointMatches(r,'',status)).map(row=>row.key));
   for(const id of selectedPoints)if(!available.has(id))selectedPoints.delete(id);
-  initialSelectionPending=initialPointSelection(records,selectedPoints,initialSelectionPending);
-  $('pointSelectionCount').textContent=selectedPoints.size+' / '+records.length+' '+(records.length===1?'ponto':'pontos');
+  if(initialSelectionPending&&rows.length){if(rows.length===1&&!$('reportStatusFilter').value)selectedPoints.add(rows[0].key);initialSelectionPending=false}
+  $('pointSelectionCount').textContent=selectedPoints.size+' / '+rows.length+' '+(rows.length===1?'ponto':'pontos');
   $('selectionDialogCount').textContent=selectedPoints.size+' selecionado(s)';
   $('togglePointSelection').textContent=selectedPoints.size?'Alterar seleção':'Selecionar pontos';
   $('clearPointSelection').disabled=!selectedPoints.size;
@@ -61,36 +102,37 @@
    const r=records[i];if(!r)return;
    let input=entry.querySelector('[data-select-point]');
    if(!input){const label=document.createElement('label');label.className='report-selection-check';input=document.createElement('input');input.type='checkbox';label.append(input,document.createTextNode(' Incluir no relatório selecionado'));entry.prepend(label)}
-   input.dataset.selectPoint=r.pointId||'';input.disabled=!r.pointId;
-   input.checked=!!r.pointId&&selectedPoints.has(r.pointId);
+   input.dataset.selectPoint=r.pointId?currentKey(r):'';input.disabled=!r.pointId;
+   input.checked=!!r.pointId&&selectedPoints.has(currentKey(r));
    input.setAttribute('aria-label','Selecionar ponto '+(i+1)+' '+(r.tag||''));
   });
  }
  function filterReport(){
   if(filterReportId!==activeReportId){filterReportId=activeReportId;selectedPoints.clear();initialSelectionPending=true;invalidateSummary();$('onlySelectedPoints').checked=true;$('reportSearch').value='';$('reportStatusFilter').value='';if(selectionDialog.open)selectionDialog.close()}
   updatePointSelection();
-  const preview=true;
-  $('entries').querySelectorAll('.entry').forEach((entry,i)=>{const r=records[i];entry.hidden=!r||!selectedPoints.has(r.pointId)});
-  emptySelection.hidden=!preview||selectedPoints.size>0;
-  emptySelection.textContent=records.length?'Escolha os pontos para montar a prévia.':'Adicione um ponto na aba Vistoria.';
-  $('togglePointSelection').disabled=!records.length;
-  $('makeSummary').disabled=!selectedPoints.size;
+  renderSelectedPreview();
+  const total=scopedRows().length;
+  emptySelection.textContent=total?'Escolha os pontos para montar a prévia.':'Nenhum ponto disponível neste escopo.';
+  $('togglePointSelection').disabled=false;
   if(selectionDialog.open)renderSelectionDialog();
  }
  function selectableRows(){
   const q=$('reportSearch').value,status=$('reportStatusFilter').value;
-  return records.map((r,i)=>({r,i})).filter(({r})=>r.pointId&&reportPointMatches(r,q,status));
+  return scopedRows().filter(({r,doc})=>reportPointMatches({...r,pointWorkOrder:[r.pointWorkOrder,doc.meta?.workOrder,doc.meta?.number].filter(Boolean).join(' ')},q,status));
  }
  function renderSelectionDialog(){
   const rows=selectableRows(),list=$('selectionDialogList');list.replaceChildren();
-  for(const {r,i} of rows){
+  for(const {r,i,doc,key} of rows){
    const label=document.createElement('label');label.className='selection-dialog-row';
-   const input=document.createElement('input');input.type='checkbox';input.dataset.dialogPoint=r.pointId;input.checked=selectedPoints.has(r.pointId);
+   const input=document.createElement('input');input.type='checkbox';input.dataset.dialogPoint=key;input.checked=selectedPoints.has(key);
    const text=document.createElement('span');const title=document.createElement('strong');title.textContent='Ponto '+String(i+1).padStart(2,'0')+' · '+(r.tag||'TAG não informada');
-   const info=document.createElement('small');info.textContent=[r.equipment,r.status,r.priority].filter(Boolean).join(' · ');text.append(title,info);label.append(input,text);list.append(label);
+   const info=document.createElement('small');info.textContent=[doc.meta?.number,doc.meta?.workOrder?'OS '+doc.meta.workOrder:'',r.area,r.equipment,r.status,r.priority].filter(Boolean).join(' · ');text.append(title,info);label.append(input,text);list.append(label);
   }
-  $('reportSearchCount').textContent=rows.length+' de '+records.length+' pontos disponíveis';
+  $('reportSearchCount').textContent=rows.length+' de '+scopedRows().length+' pontos disponíveis';
   if(!rows.length){const message=document.createElement('p');message.className='muted';message.textContent='Nenhum ponto encontrado.';list.append(message)}
+  const visibleSelected=rows.filter(row=>selectedPoints.has(row.key)).length;
+  const outside=selectedPoints.size-visibleSelected;
+  $('selectionDialogCount').textContent=selectedPoints.size+' selecionado(s)'+(outside?' · '+outside+' fora da busca atual':'');
   $('selectVisiblePoints').disabled=!rows.length;
  }
 
@@ -105,25 +147,34 @@
    details.append(dl);entry.insertBefore(details,actions);
   });
  }
- $('reportSearch').oninput=filterReport;$('reportStatusFilter').onchange=filterReport;
+ $('reportSearch').oninput=filterReport;
+ function applyScopeOrStatus(){
+  initialSelectionPending=false;
+  const status=$('reportStatusFilter').value;
+  const allowed=new Set(scopedRows().filter(({r})=>reportPointMatches(r,'',status)).map(row=>row.key));
+  for(const id of selectedPoints)if(!allowed.has(id))selectedPoints.delete(id);
+  invalidateSummary();filterReport();
+ }
+ $('reportStatusFilter').onchange=applyScopeOrStatus;
+ $('reportScope').onchange=applyScopeOrStatus;
  $('onlySelectedPoints').onchange=filterReport;
  $('togglePointSelection').onclick=()=>{selectionDialog.showModal();filterReport()};
  $('closePointSelection').onclick=$('confirmPointSelection').onclick=()=>selectionDialog.close();
- $('selectionDialogList').addEventListener('change',e=>{const id=e.target.dataset.dialogPoint;if(!id)return;initialSelectionPending=false;if(e.target.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();updatePointSelection();$('entries').querySelectorAll('.entry').forEach((entry,i)=>{entry.hidden=!selectedPoints.has(records[i]?.pointId)});emptySelection.hidden=selectedPoints.size>0;$('makeSummary').disabled=!selectedPoints.size});
+ $('selectionDialogList').addEventListener('change',e=>{const id=e.target.dataset.dialogPoint;if(!id)return;initialSelectionPending=false;if(e.target.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
  function invalidateSummary(){const field=$('summaryText');if(field)field.value='';}
  $('entries').addEventListener('change',e=>{const input=e.target;if(!input.matches('[data-select-point]')||!input.dataset.selectPoint)return;const id=input.dataset.selectPoint;initialSelectionPending=false;if(input.checked)selectedPoints.add(id);else selectedPoints.delete(id);invalidateSummary();filterReport()});
- $('selectVisiblePoints').onclick=()=>{initialSelectionPending=false;for(const {r} of selectableRows())selectedPoints.add(r.pointId);invalidateSummary();filterReport()};
+ $('selectVisiblePoints').onclick=()=>{initialSelectionPending=false;for(const {key} of selectableRows())selectedPoints.add(key);invalidateSummary();filterReport()};
  $('clearPointSelection').onclick=()=>{selectedPoints.clear();$('onlySelectedPoints').checked=true;initialSelectionPending=false;invalidateSummary();filterReport()};
  const previewButton=document.createElement('button');previewButton.type='button';previewButton.className='secondary';previewButton.id='previewSelectedPdf';previewButton.textContent='Visualizar PDF';dock.prepend(previewButton);
  function generateSelectedPdf(preview=false){return guarded(async()=>{
-  const snapshot=selectedReportSnapshot(data(),selectedPoints);
-  if(!snapshot)return notify('Selecione pelo menos um ponto já registrado.');
+  const snapshots=selectedSnapshots();
+  if(!snapshots.length)return notify('Selecione pelo menos um ponto já registrado.');
   const pending=data().pending;
   if(pending&&(pending.editing!==null&&pending.editing!==undefined||pending.fields?.tag||pending.fields?.problem||pending.photos?.length)){
    if(!confirm('Existem alterações no formulário ainda não aplicadas. O PDF selecionado utilizará somente os pontos já registrados. Continuar?'))return;
   }
   const button=$('pdfSelectedPoints');button.disabled=true;
-  try{if(preview)await exportReportDocuments([snapshot],[],{preview:true});else await exportReportDocuments([snapshot])}finally{filterReport()}
+  try{if(preview)await exportReportDocuments(snapshots,[],{preview:true});else await exportReportDocuments(snapshots)}finally{filterReport()}
  });}
  $('pdfSelectedPoints').onclick=()=>generateSelectedPdf();previewButton.onclick=()=>generateSelectedPdf(true);
  document.addEventListener('vistoria-saved',filterReport);
@@ -160,7 +211,7 @@
  const audit=document.createElement('details');audit.className='card';audit.innerHTML='<summary>Revisão antes de exportar</summary><p class="muted">Confira os campos faltantes e os pontos ainda não adicionados. Avisos não impedem a emissão, mas devem ser revisados.</p><button type="button" id="auditReport" class="secondary">Conferir vistoria aberta</button><div id="auditResults" aria-live="polite"></div>';$('view-review').append(audit);
  function inspect(d){const issues=[],m=d.meta||{};for(const [key,label] of [['number','Referência'],['date','Data'],['author','Responsável'],['objective','Objetivo']])if(!String(m[key]||'').trim())issues.push(label+' não preenchido');if(!d.records.length)issues.push('Nenhum ponto adicionado');d.records.forEach((r,i)=>{const tag=r.tag||'Ponto '+(i+1);for(const [key,label] of [['tag','TAG'],['area','Área'],['problem','Condição encontrada']])if(!String(r[key]||'').trim())issues.push(tag+': '+label+' não preenchido');if(['Pendente','Em acompanhamento'].includes(r.status)){for(const [key,label] of [['action','Ação'],['owner','Responsável pela ação'],['deadline','Prazo']])if(!String(r[key]||'').trim())issues.push(tag+': '+label+' a definir')}if(r.status==='Corrigido'&&(!r.completionDate||!r.completionWork))issues.push(tag+': conclusão sem data ou serviço descrito');if(!r.photos.length)issues.push(tag+': sem foto de evidência')});const pending=d.pending;if(pending&&(pending.fields?.tag||pending.fields?.problem||pending.photos?.length))issues.push(pending.editing!==null&&pending.editing!==undefined?'Existe uma edição ainda não aplicada ao ponto':'Existe um ponto preenchido ainda não adicionado');return issues}
  function drawAudit(docs){const counts=new Map();for(const d of docs){const key=normalize(d.meta.number);if(key)counts.set(key,(counts.get(key)||0)+1)}const result=docs.map((d,i)=>{const issues=inspect(d);if(counts.get(normalize(d.meta.number))>1)issues.push('Referência repetida no conjunto selecionado');return {label:d.meta.number||'Vistoria '+(i+1),issues}});$('auditResults').innerHTML=result.map(r=>'<div class="entry"><h3>'+esc(r.label)+'</h3>'+(r.issues.length?'<ul>'+r.issues.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'<p class="completion-detail">Campos verificados sem pendências de preenchimento.</p>')+'</div>').join('');return result}
- $('auditReport').onclick=()=>{const snapshot=selectedReportSnapshot(data(),selectedPoints);if(!snapshot)return notify('Selecione os pontos antes de revisar.');drawAudit([snapshot]);audit.open=true};
+ $('auditReport').onclick=()=>{const snapshots=selectedSnapshots();if(!snapshots.length)return notify('Selecione os pontos antes de revisar.');drawAudit(snapshots);audit.open=true};
  const exportPdf=exportReportDocuments;exportReportDocuments=async function(documents,ids=[],options={}){const result=drawAudit(documents),warnings=result.reduce((n,r)=>n+r.issues.length,0);if(warnings){audit.open=true;if(audit.parentElement?.tagName==='DETAILS')audit.parentElement.open=true;document.querySelector('[data-view="review"]').click();if(!confirm('A revisão encontrou '+warnings+' aviso(s) de preenchimento em '+documents.length+' vistoria(s).\n\nCancelar: revisar os detalhes na tela.\nOK: gerar o PDF mesmo assim, apenas com os pontos já adicionados.'))return}return exportPdf(documents,ids,options)};
  const originalWord=$('word').onclick;$('word').onclick=()=>guarded(async()=>{await persistCurrent();const result=drawAudit([data()]);if(result[0].issues.length){audit.open=true;if(audit.parentElement?.tagName==='DETAILS')audit.parentElement.open=true;if(!confirm('A revisão encontrou '+result[0].issues.length+' aviso(s). Gerar o Word mesmo assim?'))return}return originalWord()});
 })();

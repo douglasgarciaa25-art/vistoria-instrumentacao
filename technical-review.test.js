@@ -146,7 +146,7 @@ test('relatório: filtros de TAG, OS e situação preservam índices e dados',()
  assert.deepEqual(details(rows[1]),[]);
  assert.equal(JSON.stringify(rows),original);
  assert.match(s,/dd.textContent=String\(value\)/);
- assert.match(s,/entry.hidden=!r\|\|!selectedPoints.has\(r.pointId\)/);
+ assert.match(s,/entry.hidden=!r\|\|!selectedPoints.has\(currentKey\(r\)\)/);
  assert.match(s,/filterReportId!==activeReportId/);
  assert.match(s,/originalRender\(\);filterReport\(\);addReportDetails\(\);photoButtons\(\)/);
 });
@@ -181,7 +181,7 @@ test('PDF parcial contém somente IDs selecionados, fotos e números originais, 
  assert.equal(snapshot(doc,new Set()),null);
  partial.records[0].tag='alterado';assert.equal(JSON.stringify(doc),before);
  assert.match(source,/selectedPoints.clear\(\);\$\('onlySelectedPoints'\).checked=true/);
- assert.match(source,/await exportReportDocuments\(\[snapshot\]\)/);
+ assert.match(source,/await exportReportDocuments\(snapshots\)/);
  assert.match(readFileSync('pdf-export.js','utf8'),/reportDocument.exportPointNumbers\?\.\[i\]/);
 });
 
@@ -190,11 +190,11 @@ test('prévia inicia vazia e exibe somente os pontos marcados; seleção permane
  const source=readFileSync('workflow.js','utf8');
  assert.match(source,/id="onlySelectedPoints" checked hidden/);
  assert.match(source,/selectionDialog.showModal\(\)/);
- assert.match(source,/entry.hidden=!r\|\|!selectedPoints.has\(r.pointId\)/);
- assert.match(source,/selectedPoints.has\(r.pointId\)/);
- assert.match(source,/emptySelection.hidden=!preview\|\|selectedPoints.size>0/);
+ assert.match(source,/entry.hidden=!r\|\|!selectedPoints.has\(currentKey\(r\)\)/);
+ assert.match(source,/selectedPoints.has\(currentKey\(r\)\)/);
+ assert.match(source,/emptySelection.hidden=selectedPoints.size>0/);
  assert.match(source,/\$\('togglePointSelection'\).onclick=/);
- assert.match(source,/selectedReportSnapshot\(data\(\),selectedPoints\)/);
+ assert.match(source,/selectedSnapshots\(\)/);
 });
 
 test('resumo executivo exclui pontos não selecionados e não inclui conclusão geral em seleção parcial',()=>{
@@ -218,4 +218,4 @@ test('diálogo e opções recolhíveis mantêm os controles existentes',()=>{
  assert.match(source,/selectionDialog.showModal\(\)/);assert.match(source,/selectionDialogList/);assert.match(source,/details.append\(tools\)/);assert.match(source,/extras.append\(trash\)/);assert.match(source,/extras.append\(audit\)/);assert.match(source,/report.insertBefore\(dock,review\)/);assert.match(css,/report-export-dock\{position:sticky/);
 });
 
- test('prévia real reutiliza o PDF serializado e preserva opções na auditoria',()=>{const pdf=readFileSync('pdf-export.js','utf8'),flow=readFileSync('workflow.js','utf8');assert.match(pdf,/const pdfBlob=new Blob\(\[await doc.save\(\)\]/);assert.match(pdf,/options.preview\?previewGeneratedPdf:download/);assert.match(pdf,/save.onclick=\(\)=>download\(blob,name\)/);assert.match(flow,/return exportPdf\(documents,ids,options\)/);assert.match(flow,/exportReportDocuments\(\[snapshot\],\[\],\{preview:true\}\)/);});
+ test('prévia real reutiliza o PDF serializado e preserva opções na auditoria',()=>{const pdf=readFileSync('pdf-export.js','utf8'),flow=readFileSync('workflow.js','utf8');assert.match(pdf,/const pdfBlob=new Blob\(\[await doc.save\(\)\]/);assert.match(pdf,/options.preview\?previewGeneratedPdf:download/);assert.match(pdf,/save.onclick=\(\)=>download\(blob,name\)/);assert.match(flow,/return exportPdf\(documents,ids,options\)/);assert.match(flow,/exportReportDocuments\(snapshots,\[\],\{preview:true\}\)/);});

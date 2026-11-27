@@ -448,3 +448,47 @@ test('Identidade pública própria: ícones PNG, cabeçalho, manifesto e cache c
  for(const source of [html,about]) assert.ok(source.includes('src="/vistoria-icon-192.png" alt="Logotipo Vistoria Técnica"'));
  assert.ok(html.includes('rel="apple-touch-icon" href="/vistoria-icon-192.png"'));
 });
+
+
+test('modo rápido preserva o formulário e modo guiado é alternável',()=>{
+ const source=readFileSync('form-wizard.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ assert.match(source,/Preenchimento rápido/);
+ assert.match(source,/Preenchimento guiado/);
+ assert.match(source,/localStorage\.setItem\('vistoria\.formMode'/);
+ assert.match(source,/if\(quickMode\)\{\s*for\(const node of group\.keys\(\)\)node\.dataset\.wizardHidden='false'/);
+ assert.match(source,/if\(!quickMode&&current<steps\.length-1\)/);
+});
+test('seleção entre vistorias mantém IDs e referências e não exporta pontos não selecionados',()=>{
+ const source=readFileSync('workflow.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ const section=source.slice(source.indexOf(' const pointKey='),source.indexOf(' const otherPreview='));
+ const snapshot=source.slice(source.indexOf(' function selectedReportSnapshot('),source.indexOf(' function initialPointSelection('));
+ const match=source.slice(source.indexOf(' function reportPointMatches('),source.indexOf(' function reportPointDetails('));
+ const active={meta:{number:'RV-A',workOrder:'123',title:'Vistoria'},records:[{pointId:'shared',status:'Corrigido'},{pointId:'other',status:'Pendente'}]};
+ const other={meta:{number:'RV-B',workOrder:'456',title:'Vistoria'},records:[{pointId:'shared',status:'Pendente'}]};
+ let scope='all';
+ const context={data:()=>active,activeReportId:'a',historyItems:[{id:'a',document:active},{id:'b',document:other}],selectedPoints:new Set(),$:()=>({value:scope}),window:{},structuredClone};
+ const result=vm.runInNewContext(section+snapshot+match+
+  "\nselectedPoints.add(pointKey('b','shared')); const rows=scopedRows(); const docs=selectedSnapshots(); ({total:rows.length,selected:docs.length,ref:docs[0].meta.number,points:docs[0].records.length,pending:rows.filter(row=>reportPointMatches(row.r,'','Pendente')).length})",context);
+ assert.equal(result.total,3);assert.equal(result.selected,1);assert.equal(result.ref,'RV-B');assert.equal(result.points,1);assert.equal(result.pending,2);
+ scope='current';
+ assert.equal(vm.runInContext('scopedRows().length',context),2);
+});
+
+
+test('indicadores filtram área cadastrada, localização, equipamento, situação e período',()=>{
+ const source=readFileSync('management-tools.js','utf8');
+ assert.doesNotThrow(()=>new vm.Script(source));
+ const fn=source.slice(source.indexOf('function indicatorFilter('),source.indexOf('function rows()'));
+ const apply=new Function(fn+';return indicatorFilter;')();
+ const data=[{area:'BV',m:{date:'2026-11-20'},p:{area:'Concentração BV',tag:'C210',equipment:'Válvula',status:'Corrigido'}},{area:'BV',m:{date:'2026-11-21'},p:{area:'Concentração BV',tag:'C240',status:'Pendente'}},{area:'BVO',m:{date:'2026-11-25'},p:{area:'Britagem',tag:'C210',status:'Sem pendência'}}];
+ const original=JSON.stringify(data);
+ assert.equal(apply(data,{area:'bv',sub:'concentração bv',equipment:'valvula',status:'finalizados',from:'2026-11-20',to:'2026-11-20'}).length,1);
+ assert.equal(apply(data,{status:'finalizados'}).length,2);
+ assert.equal(apply(data,{area:'bv',status:'Pendente'}).length,1);
+ assert.equal(apply(data,{from:'2026-11-22'}).length,1);
+ assert.equal(JSON.stringify(data),original);
+ assert.match(source,/vistoriaAreaCatalog\(\)/);
+ assert.match(source,/\.\.\.rows\(\)\.map/);
+});
