@@ -1,4 +1,4 @@
-const CACHE='vistoria-shell-v123-origem-todas';
+const CACHE='vistoria-shell-v126-pagina-apontamento';
 importScripts('/background-sync.js');
 const FILES=['/background-sync.js','/point-identity.js','/point-trash.js','/management-tools.js','/voice-dictation.js','/trash-actions.js','/export-current.js','/point-actions.js','/pdf-import.js','/analysis-progress.js','/descritivo-core.js','/descritivo-guiado.js','/technical-review.js','/edit-saved.js','/workflow.js','/field-tools.js','/photo-markup.js','/photo-order.js','/enhancements.js','/layout.css','/cloud-dashboard.css','/layout.js','/google-drive-sync.js','/team-merge.mjs','/team-live.mjs','/','/index.html','/history.js','/form-wizard.js','/pdf-export.js','/improvements.js','/pwa.js','/pdf-lib.min.js','/manifest.webmanifest','/vistoria-icon-192.png','/vistoria-icon-512.png','/vistoria-logo.svg'];
 const PDF_ASSET_CACHE='vistoria-pdf-preview-5.4.624';
@@ -9,7 +9,7 @@ self.addEventListener('fetch',event=>{
  const url=new URL(event.request.url);
  if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
  if(PDF_ASSETS.includes(url.pathname)){event.respondWith((async()=>{const cache=await caches.open(PDF_ASSET_CACHE);const saved=await cache.match(url.pathname);if(saved)return saved;const response=await fetch(event.request);if(response.ok)await cache.put(url.pathname,response.clone());return response})());return}
- if(url.pathname.startsWith('/api/')||['/privacidade.html','/termos.html','/sobre.html','/google2fd58006cf13a852.html'].includes(url.pathname))return;
+ if(url.pathname.startsWith('/api/')||['/apontamento.html','/privacidade.html','/termos.html','/sobre.html','/google2fd58006cf13a852.html'].includes(url.pathname))return;
  if(event.request.mode==='navigate'){
   // Online-first for the application shell; still available without network.
   event.respondWith(fetch(event.request).then(response=>{
