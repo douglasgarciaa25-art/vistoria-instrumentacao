@@ -30,16 +30,17 @@ export default async function handler(req,res){
  return reply(200,{matches:await teamDb(query)});
  }
  const trashState=req.query?.['trash-state']==='1';
- if(trashState)return reply(200,{reports:await teamDb(base+'?deleted_at=not.is.null&select=report_id,revision,deleted_at&order=report_id.asc')});
+ if(trashState)return reply(200,{reports:await teamDb(base+'?deleted_at=not.is.null&select=report_id,revision,deleted_at,purged_at,purge_completed_at&order=report_id.asc')});
  const trash=req.query?.trash==='1';
 
- return reply(200,{reports:await teamDb(base+'?deleted_at='+ (trash?'not.is.null':'is.null')+'&select=report_id,owner_subject,revision,updated_at,deleted_at&order=updated_at.desc')});
+ return reply(200,{reports:await teamDb(base+'?deleted_at='+ (trash?'not.is.null':'is.null')+'&purged_at=is.null&select=report_id,owner_subject,revision,updated_at,deleted_at&order=updated_at.desc')});
  }
  if(!valid)return reply(400,{error:'Identificador inválido'});
  const filter=base+'?report_id=eq.'+encodeURIComponent(id);
  const old=(await teamDb(filter))[0];
  if(req.method==='GET'){
- if(req.query?.state==='1')return old?reply(200,{report_id:id,revision:old.revision,deleted_at:old.deleted_at||null}):reply(404,{error:'Vistoria não encontrada'});
+ if(req.query?.state==='1')return old?reply(200,{report_id:id,revision:old.revision,deleted_at:old.deleted_at||null,...(old.purged_at?{purged_at:old.purged_at,purge_completed_at:old.purge_completed_at||null}:{})}):reply(404,{error:'Vistoria não encontrada'});
+ if(old?.purged_at)return reply(410,{error:'Prazo de 30 dias encerrado'});
  if(!old||(old.deleted_at&&!(req.query?.history==='1')))return reply(404,{error:'Vistoria não encontrada'});
  if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,actor_name,drive_file_id&order=occurred_at.desc');const pointHistory=await teamDb('vistoria_point_audit?report_id=eq.'+encodeURIComponent(id)+'&select=point_id,action,revision,occurred_at,actor_subject,actor_name,tag_snapshot,work_order_snapshot,previous_status,current_status&order=occurred_at.desc&limit=500');const members=await teamDb('vistoria_members?select=google_subject,email');const names=new Map(members.map(v=>[v.google_subject,v.email]));return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,actor_email:names.get(event.actor_subject)||null,available:!!drive_file_id})),pointHistory:pointHistory.map(event=>({...event,actor_email:names.get(event.actor_subject)||null}))});}
  let fileId=old.drive_file_id;let selectedRevision=old.revision;
@@ -62,6 +63,7 @@ export default async function handler(req,res){
  if(req.method!=='POST')return reply(405,{error:'Método inválido'});
  if(req.body?.action==='restore'){
 
+ if(old?.purged_at||(old?.deleted_at&&Date.parse(old.deleted_at)<=Date.now()-30*86400000))return reply(410,{error:'Prazo de 30 dias encerrado'});
  if(!old?.deleted_at)return reply(404,{error:'Vistoria não está na lixeira'});
  if(Number(req.body.revision)!==old.revision)return reply(409,{error:'Revisão alterada'});
  const revision=await teamDb('rpc/vistoria_change_report_state',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_expected_revision:old.revision,p_action:'restore'})});

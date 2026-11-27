@@ -69,3 +69,21 @@ export async function readPrivateReport(fileId,{withPhotos=true}={}){
  }
  return doc;
 }
+
+export function validTrashFile(meta,folder,reportId,kind){
+ return !!meta&&meta.mimeType==='application/json'&&meta.ownedByMe===true&&meta.capabilities?.canDelete===true&&Array.isArray(meta.parents)&&meta.parents.length===1&&meta.parents[0]===folder&&meta.name==='vistoria_'+reportId+(kind==='photo'?'_foto':'')+'.json';
+}
+export async function inspectExpiredFile(task){
+ if(!/^[A-Za-z0-9_-]{1,100}$/.test(task.report_id)||!['report','photo'].includes(task.kind)||!/^[A-Za-z0-9_-]{8,200}$/.test(task.file_id))throw Error('Identidade inválida');
+ const folder=await checkCentralDrive();
+ let meta;
+ try{meta=await (await drive(API+'/'+encodeURIComponent(task.file_id)+'?fields=id,name,mimeType,ownedByMe,parents,capabilities(canDelete)')).json();}
+ catch(e){if(task.verified_at&&e.message==='Drive central: 404')return {missing:true,photos:[]};throw e;}
+ if(meta.id!==task.file_id||!validTrashFile(meta,folder,task.report_id,task.kind))throw Error('Arquivo fora do escopo autorizado');
+ if(task.kind==='photo')return {photos:[]};
+ const packet=await readJsonFile(task.file_id);
+ if(packet.format!=='vistoria-team-v2'){if(!packet.meta||!Array.isArray(packet.records))throw Error('Revisão não reconhecida');return {photos:[]};}
+ if(!packet.document?.meta||!Array.isArray(packet.document.records)||!Array.isArray(packet.photos)||packet.photos.some(id=>typeof id!=='string'||!/^[A-Za-z0-9_-]{8,200}$/.test(id)||id===task.file_id))throw Error('Referências de fotos inválidas');
+ return {photos:[...new Set(packet.photos)]};
+}
+export async function removeExpiredFile(id){try{await drive(API+'/'+encodeURIComponent(id),{method:'DELETE'});}catch(e){if(e.message!=='Drive central: 404')throw e;}}

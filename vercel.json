@@ -5,6 +5,13 @@
   ],
   "builds": [
     {
+      "src": "api/team-trash-retention.mjs",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 60
+      }
+    },
+    {
       "src": "api/team-events.mjs",
       "use": "@vercel/node",
       "config": {
@@ -90,6 +97,10 @@
   ],
   "routes": [
     {
+      "src": "/api/team-trash-retention",
+      "dest": "/api/team-trash-retention.mjs"
+    },
+    {
       "src": "/api/team-events",
       "dest": "/api/team-events.mjs"
     },
@@ -151,6 +162,12 @@
     {
       "src": "/.*",
       "status": 404
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/team-trash-retention",
+      "schedule": "0 6 * * *"
     }
   ]
 }

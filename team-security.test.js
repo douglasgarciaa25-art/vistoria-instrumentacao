@@ -9,7 +9,7 @@ test('API da equipe: autorização, propriedade, lixeira e partes',async()=>{
   url=String(url);calls.push({url,method:opts.method||'GET'});
   if(url.startsWith('https://oauth2.googleapis.com/'))return Response.json({aud:'test-client',email_verified:true,sub:'tech',email:'test@example.invalid'});
   if(url.includes('vistoria_members?'))return Response.json([member]);
-  if(url.includes('vistoria_report_index?'))return Response.json([{report_id:'r1',owner_subject:'other',revision:2,deleted_at:deleted?'2026-11-27T00:00:00Z':null}]);
+  if(url.includes('vistoria_report_index?'))return Response.json([{report_id:'r1',owner_subject:'other',revision:2,deleted_at:deleted?new Date().toISOString():null}]);
   if(url.includes('rpc/vistoria_change_report_state')){const body=JSON.parse(opts.body);assert.equal(body.p_actor_subject,'tech');deleted=body.p_action==='delete';return Response.json(3);}
   if(url.includes('vistoria_upload_parts?')){if(opts.method==='DELETE')return new Response(null,{status:204});return Response.json(staged);}
   throw Error('Unexpected network request '+url);

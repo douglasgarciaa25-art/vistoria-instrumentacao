@@ -509,7 +509,7 @@
     if(accessToken!==token||queueMember?.google_subject!==account||!validToken())return;
     sharedTrashIndex=packet.reports;sharedTrashAccount=account;sharedTrashStamp=new Date().toISOString();rememberTeamIds(sharedTrashIndex);
     const local=await idbReq(db.transaction('trash').objectStore('trash').getAll());
-    for(const row of local){const item=sharedTrashIndex.find(x=>x.report_id===row.id);if(item&&accessToken===token&&queueMember?.google_subject===account)await markTeamTrash(row.id,account,item.revision);}
+    for(const row of local){const item=sharedTrashIndex.find(x=>x.report_id===row.id);if(item&&accessToken===token&&queueMember?.google_subject===account){await markTeamTrash(row.id,account,item.revision);if(item.purged_at)await expireLocalTeamTrash(item,member);}}
   }
   let queueRunning=false,queueMember=null,queueGeneration=0;
   async function showPendingQueue(member){
@@ -590,6 +590,15 @@
   function canRestoreTeamTrash(marker,item,account){
     return !!marker&&marker.account===account&&Number.isSafeInteger(marker.revision)&&Number(item.revision)>marker.revision;
   }
+  async function expireLocalTeamTrash(item,member){
+    const id=item.report_id,account=member.google_subject,token=accessToken;
+    if(!item.purged_at||!validToken()||queueMember?.google_subject!==account)return false;
+    const tx=db.transaction(['reports','trash','draft'],'readwrite'),done=txDone(tx);
+    const store=tx.objectStore('reports'),trash=tx.objectStore('trash'),draft=tx.objectStore('draft');
+    let changed=false;const live=store.get(id);
+    live.onsuccess=()=>{if(live.result||activeReportId===id||accessToken!==token||queueMember?.google_subject!==account)return;const marker=draft.get('deleted-report:'+id);marker.onsuccess=()=>{if(marker.result?.account!==account||marker.result.revision!==item.revision)return;trash.delete(id);draft.put({...marker.result,purged:true},'deleted-report:'+id);changed=true;};};
+    await done;return changed;
+  }
   async function markTeamTrash(id,account,revision){
     const tx=db.transaction(['reports','trash','draft'],'readwrite'),done=txDone(tx);
     const store=tx.objectStore('reports'),trash=tx.objectStore('trash'),draft=tx.objectStore('draft');
@@ -641,7 +650,7 @@
   const teamState=id=>reportRequest('GET',id,null,false,false,null,null,null,true);
   window.VistoriaTeamTrash={
     known:isSharedTrashReport,
-    getIndex(){return sharedTrashAccount===queueMember?.google_subject?{items:sharedTrashIndex,stamp:sharedTrashStamp,admin:queueMember?.status==='approved'}:{items:[],stamp:null,admin:false};},
+    getIndex(){return sharedTrashAccount===queueMember?.google_subject?{items:sharedTrashIndex.filter(x=>!x.purged_at),stamp:sharedTrashStamp,admin:queueMember?.status==='approved'}:{items:[],stamp:null,admin:false};},
     async sync(){if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para atualizar a lixeira.');if(teamRunning){scheduleTeamSync(500);return;}await syncTeam();},
     async move(id){
       if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para mover a vistoria em todos os aparelhos.');
@@ -670,6 +679,7 @@
       const {member}=await teamRequest();
       if(member?.status!=='approved')throw Error('Acesso à equipe não aprovado.');
       const state=await teamState(id);
+      if(state.purged_at||(state.deleted_at&&Date.parse(state.deleted_at)<=Date.now()-30*86400000))throw Error('Prazo de restauração de 30 dias encerrado.');
       if(state.deleted_at)await reportRequest('POST',id,{action:'restore',revision:state.revision});
       // O marcador fica até o recebimento atômico da revisão restaurada.
       await syncTeam();await showTeam();await window.refreshTrash?.();
@@ -820,7 +830,7 @@
         try{
           const state=await teamState(row.id);
           if(state.report_id===row.id&&state.deleted_at){
-            if(await applyTeamTrash(state,row,member))teamReceived++;else teamDeferred++;
+            if(await applyTeamTrash(state,row,member)){teamReceived++;if(state.purged_at&&typeof expireLocalTeamTrash==='function')await expireLocalTeamTrash(state,member);}else teamDeferred++;
           }
         }catch(e){failed(row.id,e);}
       }

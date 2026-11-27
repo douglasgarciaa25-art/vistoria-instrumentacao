@@ -9,7 +9,7 @@
  function ask(message){if(decision)return Promise.resolve(false);$('trashConfirmText').textContent=message;dialog.showModal();return new Promise(resolve=>{decision=resolve})}
  async function move(id){
   if(window.VistoriaTeamTrash?.known(id)){
-   if(!await ask('Mover esta vistoria e suas fotos para a lixeira em todos os aparelhos da equipe? Qualquer técnico aprovado poderá restaurá-la.'))return;
+   if(!await ask('Mover esta vistoria e suas fotos para a lixeira em todos os aparelhos da equipe? Qualquer técnico aprovado poderá restaurá-la durante 30 dias. Depois, será excluída definitivamente.'))return;
    return window.VistoriaTeamTrash.move(id);
   }
   return moveLocal(id);
