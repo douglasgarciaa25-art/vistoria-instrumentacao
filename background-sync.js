@@ -40,6 +40,15 @@
   if(job.state!=='pending'||typeof job.generation!=='string'||!job.generation||typeof job.hash!=='string'||!job.hash||!job.document)throw Error('Envio inválido');
   return transaction('readwrite',s=>s.put({...job,key,queuedAt:job.queuedAt||new Date().toISOString()}));
  };
+ const putIfAbsent=job=>{
+  const key=keyFor(job?.subject,job?.id);
+  if(job.state!=='pending'||!job.document||!job.hash||!job.generation)throw Error('Envio inválido');
+  return transaction('readwrite',(s,t,done)=>{const q=s.get(key);q.onsuccess=()=>{const current=q.result;if(current&&!(current.state==='sent'&&current.newRevision===job.revision)){done(false);return;}s.put({...job,key,queuedAt:new Date().toISOString()});done(true);};});
+ };
+ async function confirmConflict(job,revision){
+  if(!Number.isSafeInteger(revision)||revision<=job.revision)return false;
+  return transaction('readwrite',(s,t,done)=>{const q=s.get(keyFor(job.subject,job.id));q.onsuccess=()=>{const current=q.result;if(!current||current.state!=='conflict'||current.generation!==job.generation||current.hash!==job.hash||current.revision!==job.revision){done(false);return;}s.put({...current,state:'sent',document:null,newRevision:revision,finishedAt:new Date().toISOString(),lease:null,leaseUntil:0});done(true);};});
+ }
  const same=(current,job)=>!!current&&current.state==='pending'&&current.key===keyFor(job.subject,job.id)
   &&current.subject===job.subject&&current.hash===job.hash&&current.revision===job.revision
   &&current.generation===job.generation;
@@ -88,12 +97,11 @@
   if(!await change(job,{...patch,leaseUntil:Date.now()+120000},lease))throw Error('Fila alterada ou cancelada');
  }
  const successStatus=s=>s>=200&&s<300;
- async function run(expectedSubject=null){
+ async function run(expectedSubject=null,foregroundSession=null){
   const jobs=(await list()).filter(j=>j.state==='pending');
   if(!jobs.length)return;
-  const session=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
-  if(!session.ok)return;
-  const auth=await session.json();
+  const session=async()=>{if(foregroundSession)return await foregroundSession();const response=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});return response.ok?await response.json():null;};
+  const auth=await session();if(!auth)return;
   if(!auth.subject||!auth.access_token||(expectedSubject!==null&&auth.subject!==expectedSubject))return;
   for(const job of jobs){
    if(job.subject!==auth.subject)continue;
@@ -105,9 +113,8 @@
      if(!await active(job,lease))throw Error('Fila alterada, conta desconectada ou envio cancelado');
      // A sessão pode mudar durante uma transferência longa ou entre duas partes.
      // Não reutilizar o token capturado no início se a conta tiver mudado ou saído.
-     const check=await fetch('/api/personal-session',{method:'POST',cache:'no-store',credentials:'same-origin'});
-     if(!check.ok)throw Error('Sessão não disponível para continuar o envio');
-     const fresh=await check.json();
+     const fresh=await session();
+     if(!fresh)throw Error('Sessão não disponível para continuar o envio');
      if(fresh.subject!==job.subject||fresh.subject!==auth.subject||!fresh.access_token)
       throw Error('Conta alterada durante o envio');
      if(!await active(job,lease))throw Error('Fila cancelada durante a verificação da sessão');
@@ -177,5 +184,5 @@
    }
   }
  }
- root.VistoriaBackground={list,put,cancel,clearFor,run};
+ root.VistoriaBackground={list,put,putIfAbsent,confirmConflict,cancel,clearFor,run};
 })(globalThis);

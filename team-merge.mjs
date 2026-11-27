@@ -94,3 +94,54 @@ export function autoResolveReport(base,local,remote){
  const choices=first.conflicts.map(c=>({path:c.path,choice:'local'}));
  return {...mergeReport(base,local,remote,new Map(choices.map(c=>[JSON.stringify(c.path),c.choice]))),choices};
 }
+
+/* Envio incremental por campo e ID permanente, protegido pela revisão-base. */
+const deltaObject=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const deltaKey=k=>typeof k==='string'&&/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(k)&&!['constructor','prototype','__proto__'].includes(k);
+const deltaId=k=>typeof k==='string'&&/^[A-Za-z0-9:_-]{8,160}$/.test(k);
+export function canonicalReport(v){
+ if(Array.isArray(v))return '['+v.map(canonicalReport).join(',')+']';
+ if(deltaObject(v))return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonicalReport(v[k])).join(',')+'}';
+ const s=JSON.stringify(v);if(s===undefined)throw Error('Valor inválido');return s;
+}
+function deltaIds(d){
+ if(!deltaObject(d)||!deltaObject(d.meta)||!Array.isArray(d.records))throw Error('Documento inválido');
+ const ids=d.records.map(p=>deltaObject(p)&&p.pointId);
+ if(!ids.every(deltaId)||new Set(ids).size!==ids.length)throw Error('Identidade inválida');
+ return ids;
+}
+export function applyReportDelta(base,changes){
+ const ids=deltaIds(base);
+ if(!Array.isArray(changes)||!changes.length||changes.length>1000)throw Error('Alterações inválidas');
+ const result=structuredClone(base),points=new Map(ids.map((id,i)=>[id,result.records[i]])),seen=new Set();
+ for(const op of changes){
+  if(!deltaObject(op)||!deltaKey(op.key)||!['root','meta','point'].includes(op.scope))throw Error('Campo inválido');
+  if(op.scope==='root'&&['meta','records','version'].includes(op.key)||op.scope==='point'&&op.key==='pointId')throw Error('Identidade protegida');
+  if(op.scope==='point'&&!points.has(op.id)||op.scope!=='point'&&Object.hasOwn(op,'id'))throw Error('Ponto inválido');
+  if((op.remove===true)===Object.hasOwn(op,'value'))throw Error('Operação inválida');
+  const id=JSON.stringify([op.scope,op.id||'',op.key]);if(seen.has(id))throw Error('Campo duplicado');seen.add(id);
+  const target=op.scope==='root'?result:op.scope==='meta'?result.meta:points.get(op.id);
+  if(op.remove===true){if(!Object.hasOwn(target,op.key))throw Error('Campo inexistente');delete target[op.key];}
+  else Object.defineProperty(target,op.key,{value:structuredClone(op.value),writable:true,enumerable:true,configurable:true});
+ }
+ deltaIds(result);return result;
+}
+export function buildReportDelta(base,next){
+ try{
+  const ids=deltaIds(base);if(JSON.stringify(ids)!==JSON.stringify(deltaIds(next))||base.version!==next.version)return null;
+  const changes=[];
+  function fields(a,b,scope,id,skip=[]){
+   for(const key of new Set([...Object.keys(a),...Object.keys(b)])){
+    if(skip.includes(key))continue;
+    const had=Object.hasOwn(a,key),has=Object.hasOwn(b,key);
+    if(had&&has&&canonicalReport(a[key])===canonicalReport(b[key]))continue;
+    if(!deltaKey(key)||changes.length>=1000)throw Error('Delta não suportado');
+    changes.push({scope,...(id?{id}:{}),key,...(has?{value:b[key]}:{remove:true})});
+   }
+  }
+  fields(base,next,'root',null,['version','meta','records']);fields(base.meta,next.meta,'meta',null);
+  ids.forEach((id,i)=>fields(base.records[i],next.records[i],'point',id,['pointId']));
+  if(!changes.length)return [];
+  return canonicalReport(applyReportDelta(base,changes))===canonicalReport(next)?changes:null;
+ }catch{return null;}
+}

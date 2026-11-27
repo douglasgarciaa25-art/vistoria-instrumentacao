@@ -507,13 +507,15 @@
     queueRunning=true;
     try{
       const baseline=JSON.parse(localStorage.getItem('vistoria-team-baseline:'+member.google_subject)||'{}');
-      const local=await reports();const pending=[];
+      const local=await reports();const pending=[],states=new Map();
       for(const item of local){
         const prev=baseline[item.id];
-        if(prev&&await digest(item.document)!==prev.hash)pending.push(item);
-        else if(!prev&&!isTeamReport(item.id)&&localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'&&validate(item)&&item.document.records?.length)pending.push(item);
+        if(prev){const changed=await digest(item.document)!==prev.hash;states.set(item.id,changed?(navigator.onLine?'Alteração pendente':'Salva offline'):'Revisão confirmada · '+prev.revision);if(changed)pending.push(item);}
+        else if(isTeamReport(item.id))states.set(item.id,'Aguardando confirmação da revisão');
+        else if(localStorage.getItem('vistoria-team-auto:'+member.google_subject)==='1'&&validate(item)&&item.document.records?.length)pending.push(item);
       }
       if(generation!==queueGeneration)return;
+      for(const card of document.querySelectorAll('.cloud-report-card[data-report-id]')){const label=card.querySelector('[data-team-sync-status]');if(label)label.textContent=states.get(card.dataset.reportId)||'Aguardando confirmação';}
       host.replaceChildren();
       const title=document.createElement('p');title.textContent=pending.length+' vistoria(s) com alterações locais a verificar na sincronização.';host.append(title);
       for(const item of pending){const row=document.createElement('p');row.textContent=(item.document.meta?.title||item.document.meta?.number||item.id)+' — '+(navigator.onLine?'Aguardando verificação':'Sem internet');host.append(row);}
@@ -684,6 +686,60 @@
     }
     return false;
   }
+  const teamSnapshotKey=(account,id)=>'team-sync-base:'+account+':'+id;
+  async function rememberTeamSnapshot(account,id,revision,document){
+    try{if(queueMember?.google_subject!==account)return;const hash=await digest(document);if(queueMember?.google_subject!==account)return;const tx=db.transaction('draft','readwrite'),done=txDone(tx);tx.objectStore('draft').put({revision,hash,document},teamSnapshotKey(account,id));await done;}catch{}
+  }
+  async function prepareTeamPatch(account,id,previous,next){
+    try{
+      const module=await import('./team-merge.mjs');
+      let base=await idbReq(db.transaction('draft').objectStore('draft').get(teamSnapshotKey(account,id)));
+      if(!base||base.revision!==previous.revision||base.hash!==previous.hash||await digest(base.document)!==previous.hash){
+        const packet=await reportRequest('GET',id,null,false,false,previous.revision);
+        if(packet.revision!==previous.revision||!await confirmedTeamBase(packet.document,previous.hash))return null;
+        base={document:packet.document};
+      }
+      const changes=module.buildReportDelta(base.document,next);if(!changes?.length)return null;
+      const hash=async d=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(module.canonicalReport(d)))),b=>b.toString(16).padStart(2,'0')).join('');
+      const patch={action:'patch-fields',revision:previous.revision,baseHash:await hash(base.document),resultHash:await hash(next),changes};
+      return new TextEncoder().encode(JSON.stringify(patch)).length<Math.min(3000000,new TextEncoder().encode(JSON.stringify(next)).length)?patch:null;
+    }catch{return null;}
+  }
+  async function enqueueSharedSnapshot(account,row,previous,hash){
+    if(!window.VistoriaBackground?.putIfAbsent||!previous||!validate(row)||queueMember?.google_subject!==account)return false;
+    if(new TextEncoder().encode(JSON.stringify(row.document)).length>12000000)return false;
+    const saved=await window.VistoriaBackground.putIfAbsent({id:row.id,subject:account,document:row.document,revision:previous.revision,hash,state:'pending',generation:crypto.randomUUID()});
+    if(saved&&navigator.serviceWorker)void navigator.serviceWorker.ready.then(reg=>reg.sync?.register('vistoria-background')).catch(()=>{});
+    return saved;
+  }
+  async function queueOfflineEdits(){
+    if(navigator.onLine!==false||!queueMember?.google_subject||!window.VistoriaBackground?.putIfAbsent)return;
+    const account=queueMember.google_subject,base=JSON.parse(localStorage.getItem('vistoria-team-baseline:'+account)||'{}');
+    for(const row of await reports()){
+      if(queueMember?.google_subject!==account||navigator.onLine!==false)return;
+      const previous=base[row.id];if(!previous)continue;
+      const hash=await digest(row.document);if(hash!==previous.hash)await enqueueSharedSnapshot(account,row,previous,hash);
+    }
+  }
+  async function sendTeamRevision(account,row,previous,hash){
+    const id=row.id,token=accessToken,patch=await prepareTeamPatch(account,id,previous,row.document);
+    if(queueMember?.google_subject!==account||accessToken!==token||!validToken()||!await activeMatchesSaved(id,hash))throw Error('Edição ou sessão alterada durante preparação');
+    let receipt;
+    if(patch){
+      try{receipt=await reportRequest('POST',id,patch);}
+      catch(e){if(![400,413].includes(e?.status))throw e;}
+      if(receipt&&(receipt.hash!==patch.resultHash||receipt.revision!==previous.revision+1))throw Error('Recibo dos campos alterados inválido');
+    }
+    if(!receipt){
+      if(new TextEncoder().encode(JSON.stringify(row.document)).length>3000000){
+        await enqueueSharedSnapshot(account,row,previous,hash);
+        throw Error('Vistoria grande: alterações locais preservadas; envio em partes pendente');
+      }
+      receipt=await reportRequest('POST',id,{document:row.document,revision:previous.revision});
+    }
+    if(receipt.revision!==previous.revision+1)throw Error('Recibo da revisão inválido');
+    return receipt;
+  }
   async function repairTeamPacket(id,packet){
     if(validate({id,document:packet.document}))return;
     const {repairLegacyReport}=await import('./team-merge.mjs');
@@ -713,14 +769,26 @@
       if(receiveOnly!==true&&window.VistoriaBackground?.run){
         try{
           const pending=(await window.VistoriaBackground.list()).some(j=>j.subject===member.google_subject&&j.state==='pending');
-          if(pending&&accessToken===runToken){await window.VistoriaBackground.run(member.google_subject);if(accessToken===runToken){const latest=await reportRequest();remote=latest.reports;rememberTeamIds(remote);}}
+          if(pending&&accessToken===runToken){await window.VistoriaBackground.run(member.google_subject,async()=>accessToken===runToken&&validToken()&&queueMember?.google_subject===member.google_subject?{subject:member.google_subject,access_token:runToken}:null);if(accessToken===runToken){const latest=await reportRequest();remote=latest.reports;rememberTeamIds(remote);}}
         }catch(e){failures.push('Fila automática: '+e.message);}
       }
       if(accessToken!==runToken||!validToken())return;
       const background=window.VistoriaBackground?await window.VistoriaBackground.list():[];
       for(const job of background)if(job.subject===member.google_subject&&job.state==='sent'&&baseline[job.id]?.revision===job.revision){baseline[job.id]={revision:job.newRevision,hash:job.hash};localStorage.setItem(key,JSON.stringify(baseline));}
       const queued=new Set(background.filter(j=>j.subject===member.google_subject&&j.state==='pending').map(j=>j.id));
-      const queuedConflicts=background.filter(j=>j.subject===member.google_subject&&j.state==='conflict');
+      let queuedConflicts=background.filter(j=>j.subject===member.google_subject&&j.state==='conflict');
+      if(receiveOnly!==true&&window.VistoriaBackground?.confirmConflict){
+        const outstanding=[];
+        for(const job of queuedConflicts){
+          const item=remote.find(x=>x.report_id===job.id);
+          try{if(item&&item.revision>job.revision&&accessToken===runToken&&queueMember?.google_subject===member.google_subject){
+            const packet=await reportRequest('GET',job.id);
+            if(packet.revision===item.revision&&await confirmedTeamBase(packet.document,job.hash)&&accessToken===runToken&&await window.VistoriaBackground.confirmConflict(job,packet.revision)){
+              if(baseline[job.id]?.revision===job.revision){baseline[job.id]={revision:packet.revision,hash:job.hash};localStorage.setItem(key,JSON.stringify(baseline));}teamRecovered++;continue;
+            }
+          }}catch{}outstanding.push(job);
+        }queuedConflicts=outstanding;
+      }
       if(queued.size)teamDeferred+=queued.size;
       if(queuedConflicts.length){teamConflicts+=queuedConflicts.length;conflictFields.push('Fila: '+queuedConflicts.length+' envio(s) exigem revisão; versões preservadas');}
       let local=await reports();
@@ -836,6 +904,7 @@
          if(archive)teamRecovered++;
         baseline[item.report_id]={revision:d.revision,hash:remoteHash};
         localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
+        if(typeof rememberTeamSnapshot==='function')await rememberTeamSnapshot(member.google_subject,item.report_id,d.revision,d.originalDocument||d.document);
         markTeamRenewed(item.report_id,d.revision);
         if(typeof refreshHistory==='function')await refreshHistory();
         }catch(e){failed(item.report_id,e);}
@@ -869,9 +938,12 @@
         const hash=await digest(row.document);
         if(hash===previous.hash)continue;
         if(!await activeMatchesSaved(item.report_id,hash)){teamDeferred++;continue;}
-          const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
+          const d=await sendTeamRevision(member.google_subject,row,previous,hash);
+          if(accessToken!==runToken||queueMember?.google_subject!==member.google_subject)break;
           baseline[item.report_id]={revision:d.revision,hash};
           localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
+          await rememberTeamSnapshot(member.google_subject,item.report_id,d.revision,row.document);
+          markTeamRenewed(item.report_id,d.revision);
         }catch(e){failed(item.report_id,e);if(e?.status===409&&typeof scheduleTeamSync==='function')scheduleTeamSync(500);}
       }
       if(accessToken!==runToken||!validToken())return;
@@ -1043,6 +1115,7 @@
       const archivePrefix='team-conflict:'+member.google_subject+':'+item.report_id+':';
       renewal.textContent=archiveKeys.some(k=>typeof k==='string'&&k.startsWith(archivePrefix))?'Versões anteriores preservadas · consultar histórico local':'Renovação automática ativa';
       row.append(renewal);
+      const syncLabel=document.createElement('small');syncLabel.className='cloud-report-meta';syncLabel.dataset.teamSyncStatus='1';syncLabel.textContent='Verificando sincronização…';row.append(syncLabel);
       entries.push({row,mine:item.owner_subject===member.google_subject,areas:(doc?.records||[]).map(p=>p.area),date:Date.parse(item.updated_at)||0,tag:title.textContent,text:label+' '+JSON.stringify(doc?.meta||{})+' '+(doc?.records||[]).map(p=>[p.pointWorkOrder,p.tag,p.area,p.os,p.order].filter(Boolean).join(' ')).join(' ')});
       const menu=document.createElement('details');menu.className='cloud-report-menu';menu.open=disclosureState.menus.get(item.report_id)===true;const summary=document.createElement('summary');summary.textContent='Histórico e outras ações';menu.append(summary);row.append(menu);
       // O botão é apenas uma alternativa; o mesmo fluxo roda sozinho.
@@ -1160,7 +1233,7 @@
       if(member.role==='admin')button(menu,'Mover para lixeira em todos os aparelhos',async()=>{if(confirm('Mover esta vistoria para a lixeira de toda a equipe? As fotos e o histórico serão preservados.'))await window.VistoriaTeamTrash.move(item.report_id)});
       for(const b of row.querySelectorAll('button')){b.classList.add('cloud-report-action');if(b.textContent==='Mover para lixeira em todos os aparelhos')b.classList.add('danger');}
     }
-    filter();
+    filter();void showPendingQueue(member);
     if(member.role==='admin'){
       const trash=document.createElement('details');trash.className='cloud-disclosure';const heading=document.createElement('summary');heading.textContent='Lixeira da equipe';trash.append(heading);section.append(trash);
       const content=document.createElement('div');trash.append(content);
@@ -1266,8 +1339,8 @@
       }
     }
     addEventListener('online',resume);
-    addEventListener('offline',()=>{stopTeamLive();if(queueMember)void showPendingQueue(queueMember);});
-    document.addEventListener('vistoria-saved',()=>{if(queueMember)void showPendingQueue(queueMember);});
+    addEventListener('offline',()=>{stopTeamLive();if(queueMember){void showPendingQueue(queueMember);void queueOfflineEdits().catch(()=>{});}});
+    document.addEventListener('vistoria-saved',()=>{if(queueMember){void showPendingQueue(queueMember);void queueOfflineEdits().catch(()=>{});}});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){resume();void connectTeamLive()}else stopTeamLive()});
     resume();
     setInterval(()=>{if(document.visibilityState==='visible'){if(validToken())sync();else void restoreSession();}},90000);

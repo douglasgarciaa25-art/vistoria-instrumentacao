@@ -97,7 +97,8 @@ test('sincronização da equipe recebe revisão da vistoria aberta sem perder o 
 test('sincronização da equipe permite envio de alteração em vistoria aberta já salva',()=>{
  const src=file('google-drive-sync.js');
  assert.match(src,/if\(!await activeMatchesSaved\(item\.report_id,hash\)\)\{teamDeferred\+\+;continue;\}/);
- assert.match(src,/reportRequest\('POST',item\.report_id,\{document:row\.document,revision:previous\.revision\}\)/);
+ assert.match(src,/sendTeamRevision\(member\.google_subject,row,previous,hash\)/);
+ assert.match(src,/receipt\.hash!==patch\.resultHash/);
  assert.match(src,/Sincronização parcial/);
  assert.match(src,/Atualizar da nuvem \(mesmo ID\)/);
  assert.doesNotMatch(src,/\(cópia local preservada\)/);

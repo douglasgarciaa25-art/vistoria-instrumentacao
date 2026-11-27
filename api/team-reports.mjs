@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {approvedMember,teamDb} from '../team-auth.mjs';
 import {pointChanges} from '../point-audit-core.mjs';
+import {applyReportDelta,canonicalReport} from '../team-merge.mjs';
 import {parseTeamOsQuery,scanTeamOsPage} from '../team-os-search.mjs';
 import {createPrivateReport,readPrivateReport} from '../team-drive.mjs';
 export default async function handler(req,res){
@@ -66,6 +67,16 @@ export default async function handler(req,res){
  return reply(200,{revision});
  }
  let doc=req.body?.document;
+ let deltaReceipt=null;
+ if(req.body?.action==='patch-fields'){
+  if(!old?.drive_file_id||old.deleted_at||Number(req.body.revision)!==old.revision)return reply(409,{error:'Versão desatualizada'});
+  if(!/^[a-f0-9]{64}$/.test(req.body.baseHash||'')||!/^[a-f0-9]{64}$/.test(req.body.resultHash||'')||Buffer.byteLength(JSON.stringify(req.body),'utf8')>3000000)return reply(400,{error:'Alterações inválidas'});
+  const hash=d=>createHash('sha256').update(canonicalReport(d)).digest('hex');
+  const source=await readPrivateReport(old.drive_file_id);
+  if(hash(source)!==req.body.baseHash)return reply(409,{error:'Conteúdo da revisão-base não confirmado'});
+  try{doc=applyReportDelta(source,req.body.changes);deltaReceipt=hash(doc);}catch{return reply(400,{error:'Campos alterados inválidos'});}
+  if(deltaReceipt!==req.body.resultHash)return reply(400,{error:'Integridade das alterações não confirmada'});
+ }
  if(['upload-part','upload-finish','upload-status'].includes(req.body?.action)){
  const upload=String(req.body.upload_id||'');if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(upload))return reply(400,{error:'Envio inválido'});
  if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
@@ -82,7 +93,7 @@ export default async function handler(req,res){
  try{const bytes=Buffer.from(parts.map(p=>p.payload).join(''),'base64');if(req.body.sha256&&createHash('sha256').update(bytes).digest('hex')!==req.body.sha256)return reply(400,{error:'Integridade do envio inválida'});doc=JSON.parse(bytes.toString('utf8'));}catch{return reply(400,{error:'Documento inválido'});}
  }
 
- if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>(req.body?.action==='upload-finish'?12000000:3500000))return reply(400,{error:'Documento inválido ou grande demais'});
+ if(!doc||typeof doc!=='object'||Array.isArray(doc)||!doc.meta||!Array.isArray(doc.records)||Buffer.byteLength(JSON.stringify(doc),'utf8')>(['upload-finish','patch-fields'].includes(req.body?.action)?12000000:3500000))return reply(400,{error:'Documento inválido ou grande demais'});
  if(old?.deleted_at||Number(req.body.revision)!==(old?.revision||0))return reply(409,{error:'Versão desatualizada'});
  // Somente diferenças entre IDs permanentes recebem autoria verificável.
  let events;
@@ -93,6 +104,6 @@ export default async function handler(req,res){
  const revision=await teamDb(old&&old.owner_subject!==m.google_subject&&m.role!=='admin'?'rpc/vistoria_commit_collaborative_report':'rpc/vistoria_commit_report',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_owner_subject:old?.owner_subject||m.google_subject,p_expected_revision:old?.revision||0,p_drive_file_id:file,p_events:events})});
  if(!Number.isSafeInteger(revision)||revision<1)return reply(409,{error:'Revisão alterada durante o envio'});
  if(req.body?.action==='upload-finish'){try{await teamDb('vistoria_upload_parts?owner_subject=eq.'+encodeURIComponent(m.google_subject)+'&report_id=eq.'+encodeURIComponent(id)+'&upload_id=eq.'+encodeURIComponent(req.body.upload_id),{method:'DELETE'});}catch{}}
- return reply(200,{revision});
+ return reply(200,deltaReceipt?{revision,hash:deltaReceipt}:{revision});
  }catch{return reply(503,{error:'Não foi possível concluir a operação da equipe'});}
 }

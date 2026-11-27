@@ -650,3 +650,18 @@ test('limite temporário de uma conta não transmite nem cancela trabalho de out
  assert.equal(jobs.find(j=>j.subject==='conta-B').document.meta.os,os);
  assert.equal(calls.filter(c=>c.url.startsWith('/api/team-reports')).length,2);
 });
+
+test('fila automática conserva envio anterior e só substitui recibo integrado',async()=>{
+ const {queue}=setup();const a=fixture('offline-auto','conta-A',1),b={...a,generation:'new'};
+ assert.equal(await queue.putIfAbsent(a),true);assert.equal(await queue.putIfAbsent(b),false);await queue.run();
+ assert.equal(await queue.putIfAbsent(b),false);assert.equal(await queue.putIfAbsent({...b,revision:2}),true);
+});
+test('recuperação de recibo perdido verifica a geração',async()=>{
+ const {queue}=setup({handler:()=>new Response('',{status:409})});const job=fixture('ack-lost','conta-A',1);await queue.put(job);await queue.run();
+ assert.equal(await queue.confirmConflict({...job,generation:'wrong'},2),false);assert.equal(await queue.confirmConflict(job,2),true);assert.equal((await queue.list())[0].state,'sent');
+});
+test('fila aberta usa sessão ativa sem exigir cookie persistente',async()=>{
+ const {queue,calls}=setup({sessionHandler:()=>new Response('',{status:401})});await queue.put(fixture('active-session','conta-A',1));
+ await queue.run('conta-A',async()=>({subject:'conta-A',access_token:'active-token'}));
+ assert.equal((await queue.list())[0].state,'sent');assert.equal(calls.filter(c=>c.url==='/api/personal-session').length,0);
+});

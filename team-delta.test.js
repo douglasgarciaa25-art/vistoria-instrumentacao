@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {buildReportDelta,applyReportDelta,canonicalReport} from './team-merge.mjs';
+const base={version:1,meta:{title:'A'},records:[{pointId:'point-001',status:'Pendente',photos:[{src:'data:image/jpeg;base64,'+'x'.repeat(200000),caption:'Foto'}]},{pointId:'point-002',status:'Pendente'}]};
+test('envia somente campos modificados sem repetir foto',()=>{const next=structuredClone(base);next.records[0].status='Corrigido';next.meta.title='B';const c=buildReportDelta(base,next);assert.equal(c.length,2);assert.ok(JSON.stringify(c).length<300);assert.equal(canonicalReport(applyReportDelta(base,c)),canonicalReport(next));assert.equal(base.records[0].status,'Pendente');});
+test('reordenação ou inclusão usa documento completo',()=>{const next=structuredClone(base);next.records.reverse();assert.equal(buildReportDelta(base,next),null);next.records.push({pointId:'point-003'});assert.equal(buildReportDelta(base,next),null);});
+test('campos perigosos, identidade e operação duplicada são rejeitados',()=>{for(const c of [[{scope:'root',key:'__proto__',value:{x:1}}],[{scope:'point',id:'point-001',key:'pointId',value:'point-002'}],[{scope:'point',id:'point-404',key:'status',value:'Corrigido'}],[{scope:'meta',key:'title',value:'B'},{scope:'meta',key:'title',value:'C'}]])assert.throws(()=>applyReportDelta(base,c));});
+test('hash canônico independe da ordem das propriedades',()=>{const next=structuredClone(base);const {src,caption}=next.records[0].photos[0];next.records[0].photos[0]={caption,src};assert.equal(canonicalReport(base),canonicalReport(next));assert.deepEqual(buildReportDelta(base,next),[]);});
