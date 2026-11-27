@@ -641,7 +641,7 @@
   const teamState=id=>reportRequest('GET',id,null,false,false,null,null,null,true);
   window.VistoriaTeamTrash={
     known:isSharedTrashReport,
-    getIndex(){return sharedTrashAccount===queueMember?.google_subject?{items:sharedTrashIndex,stamp:sharedTrashStamp,admin:queueMember?.role==='admin'}:{items:[],stamp:null,admin:false};},
+    getIndex(){return sharedTrashAccount===queueMember?.google_subject?{items:sharedTrashIndex,stamp:sharedTrashStamp,admin:queueMember?.status==='approved'}:{items:[],stamp:null,admin:false};},
     async sync(){if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para atualizar a lixeira.');if(teamRunning){scheduleTeamSync(500);return;}await syncTeam();},
     async move(id){
       if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para mover a vistoria em todos os aparelhos.');
@@ -658,7 +658,7 @@
         rememberLocalCopy(id);
         return window.VistoriaLocalTrash.move(id);
       }
-      if(member.role!=='admin')throw Error('Somente o administrador pode mover uma vistoria compartilhada para a lixeira da equipe.');
+
       await persistCurrent();
       const result=state.deleted_at?state:await reportRequest('DELETE',id,{revision:state.revision});
       await markTeamTrash(id,member.google_subject,result.revision);
@@ -668,7 +668,7 @@
     async restore(id){
       if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para restaurar a vistoria.');
       const {member}=await teamRequest();
-      if(member?.status!=='approved'||member.role!=='admin')throw Error('Somente o administrador pode restaurar uma vistoria compartilhada.');
+      if(member?.status!=='approved')throw Error('Acesso à equipe não aprovado.');
       const state=await teamState(id);
       if(state.deleted_at)await reportRequest('POST',id,{action:'restore',revision:state.revision});
       // O marcador fica até o recebimento atômico da revisão restaurada.
@@ -809,7 +809,7 @@
       }
       if(queued.size)teamDeferred+=queued.size;
       // Uma exclusão confirmada não é um conflito de envio: manter a fila arquivada
-      // até o administrador restaurar a vistoria; nunca apagar o documento pendente.
+      // até um membro aprovado restaurar a vistoria; nunca apagar o documento pendente.
       const held=typeof sharedTrashIndex!=='undefined'&&sharedTrashAccount===member.google_subject?new Set(sharedTrashIndex.map(x=>x.report_id)):new Set();
       const visibleConflicts=queuedConflicts.filter(j=>!held.has(j.id));
       if(visibleConflicts.length){teamConflicts+=visibleConflicts.length;conflictFields.push('Fila: '+visibleConflicts.length+' envio(s) exigem revisão; versões preservadas');}
@@ -1258,11 +1258,11 @@
         try{await reg.sync.register('vistoria-background');status.textContent='Revisão enfileirada. O navegador poderá enviar após fechar o aplicativo.';}catch{status.textContent='Revisão salva na fila, mas o agendamento falhou. Use Reagendar envios pendentes quando disponível.';}
       });
       button(row,'Criar cópia local',async()=>{const d=await reportRequest('GET',item.report_id);const copy=structuredClone(d.document);const copyId=crypto.randomUUID();rememberLocalCopy(copyId);await putReport({id:copyId,updated:new Date().toISOString(),document:copy});status.textContent='Cópia local criada; original compartilhado preservado.'});
-      if(member.role==='admin')button(menu,'Mover para lixeira em todos os aparelhos',async()=>{if(confirm('Mover esta vistoria para a lixeira de toda a equipe? As fotos e o histórico serão preservados.'))await window.VistoriaTeamTrash.move(item.report_id)});
+      button(menu,'Mover para lixeira em todos os aparelhos',async()=>{if(confirm('Mover esta vistoria para a lixeira de toda a equipe? As fotos e o histórico serão preservados.'))await window.VistoriaTeamTrash.move(item.report_id)});
       for(const b of row.querySelectorAll('button')){b.classList.add('cloud-report-action');if(b.textContent==='Mover para lixeira em todos os aparelhos')b.classList.add('danger');}
     }
     filter();void showPendingQueue(member);
-    if(member.role==='admin'){
+    if(member.status==='approved'){
       const trash=document.createElement('details');trash.className='cloud-disclosure';const heading=document.createElement('summary');heading.textContent='Lixeira da equipe';trash.append(heading);section.append(trash);
       const content=document.createElement('div');trash.append(content);
       trash.addEventListener('toggle',async()=>{if(!trash.open)return;content.textContent='Carregando…';try{const d=await reportRequest('GET','',null,false,true);content.replaceChildren();if(!d.reports.length)content.textContent='Nenhuma vistoria excluída.';for(const item of d.reports){const row=document.createElement('div');const label=document.createElement('p');label.textContent=item.report_id+' · Excluída em '+new Date(item.deleted_at).toLocaleString('pt-BR');row.append(label);content.append(row);button(row,'Consultar auditoria',async()=>{const d=await reportRequest('GET',item.report_id,null,true);const previous=row.querySelector('[data-trash-audit]');if(previous){previous.remove();return;}const details=document.createElement('div');details.dataset.trashAudit='1';for(const event of d.history||[]){const p=document.createElement('p');p.textContent=({create:'Criação',update:'Atualização',delete:'Exclusão',restore:'Restauração'}[event.action]||event.action)+' — '+new Date(event.occurred_at).toLocaleString('pt-BR')+' — Técnico: '+(event.actor_name||'Não registrado')+' — '+(event.actor_email||'Conta não registrada');details.append(p);}if(!details.childElementCount)details.textContent='Sem histórico registrado.';row.append(details);});button(row,'Restaurar vistoria',async()=>{if(!confirm('Restaurar esta vistoria para a equipe?'))return;await reportRequest('POST',item.report_id,{action:'restore',revision:item.revision});await syncTeam();await showTeam();});}}catch(e){content.textContent=e.message;}});

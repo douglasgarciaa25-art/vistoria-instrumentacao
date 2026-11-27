@@ -32,7 +32,7 @@ export default async function handler(req,res){
  const trashState=req.query?.['trash-state']==='1';
  if(trashState)return reply(200,{reports:await teamDb(base+'?deleted_at=not.is.null&select=report_id,revision,deleted_at&order=report_id.asc')});
  const trash=req.query?.trash==='1';
- if(trash&&m.role!=='admin')return reply(403,{error:'Somente administrador pode consultar a lixeira'});
+
  return reply(200,{reports:await teamDb(base+'?deleted_at='+ (trash?'not.is.null':'is.null')+'&select=report_id,owner_subject,revision,updated_at,deleted_at&order=updated_at.desc')});
  }
  if(!valid)return reply(400,{error:'Identificador inválido'});
@@ -40,7 +40,7 @@ export default async function handler(req,res){
  const old=(await teamDb(filter))[0];
  if(req.method==='GET'){
  if(req.query?.state==='1')return old?reply(200,{report_id:id,revision:old.revision,deleted_at:old.deleted_at||null}):reply(404,{error:'Vistoria não encontrada'});
- if(!old||(old.deleted_at&&!(m.role==='admin'&&req.query?.history==='1')))return reply(404,{error:'Vistoria não encontrada'});
+ if(!old||(old.deleted_at&&!(req.query?.history==='1')))return reply(404,{error:'Vistoria não encontrada'});
  if(req.query?.history==='1'){const history=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&select=action,revision,occurred_at,actor_subject,actor_name,drive_file_id&order=occurred_at.desc');const pointHistory=await teamDb('vistoria_point_audit?report_id=eq.'+encodeURIComponent(id)+'&select=point_id,action,revision,occurred_at,actor_subject,actor_name,tag_snapshot,work_order_snapshot,previous_status,current_status&order=occurred_at.desc&limit=500');const members=await teamDb('vistoria_members?select=google_subject,email');const names=new Map(members.map(v=>[v.google_subject,v.email]));return reply(200,{history:history.map(({drive_file_id,...event})=>({...event,actor_email:names.get(event.actor_subject)||null,available:!!drive_file_id})),pointHistory:pointHistory.map(event=>({...event,actor_email:names.get(event.actor_subject)||null}))});}
  let fileId=old.drive_file_id;let selectedRevision=old.revision;
  if(req.query?.version){const version=String(req.query.version);if(!/^\d{1,12}$/.test(version))return reply(400,{error:'Revisão inválida'});const requested=Number(version);if(requested===old.revision&&old.drive_file_id){fileId=old.drive_file_id;}else{const events=await teamDb('vistoria_audit?report_id=eq.'+encodeURIComponent(id)+'&revision=eq.'+version+'&select=drive_file_id');const file=events.find(e=>e.drive_file_id)?.drive_file_id;if(!file)return reply(404,{error:'Conteúdo desta revisão não está indexado'});fileId=file;}selectedRevision=requested;}
@@ -50,9 +50,9 @@ export default async function handler(req,res){
  if(bytes.length>3000000)return reply(200,{segmented:true,total:Math.ceil(bytes.length/750000),revision:selectedRevision,owner:old.owner_subject});
  return reply(200,{document,revision:selectedRevision,owner:old.owner_subject});
  }
- // A equipe aprovada pode revisar; a criação mantém o autor autenticado e exclusão/restauração continuam administrativas.
+ // A equipe aprovada pode revisar; a criação mantém o autor autenticado e exclusão/restauração exigem conta aprovada e revisão confirmada.
  if(req.method==='DELETE'){
- if(m.role!=='admin')return reply(403,{error:'Somente administrador pode excluir'});
+
  if(!old||old.deleted_at)return reply(404,{error:'Vistoria não encontrada'});
  if(req.body?.revision!==undefined&&Number(req.body.revision)!==old.revision)return reply(409,{error:'Revisão alterada'});
  const revision=await teamDb('rpc/vistoria_change_report_state',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_expected_revision:old.revision,p_action:'delete'})});
@@ -61,7 +61,7 @@ export default async function handler(req,res){
  }
  if(req.method!=='POST')return reply(405,{error:'Método inválido'});
  if(req.body?.action==='restore'){
- if(m.role!=='admin')return reply(403,{error:'Somente administrador pode restaurar'});
+
  if(!old?.deleted_at)return reply(404,{error:'Vistoria não está na lixeira'});
  if(Number(req.body.revision)!==old.revision)return reply(409,{error:'Revisão alterada'});
  const revision=await teamDb('rpc/vistoria_change_report_state',{method:'POST',body:JSON.stringify({p_report_id:id,p_actor_subject:m.google_subject,p_expected_revision:old.revision,p_action:'restore'})});
