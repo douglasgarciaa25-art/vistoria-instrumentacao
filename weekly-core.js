@@ -1,0 +1,12 @@
+export const tabs = (area) => ['Programadas Instrumentação '+area,'Corretivas Instrumentação '+area,'Pendencias Instrumentação '+area,'Parada '+area];
+export const col = i => {let s='';for(i++;i>0;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s};
+export const range = (tab,a1) => "'"+tab.replaceAll("'","''")+"'!"+a1;
+export const workbookId = raw => {const s=String(raw).trim();if(/^[a-zA-Z0-9_-]{20,}$/.test(s))return s;const u=new URL(s);if(u.protocol!=='https:'||u.hostname!=='docs.google.com')throw Error('Use o link do Google Planilhas.');const m=u.pathname.match(/^\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})(?:\/|$)/);if(!m)throw Error('Link inválido.');return m[1]};
+export const identity = row => JSON.stringify([0,1,2,3,4].map(i=>String(row[i]??'').trim()));
+export const locate = (rows,key) => {const matches=rows.map((r,i)=>({r,i})).filter(x=>x.i>=2&&identity(x.r)===key);if(matches.length!==1)throw Error('Ordem removida, alterada ou duplicada. Atualize a lista antes de salvar.');return matches[0]};
+export const timeValue = v => {if(v==='')return '';if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(v))throw Error('Horário inválido.');const [h,m]=v.split(':').map(Number);return (h*60+m)/1440};
+export const timeText = v => {if(v===''||v==null)return '';if(typeof v==='number'){if(v<0||v>=1)return '';const m=Math.round(v*1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}return /^\d\d:\d\d(:00)?$/.test(v)?v.slice(0,5):''};
+export const slots = (header,programmed) => {const starts=programmed?[6,9,12,15,18]:[5,8,11,14];if(!starts.every(i=>String(header[i]??'').trim()))throw Error('Cabeçalho de técnicos inesperado. Nenhuma alteração permitida.');return starts.map(i=>({i,name:String(header[i]).trim()}))};
+export const validHeader = (h,p) => h[0]==='Ordem'&&h[1]==='TxtDesc.Oper.'&&h[2]==='Programação'&&h[3]==='Loc.instalação'&&(p?h[4]==='HH Estimado'&&h[5]==='Executada'&&h[21]==='Total':h[4]==='HH'&&h[17]==='Total');
+export const same = (a,b) => String(a??'')===String(b??'');
+export const changedCells = (before,after,indices) => indices.filter(i=>!same(before[i],after[i])).map(i=>({i,value:after[i]??''}));
