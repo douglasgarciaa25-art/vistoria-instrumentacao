@@ -89,7 +89,8 @@
  }
  function updatePointSelection(){
   const rows=scopedRows();
-  const available=new Set(rows.map(row=>row.key));
+  const status=$('reportStatusFilter').value;
+  const available=new Set(rows.filter(({r})=>reportPointMatches(r,'',status)).map(row=>row.key));
   for(const id of selectedPoints)if(!available.has(id))selectedPoints.delete(id);
   if(initialSelectionPending&&rows.length){if(rows.length===1&&!$('reportStatusFilter').value)selectedPoints.add(rows[0].key);initialSelectionPending=false}
   $('pointSelectionCount').textContent=selectedPoints.size+' / '+rows.length+' '+(rows.length===1?'ponto':'pontos');
