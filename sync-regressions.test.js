@@ -173,7 +173,7 @@ test('renovação automática consulta equipe a cada cinco segundos e usa fluxo 
 
 test('renovação transacional preserva ID, rascunho, originais e edição concorrente',async()=>{
  const vm=await import('node:vm'),src=file('google-drive-sync.js');
- const found=src.match(/  async function replaceTeamLocal\(item,original,document,member,archive=null\)\{[\s\S]*?\n  \}/);
+ const found=src.match(/  async function replaceTeamLocal\(item,original,document,member,archive=null,legacyRestore=false\)\{[\s\S]*?\n  \}/);
  assert.ok(found);
  const id='qa-vistoria',old={meta:{title:'Anterior'},records:[]},next={meta:{title:'Nova'},records:[]};
  const row={id,document:old},member={google_subject:'tech'};
