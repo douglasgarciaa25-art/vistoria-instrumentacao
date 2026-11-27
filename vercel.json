@@ -5,6 +5,13 @@
   ],
   "builds": [
     {
+      "src": "api/team-events.mjs",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 60
+      }
+    },
+    {
       "src": "api/pdf-preview-assets.mjs",
       "use": "@vercel/node",
       "config": {
@@ -75,9 +82,17 @@
     {
       "src": "vistoria-logo.svg",
       "use": "@vercel/static"
+    },
+    {
+      "src": "team-live.mjs",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
+    {
+      "src": "/api/team-events",
+      "dest": "/api/team-events.mjs"
+    },
     {
       "src": "/pdf-preview-assets/5.4.624/engine\\.mjs",
       "dest": "/api/pdf-preview-assets.mjs?asset=engine"

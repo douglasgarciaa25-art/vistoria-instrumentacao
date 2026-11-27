@@ -161,7 +161,9 @@ test('interface móvel separa título e botões de sincronização da equipe',()
 test('renovação automática consulta equipe a cada cinco segundos e usa fluxo único no botão',()=>{
  const src=file('google-drive-sync.js');
  assert.match(src,/const TEAM_SYNC_INTERVAL=5000/);
- assert.match(src,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'&&validToken\(\)&&navigator\.onLine!==false&&!teamRunning&&teamSyncTimer===null\)void syncTeam\(\);\},TEAM_SYNC_INTERVAL\)/);
+ assert.match(src,/void connectTeamLive\(\)/);
+ assert.match(src,/Date\.now\(\)-lastTeamPoll>=30000/);
+ assert.match(src,/TEAM_SYNC_INTERVAL\);/);
  assert.match(src,/if\(validToken\(\)\)scheduleTeamSync\(500\)/);
  const manual=src.slice(src.indexOf("button(menu,'Atualizar da nuvem (mesmo ID)'"),src.indexOf("button(menu,'Revisar conflitos desta vistoria'"));
  assert.match(manual,/await syncTeam\(\)/);

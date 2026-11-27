@@ -440,6 +440,7 @@
     }catch(e){display(e.message,true);sessionMessage('Falha ao ativar conexão automática: '+e.message);return false;}
   }
   function disconnect() {
+    stopTeamLive();
     const token=accessToken;
     const disconnectingSubject=queueMember?.google_subject;
     queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
@@ -473,6 +474,13 @@
   let teamRunning=false;
   // Um salvamento ocorrido durante a sincronização não pode perder seu envio.
   const TEAM_SYNC_INTERVAL=5000;
+  let teamLive=null,teamLiveLoading=false,lastTeamPoll=0;
+  async function connectTeamLive(){
+    if(!validToken()||navigator.onLine===false||document.visibilityState!=='visible')return;
+    if(!teamLive&&!teamLiveLoading){teamLiveLoading=true;try{const {createTeamLive}=await import('./team-live.mjs');teamLive=createTeamLive({token:()=>validToken()?accessToken:'',visible:()=>document.visibilityState==='visible',online:()=>navigator.onLine!==false,onChange:()=>scheduleTeamSync(100)});}catch{}finally{teamLiveLoading=false}}
+    if(teamLive)void teamLive.start();
+  }
+  function stopTeamLive(){teamLive?.stop();}
   let teamSyncTimer=null;
   function scheduleTeamSync(delay=500){
     if(!validToken()||navigator.onLine===false)return;
@@ -912,7 +920,7 @@
   }
   async function showReports(member,box,status){
     const section=document.createElement('section');section.className='cloud-team-reports';section.dataset.disclosureSubject=member.google_subject;const disclosureState=cloudDisclosureState(member.google_subject);disclosureState.showFinalized=typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference();box.append(section);
-    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As alterações salvas são enviadas automaticamente. Com internet e o aplicativo aberto, as revisões da equipe são consultadas a cada 5 segundos, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
+    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As alterações salvas são enviadas automaticamente. Com internet e o aplicativo aberto, os avisos de atualização acionam a sincronização; a consulta periódica permanece como segurança, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
     const autoKey='vistoria-team-auto:'+member.google_subject;
     const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
     const auto=document.createElement('input');auto.type='checkbox';auto.style.width='auto';auto.checked=localStorage.getItem(autoKey)==='1';
@@ -1258,12 +1266,13 @@
       }
     }
     addEventListener('online',resume);
-    addEventListener('offline',()=>{if(queueMember)void showPendingQueue(queueMember);});
+    addEventListener('offline',()=>{stopTeamLive();if(queueMember)void showPendingQueue(queueMember);});
     document.addEventListener('vistoria-saved',()=>{if(queueMember)void showPendingQueue(queueMember);});
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){resume();void connectTeamLive()}else stopTeamLive()});
     resume();
     setInterval(()=>{if(document.visibilityState==='visible'){if(validToken())sync();else void restoreSession();}},90000);
-    setInterval(()=>{if(document.visibilityState==='visible'&&validToken()&&navigator.onLine!==false&&!teamRunning&&teamSyncTimer===null)void syncTeam();},TEAM_SYNC_INTERVAL);
+    setInterval(()=>{if(document.visibilityState==='visible'&&validToken()&&navigator.onLine!==false){void connectTeamLive();if(!teamRunning&&teamSyncTimer===null&&(!teamLive?.isReady()||Date.now()-lastTeamPoll>=30000)){lastTeamPoll=Date.now();void syncTeam();}}else stopTeamLive();},TEAM_SYNC_INTERVAL);
+    void connectTeamLive();
     document.addEventListener('vistoria-saved',()=>{if(validToken())scheduleTeamSync(500);if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(reg=>reg.sync?.register('vistoria-resume')).catch(()=>{});});
     navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='VISTORIA_RESUME')resume();});
     if(typeof window.download==='function') {
