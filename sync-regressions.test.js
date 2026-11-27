@@ -220,7 +220,8 @@ test('uma exclusão local antiga não é revertida por download automático',asy
  assert.equal(canRestore({account:'admin',revision:3},{revision:3},'admin'),false);
  assert.equal(canRestore({account:'admin',revision:3},{revision:4},'other'),false);
  assert.equal(canRestore({account:'admin',revision:3},{revision:4},'admin'),true);
- assert.match(src,/if\(marker.result&&!canRestoreTeamTrash\(marker.result,item,account\)\)return/);
+ assert.match(src,/if\(marker.result&&!canRestoreTeamTrash\(marker.result,item,account\)&&!\(legacyRestore===true&&marker.result===true&&!original\)\)return/);
+ assert.match(src,/legacyRestore=state.report_id===item.report_id&&!state.deleted_at&&state.revision===item.revision/);
 });
 
 test('cópia local antiga ausente na equipe oferece apenas a lixeira local',async()=>{

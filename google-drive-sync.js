@@ -540,7 +540,7 @@
   }
   // Renovação atômica: uma única linha por ID; o rascunho atual acompanha a revisão.
   // Sem base comprovada, guarda o original na área de conflitos, não em outra vistoria.
-  async function replaceTeamLocal(item,original,document,member,archive=null){
+  async function replaceTeamLocal(item,original,document,member,archive=null,legacyRestore=false){
     const id=item.report_id,account=member.google_subject,token=accessToken;
     const expected=original?JSON.stringify(original.document):null;
     const activeAtStart=activeReportId===id;
@@ -563,7 +563,7 @@
         const marker=draft.get('deleted-report:'+id);
         marker.onsuccess=()=>{
           // A legacy local deletion is never undone by a routine cloud download.
-          if(marker.result&&!canRestoreTeamTrash(marker.result,item,account))return;
+          if(marker.result&&!canRestoreTeamTrash(marker.result,item,account)&&!(legacyRestore===true&&marker.result===true&&!original))return;
           if(!sessionOK()||!editorOK())return;
           const deleted=trash.get(id);
           deleted.onsuccess=()=>{
@@ -597,9 +597,13 @@
     current.onsuccess=()=>{
       // Existing live records are moved atomically by applyTeamTrash.
       if(current.result)return;
-      draft.put({account,revision:Number(revision)},'deleted-report:'+id);
-      const old=trash.get(id);
-      old.onsuccess=()=>{if(old.result)trash.put({...old.result,teamTrash:true,teamRevision:Number(revision)});};
+      const marker=draft.get('deleted-report:'+id);
+      marker.onsuccess=()=>{
+        if(Number.isSafeInteger(marker.result?.revision)&&marker.result.revision>Number(revision))return;
+        draft.put({account,revision:Number(revision)},'deleted-report:'+id);
+        const old=trash.get(id);
+        old.onsuccess=()=>{if(old.result)trash.put({...old.result,teamTrash:true,teamRevision:Number(revision)});};
+      };
     };
     await done;
   }
@@ -804,7 +808,11 @@
         }queuedConflicts=outstanding;
       }
       if(queued.size)teamDeferred+=queued.size;
-      if(queuedConflicts.length){teamConflicts+=queuedConflicts.length;conflictFields.push('Fila: '+queuedConflicts.length+' envio(s) exigem revisão; versões preservadas');}
+      // Uma exclusão confirmada não é um conflito de envio: manter a fila arquivada
+      // até o administrador restaurar a vistoria; nunca apagar o documento pendente.
+      const held=typeof sharedTrashIndex!=='undefined'&&sharedTrashAccount===member.google_subject?new Set(sharedTrashIndex.map(x=>x.report_id)):new Set();
+      const visibleConflicts=queuedConflicts.filter(j=>!held.has(j.id));
+      if(visibleConflicts.length){teamConflicts+=visibleConflicts.length;conflictFields.push('Fila: '+visibleConflicts.length+' envio(s) exigem revisão; versões preservadas');}
       let local=await reports();
       const remoteIdsForTrash=new Set(remote.map(x=>x.report_id));
       for(const row of local){
@@ -823,10 +831,15 @@
         if(queueMember?.google_subject!==member.google_subject||!validToken()||accessToken!==runToken)break;
         try{
         const marker=await idbReq(db.transaction('draft').objectStore('draft').get('deleted-report:'+item.report_id));
+        let legacyRestore=false;
         if(marker&&!canRestoreTeamTrash(marker,item,member.google_subject)){
-          teamDeferred++;
-          conflictFields.push(item.report_id+': na lixeira local; confirme a remoção da equipe ou restaure manualmente');
-          continue;
+          // Uma marca booleana antiga não pode prevalecer sobre a vistoria compartilhada ativa.
+          // Confirmar o estado e a revisão no servidor, nunca inferir a partir da listagem.
+          if(marker===true&&!local.some(x=>x.id===item.report_id)&&!queued.has(item.report_id)&&isSharedTrashReport(item.report_id)){
+            const state=await teamState(item.report_id);
+            legacyRestore=state.report_id===item.report_id&&!state.deleted_at&&state.revision===item.revision;
+          }
+          if(!legacyRestore){teamDeferred++;conflictFields.push(item.report_id+': na lixeira local; confirme a remoção da equipe ou restaure manualmente');continue;}
         }
         const previous=baseline[item.report_id];
         const row=local.find(x=>x.id===item.report_id);
@@ -914,7 +927,7 @@
          if(!validate({id:item.report_id,document:d.document})||d.revision!==item.revision){teamDeferred++;continue;}
          const remoteHash=await digest(d.originalDocument||d.document);
          const archive=d.originalDocument?{reportId:item.report_id,account:member.google_subject,baseRevision:previous?.revision??null,remoteRevision:d.revision,local:row?.document||d.document,remote:d.originalDocument,choices:[],reason:'legacy-schema-repair',created:new Date().toISOString()}:null;
-         if(!await replaceTeamLocal(item,row,d.document,member,archive)){teamDeferred++;continue;}
+         if(!await replaceTeamLocal(item,row,d.document,member,archive,legacyRestore)){teamDeferred++;continue;}
          if(archive)teamRecovered++;
         baseline[item.report_id]={revision:d.revision,hash:remoteHash};
         localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;
