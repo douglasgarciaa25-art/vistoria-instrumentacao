@@ -16,7 +16,7 @@ export async function purgeExpired({db=teamDb,inspect=inspectExpiredFile,remove=
   try{
    const id=encodeURIComponent(task.report_id),file=encodeURIComponent(task.file_id);
    const rows=await db('vistoria_report_index?report_id=eq.'+id+'&select=report_id,purged_at,deleted_at,purge_completed_at');
-   if(rows.length!==1||!rows[0].purged_at||!rows[0].deleted_at||rows[0].purge_completed_at)throw Error('Vistoria não expirada');
+   if(rows.length!==1||!rows[0].purged_at||!rows[0].deleted_at||!Number.isFinite(Date.parse(rows[0].deleted_at))||Date.parse(rows[0].deleted_at)>now()-30*86400000||rows[0].purge_completed_at)throw Error('Vistoria não expirada');
    const others=await db('vistoria_report_index?drive_file_id=eq.'+file+'&report_id=neq.'+id+'&select=report_id&limit=1');
    const audits=await db('vistoria_audit?drive_file_id=eq.'+file+'&report_id=neq.'+id+'&select=report_id&limit=1');
    if(others.length||audits.length)throw Error('Arquivo referenciado por outra vistoria');

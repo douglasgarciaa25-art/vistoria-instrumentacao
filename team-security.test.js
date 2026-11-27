@@ -4,12 +4,12 @@ import handler from './api/team-reports.mjs';
 test('API da equipe: autorização, propriedade, lixeira e partes',async()=>{
  const original=globalThis.fetch;const env={...process.env};
  process.env.VISTORIA_GOOGLE_CLIENT_ID='test-client';process.env.my_super_base_secrety_key133='test-only';
- let deleted=false,staged=[],member={google_subject:'tech',role:'technician',status:'approved'},calls=[];
+ let deleted=false,expired=false,staged=[],member={google_subject:'tech',role:'technician',status:'approved'},calls=[];
  globalThis.fetch=async(url,opts={})=>{
   url=String(url);calls.push({url,method:opts.method||'GET'});
   if(url.startsWith('https://oauth2.googleapis.com/'))return Response.json({aud:'test-client',email_verified:true,sub:'tech',email:'test@example.invalid'});
   if(url.includes('vistoria_members?'))return Response.json([member]);
-  if(url.includes('vistoria_report_index?'))return Response.json([{report_id:'r1',owner_subject:'other',revision:2,deleted_at:deleted?new Date().toISOString():null}]);
+  if(url.includes('vistoria_report_index?'))return Response.json([{report_id:'r1',owner_subject:'other',revision:2,deleted_at:deleted?new Date(Date.now()-(expired?31*86400000:0)).toISOString():null}]);
   if(url.includes('rpc/vistoria_change_report_state')){const body=JSON.parse(opts.body);assert.equal(body.p_actor_subject,'tech');deleted=body.p_action==='delete';return Response.json(3);}
   if(url.includes('vistoria_upload_parts?')){if(opts.method==='DELETE')return new Response(null,{status:204});return Response.json(staged);}
   throw Error('Unexpected network request '+url);
@@ -42,5 +42,6 @@ test('API da equipe: autorização, propriedade, lixeira e partes',async()=>{
   assert.equal((await invoke('POST',{id:'r1'},{...base,action:'upload-finish',total:1,sha256:'wrong'})).status,400);
   assert.deepEqual((await invoke('POST',{id:'r1'},{...base,action:'upload-status'})).payload,{parts:[0]});
   member.role='technician';assert.equal((await invoke('DELETE',{id:'r1'},{revision:2})).status,200);assert.equal(deleted,true);assert.equal((await invoke('POST',{id:'r1'},{action:'restore',revision:2})).status,200);assert.equal(deleted,false);
+  deleted=true;expired=true;assert.equal((await invoke('POST',{id:'r1'},{action:'restore',revision:2})).status,410);
  }finally{globalThis.fetch=original;for(const k of ['VISTORIA_GOOGLE_CLIENT_ID','my_super_base_secrety_key133']){if(env[k]===undefined)delete process.env[k];else process.env[k]=env[k];}}
 });

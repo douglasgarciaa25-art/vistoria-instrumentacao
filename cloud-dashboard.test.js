@@ -31,7 +31,8 @@ test('Configurações e administração estão disponíveis em painéis recolhí
  }
  assert.match(cloud,/button\(sharePanel,'Compartilhar vistoria local selecionada'/);
  assert.match(cloud,/button\(menu,'Histórico de revisões'/);
- assert.match(cloud,/if\(member\.role==='admin'\)/);
+ assert.match(cloud,/if\(member\.role!=='admin'\)return;/);
+ assert.match(cloud,/if\(member\.status==='approved'\)\{\s*const trash=/);
  assert.match(cloud,/className='cloud-report-card'/);
  assert.match(cloud,/className='cloud-team-reports'/);
  assert.match(cloud,/const filter=\(\)=>/);
