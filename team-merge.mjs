@@ -15,6 +15,10 @@ export function mergeReport(base, local, remote, resolutions = new Map()) {
   if(equal(l,r))return l;
   if(equal(b,l))return r;
   if(equal(b,r))return l;
+  if(path.length===1&&path[0]==='deletedPoints'&&[b,l,r].every(a=>Array.isArray(a)&&a.every(x=>isObject(x)&&isObject(x.point)&&typeof x.point.pointId==='string'&&x.point.pointId)&&new Set(a.map(x=>x.point.pointId)).size===a.length)){
+   const maps=[b,l,r].map(a=>new Map(a.map(x=>[x.point.pointId,x]))),order=[...new Set([...r,...l,...b].map(x=>x.point.pointId))];
+   return order.map(id=>walk(...maps.map(map=>map.has(id)?map.get(id):missing),[...path,id])).filter(x=>x!==missing);
+  }
   if(path.length===1&&path[0]==='records'){
    if(![b,l,r].every(ids))return fail(path,'point-identity');
    const maps=[b,l,r].map(a=>new Map(a.map(p=>[p.pointId,p])));
@@ -44,6 +48,10 @@ export function mergeReport(base, local, remote, resolutions = new Map()) {
  }
  if(![base,local,remote].every(d=>isObject(d)&&isObject(d.meta)&&ids(d.records)))return {document:null,conflicts:[{path:[],reason:'invalid-base-or-point-identity'}]};
  const document=walk(base,local,remote,[]);
+ if(!conflicts.length&&Array.isArray(document.deletedPoints)){
+  const live=new Set(document.records.map(p=>p.pointId));
+  if(document.deletedPoints.some(x=>live.has(x?.point?.pointId)))conflicts.push({path:['deletedPoints'],reason:'point-live-and-trash'});
+ }
  return {document:conflicts.length?null:JSON.parse(JSON.stringify(document)),conflicts};
 }
 

@@ -29,6 +29,8 @@ export default async function handler(req,res){
  const query='vistoria_point_audit?actor_name=ilike.'+encodeURIComponent('*'+term+'*')+'&action=eq.completed&select=report_id,point_id,tag_snapshot,work_order_snapshot,actor_name,occurred_at&order=occurred_at.desc&limit=100';
  return reply(200,{matches:await teamDb(query)});
  }
+ const trashState=req.query?.['trash-state']==='1';
+ if(trashState)return reply(200,{reports:await teamDb(base+'?deleted_at=not.is.null&select=report_id,revision,deleted_at&order=report_id.asc')});
  const trash=req.query?.trash==='1';
  if(trash&&m.role!=='admin')return reply(403,{error:'Somente administrador pode consultar a lixeira'});
  return reply(200,{reports:await teamDb(base+'?deleted_at='+ (trash?'not.is.null':'is.null')+'&select=report_id,owner_subject,revision,updated_at,deleted_at&order=updated_at.desc')});

@@ -443,7 +443,7 @@
     stopTeamLive();
     const token=accessToken;
     const disconnectingSubject=queueMember?.google_subject;
-    queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();
+    queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();clearSharedTrashIndex();
     localStorage.removeItem(CONNECTED_KEY);
     try{sessionStorage.removeItem(PERSISTENCE_ATTEMPT_KEY);}catch{}
     if(disconnectingSubject)void window.VistoriaBackground?.clearFor(disconnectingSubject).catch(()=>{});
@@ -468,7 +468,7 @@
   async function reportRequest(method='GET',id='',body=null,history=false,trash=false,version=null,part=null,downloadRevision=null,stateOnly=false){
     assertReady();
     if(method==='POST'&&body?.document){const bytes=new TextEncoder().encode(JSON.stringify(body.document));if(bytes.length>3000000){if(bytes.length>12000000)throw Error('Relatório acima de 12 MB. Reduza as fotos.');const {member}=await teamRequest();if(member?.status!=='approved')throw Error('Acesso não aprovado');const hash=await digest(body.document);const queueKey='vistoria-upload:'+member.google_subject+':'+id;let pending;try{pending=JSON.parse(localStorage.getItem(queueKey)||'null');}catch{}if(!pending||pending.hash!==hash||pending.revision!==body.revision||Date.now()-pending.created>86400000){pending={upload_id:crypto.randomUUID(),hash,revision:body.revision,created:Date.now()};localStorage.setItem(queueKey,JSON.stringify(pending));}const upload_id=pending.upload_id;const size=750000;const total=Math.ceil(bytes.length/size);const staged=await reportRequest('POST',id,{action:'upload-status',upload_id,revision:body.revision});const received=new Set(staged.parts||[]);for(let part=0;part<total;part++){if(received.has(part))continue;const chunk=bytes.subarray(part*size,(part+1)*size);let binary='';for(let i=0;i<chunk.length;i+=8192)binary+=String.fromCharCode(...chunk.subarray(i,i+8192));await reportRequest('POST',id,{action:'upload-part',upload_id,part,payload:btoa(binary),revision:body.revision});setTeamSyncStatus('Enviando relatório: '+(part+1)+'/'+total);}const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');const result=await reportRequest('POST',id,{action:'upload-finish',upload_id,total,revision:body.revision,sha256});localStorage.removeItem(queueKey);return result;}}
-    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':version!==null?'&version='+encodeURIComponent(version):'')+(part!==null?'&part='+part+'&revision='+encodeURIComponent(downloadRevision):'')+(stateOnly?'&state=1':''):(trash?'?trash=1':'')),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const r=await fetch('/api/team-reports'+(id?'?id='+encodeURIComponent(id)+(history?'&history=1':version!==null?'&version='+encodeURIComponent(version):'')+(part!==null?'&part='+part+'&revision='+encodeURIComponent(downloadRevision):'')+(stateOnly?'&state=1':''):(trash==='state'?'?trash-state=1':trash?'?trash=1':'')),{method,cache:'no-store',headers:{Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Object.assign(Error(d.error||'Falha na vistoria compartilhada'),{status:r.status});if(d.segmented){if(!Number.isInteger(d.total)||d.total<1||d.total>16)throw Error('Quantidade de partes inválida');const chunks=[];let length=0;for(let i=0;i<d.total;i++){const p=await reportRequest('GET',id,null,false,false,version,i,d.revision);if(p.part!==i||p.total!==d.total||p.revision!==d.revision)throw Error('Download inconsistente');const chunk=Uint8Array.from(atob(p.payload),c=>c.charCodeAt(0));chunks.push(chunk);length+=chunk.length;}const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}return {...d,document:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))};}return d;
   }
   let teamRunning=false;
@@ -500,6 +500,17 @@
   function isLocalCopy(id){return JSON.parse(localStorage.getItem(LOCAL_COPY_IDS)||'[]').includes(id);}
   function rememberLocalCopy(id){const copies=new Set(JSON.parse(localStorage.getItem(LOCAL_COPY_IDS)||'[]'));copies.add(id);localStorage.setItem(LOCAL_COPY_IDS,JSON.stringify([...copies]));const ids=new Set(JSON.parse(localStorage.getItem(TEAM_IDS)||'[]'));ids.add(id);localStorage.setItem(TEAM_IDS,JSON.stringify([...ids]));}
   function isSharedTrashReport(id){return isTeamReport(id)&&!isLocalCopy(id);}
+  let sharedTrashIndex=[],sharedTrashAccount=null,sharedTrashStamp=null;
+  function clearSharedTrashIndex(){sharedTrashIndex=[];sharedTrashAccount=null;sharedTrashStamp=null;void window.refreshTrash?.();}
+  async function syncSharedTrashIndex(member){
+    const token=accessToken,account=member.google_subject;
+    const packet=await reportRequest('GET','',null,false,'state');
+    if(!Array.isArray(packet.reports)||packet.reports.some(x=>!x||!x.deleted_at||!Number.isSafeInteger(x.revision)||!/^[a-zA-Z0-9_-]{1,100}$/.test(x.report_id)))throw Error('Índice da lixeira inválido');
+    if(accessToken!==token||queueMember?.google_subject!==account||!validToken())return;
+    sharedTrashIndex=packet.reports;sharedTrashAccount=account;sharedTrashStamp=new Date().toISOString();rememberTeamIds(sharedTrashIndex);
+    const local=await idbReq(db.transaction('trash').objectStore('trash').getAll());
+    for(const row of local){const item=sharedTrashIndex.find(x=>x.report_id===row.id);if(item&&accessToken===token&&queueMember?.google_subject===account)await markTeamTrash(row.id,account,item.revision);}
+  }
   let queueRunning=false,queueMember=null,queueGeneration=0;
   async function showPendingQueue(member){
     const host=$('gdrive-queue');if(!host||queueRunning||!member)return;
@@ -558,7 +569,7 @@
           deleted.onsuccess=()=>{
             if(!sessionOK()||!editorOK())return;
             if(archive)draft.put(archive,'team-conflict:'+account+':'+id+':'+crypto.randomUUID());
-            if(deleted.result)draft.put(deleted.result,'team-trash-archive:'+account+':'+id+':'+crypto.randomUUID());
+            if(deleted.result){draft.put(deleted.result,'team-trash-archive:'+account+':'+id+':'+crypto.randomUUID());if(JSON.stringify(deleted.result.document)!==JSON.stringify(document))draft.put({reportId:id,account,remoteRevision:item.revision,local:deleted.result.document,remote:document,choices:[],reason:'restored-team-trash',created:new Date().toISOString()},'team-conflict:'+account+':'+id+':'+crypto.randomUUID());}
             trash.delete(id);draft.delete('deleted-report:'+id);
             store.put({id,updated:item.updated_at||new Date().toISOString(),document});
             if(current.result?.reportId===id||activeReportId===id)draft.put({...structuredClone(document),reportId:id},'current');
@@ -626,6 +637,8 @@
   const teamState=id=>reportRequest('GET',id,null,false,false,null,null,null,true);
   window.VistoriaTeamTrash={
     known:isSharedTrashReport,
+    getIndex(){return sharedTrashAccount===queueMember?.google_subject?{items:sharedTrashIndex,stamp:sharedTrashStamp,admin:queueMember?.role==='admin'}:{items:[],stamp:null,admin:false};},
+    async sync(){if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para atualizar a lixeira.');if(teamRunning){scheduleTeamSync(500);return;}await syncTeam();},
     async move(id){
       if(!validToken()||navigator.onLine===false)throw Error('Conecte-se à equipe para mover a vistoria em todos os aparelhos.');
       const {member}=await teamRequest();
@@ -654,8 +667,7 @@
       if(member?.status!=='approved'||member.role!=='admin')throw Error('Somente o administrador pode restaurar uma vistoria compartilhada.');
       const state=await teamState(id);
       if(state.deleted_at)await reportRequest('POST',id,{action:'restore',revision:state.revision});
-      const tx=db.transaction('draft','readwrite'),done=txDone(tx);
-      tx.objectStore('draft').delete('deleted-report:'+id);await done;
+      // O marcador fica até o recebimento atômico da revisão restaurada.
       await syncTeam();await showTeam();await window.refreshTrash?.();
       notify('Restauração da equipe confirmada. A vistoria retornará com o mesmo ID.');
     }
@@ -757,12 +769,14 @@
     try{
       const {member}=await teamRequest();
       if(accessToken!==runToken)return;
-      if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();setResult('Sincronização indisponível: conta não aprovada.');return;}
-      if(queueMember?.google_subject!==member.google_subject)++queueGeneration;
+      if(member?.status!=='approved'){queueMember=null;++queueGeneration;$('gdrive-queue')?.replaceChildren();if(typeof clearSharedTrashIndex==='function')clearSharedTrashIndex();setResult('Sincronização indisponível: conta não aprovada.');return;}
+      if(queueMember?.google_subject!==member.google_subject){++queueGeneration;if(typeof clearSharedTrashIndex==='function')clearSharedTrashIndex();}
       queueMember=member;
       let {reports:remote}=await reportRequest();
       if(accessToken!==runToken)return;
       rememberTeamIds(remote);
+      if(typeof syncSharedTrashIndex==='function'){try{await syncSharedTrashIndex(member);}catch(e){failed('Lixeira da equipe',e);}}
+      if(accessToken!==runToken||!validToken())return;
       const key='vistoria-team-baseline:'+member.google_subject;
       const baseline=JSON.parse(localStorage.getItem(key)||'{}');
       // A fila também roda com o aplicativo aberto; o service worker só roda após fechar as janelas.
@@ -948,6 +962,7 @@
       }
       if(accessToken!==runToken||!validToken())return;
       await showPendingQueue(member);
+      if(typeof window.refreshTrash==='function')await window.refreshTrash();
       const finalLocal=await reports(),localIds=new Set(finalLocal.map(row=>row.id));
       const missing=[...remoteIdsForTrash].filter(id=>!localIds.has(id)).length;
       const moment=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});

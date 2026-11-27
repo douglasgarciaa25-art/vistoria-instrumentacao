@@ -427,3 +427,5 @@ test('salvamentos consecutivos são agrupados e nenhum envio é perdido durante 
  vm.runInContext('teamRunning=false',context);fire();assert.equal(called,1);assert.equal(timers.size,0);
  vm.runInContext('scheduleTeamSync(500)',context);context.navigator.onLine=false;fire();assert.equal(called,1);
 });
+
+test('lixeira compartilhada tem consulta própria e exclusão definitiva local não remove dados da equipe',()=>{const src=file('google-drive-sync.js');assert.match(src,/trash-state=1/);assert.match(src,/await syncSharedTrashIndex\(member\)/);assert.match(src,/await markTeamTrash\(row.id,account,item.revision\)/);assert.match(file('trash-actions.js'),/!r.teamTrash&&!window.VistoriaTeamTrash\?\.known\(r.id\)/);assert.match(file('enhancements.js'),/Sincronizar lixeiras/);});

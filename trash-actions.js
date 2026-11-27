@@ -39,8 +39,9 @@
  window.VistoriaLocalTrash={move:moveLocal};
  async function erase(id){
   const rows=await requestResult(db.transaction('trash').objectStore('trash').getAll());
-  const selected=id?rows.filter(r=>r.id===id):rows;
-  if(!selected.length){await window.refreshTrash();return notify('A lixeira está vazia.')}
+  // A exclusão definitiva local não pode esvaziar a lixeira compartilhada.
+  const selected=(id?rows.filter(r=>r.id===id):rows).filter(r=>!r.teamTrash&&!window.VistoriaTeamTrash?.known(r.id));
+  if(!selected.length){await window.refreshTrash();return notify('Não há cópias exclusivamente locais para apagar. A lixeira da equipe é preservada.')}
   if(!await ask('Apagar '+selected.length+' vistoria(s) e suas fotos da lixeira deste aparelho? Não é possível desfazer. O histórico e backups da nuvem são mantidos.'))return;
   await guarded(async()=>{
    const t=db.transaction('trash','readwrite');for(const row of selected)t.objectStore('trash').delete(row.id);
@@ -50,7 +51,7 @@
  // Capture makes nested button labels work and avoids older delegated handlers.
  $('historyList').addEventListener('click',e=>{const b=e.target.closest('[data-remove-report]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();move(b.dataset.removeReport).catch(err=>notify('Não foi possível mover: '+err.message))},true);
  const originalRefresh=window.refreshTrash;
- window.refreshTrash=async()=>{await originalRefresh();$('trashList').querySelectorAll('[data-restore-trash]').forEach(b=>{const row=b.closest('.entry');if(row.querySelector('[data-erase-trash]'))return;const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.dataset.eraseTrash=b.dataset.restoreTrash;remove.textContent='Apagar definitivamente';remove.style.margin='8px';row.append(remove);if(window.VistoriaTeamTrash?.known(b.dataset.restoreTrash)){const all=document.createElement('button');all.type='button';all.className='danger';all.textContent='Mover para lixeira em todos os aparelhos';all.onclick=async()=>{if(await ask('Confirmar remoção da equipe em todos os aparelhos?'))window.VistoriaTeamTrash.move(b.dataset.restoreTrash).catch(e=>notify(e.message));};row.append(all);}})};
+ window.refreshTrash=async()=>{await originalRefresh();$('trashList').querySelectorAll('[data-restore-trash]').forEach(b=>{const row=b.closest('.entry');if(row.querySelector('[data-erase-trash]')||window.VistoriaTeamTrash?.known(b.dataset.restoreTrash))return;const remove=document.createElement('button');remove.type='button';remove.className='danger';remove.dataset.eraseTrash=b.dataset.restoreTrash;remove.textContent='Apagar definitivamente';remove.style.margin='8px';row.append(remove);if(window.VistoriaTeamTrash?.known(b.dataset.restoreTrash)){const all=document.createElement('button');all.type='button';all.className='danger';all.textContent='Mover para lixeira em todos os aparelhos';all.onclick=async()=>{if(await ask('Confirmar remoção da equipe em todos os aparelhos?'))window.VistoriaTeamTrash.move(b.dataset.restoreTrash).catch(e=>notify(e.message));};row.append(all);}})};
  $('emptyTrash').onclick=()=>erase().catch(err=>notify('Não foi possível apagar: '+err.message));
  $('trashList').addEventListener('click',e=>{const b=e.target.closest('[data-erase-trash]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();erase(b.dataset.eraseTrash).catch(err=>notify('Não foi possível apagar: '+err.message))},true);
  if(historyReady)window.refreshTrash().catch(()=>{});
