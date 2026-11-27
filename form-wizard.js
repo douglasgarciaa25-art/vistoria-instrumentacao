@@ -92,6 +92,22 @@
   +'<details class="wizard-navigation" id="wizardNavigation"><summary>Ir para outra etapa</summary><div class="wizard-steps" role="group" aria-label="Selecionar etapa"></div></details>'
   +'<button type="button" class="secondary wizard-more" id="wizardMore" aria-expanded="false" hidden></button>';
  fields.before(wizard);
+ const modeBar=document.createElement('div');
+ modeBar.className='wizard-mode-bar';
+ modeBar.setAttribute('role','group');
+ modeBar.setAttribute('aria-label','Modo de preenchimento');
+ modeBar.innerHTML='<button type="button" class="secondary" id="wizardQuickMode">Preenchimento rápido</button><button type="button" class="secondary" id="wizardGuidedMode">Preenchimento guiado</button>';
+ wizard.before(modeBar);
+ style.textContent+='\n#form .wizard-mode-bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}#form .wizard-mode-bar button{flex:1;min-height:44px}#form .wizard-mode-bar button[aria-pressed="true"]{background:#351463;color:white}#form .wizard-box[hidden],#form .wizard-footer[hidden]{display:none!important}';
+ let quickMode=true;
+ try{quickMode=localStorage.getItem('vistoria.formMode')!=='guided'}catch{}
+ function changeMode(quick){
+  quickMode=quick;
+  try{localStorage.setItem('vistoria.formMode',quick?'quick':'guided')}catch{}
+  render();
+ }
+ modeBar.querySelector('#wizardQuickMode').onclick=()=>changeMode(true);
+ modeBar.querySelector('#wizardGuidedMode').onclick=()=>changeMode(false);
  const nav=wizard.querySelector('.wizard-navigation');
  const stepButtons=steps.map((step,index)=>{
   const button=document.createElement('button');
@@ -199,6 +215,15 @@
   if(document.getElementById('status')?.value==='Corrigido')expanded[3]=true;
  }
  function render(){
+  wizard.hidden=quickMode;
+  footer.hidden=quickMode;
+  modeBar.querySelector('#wizardQuickMode').setAttribute('aria-pressed',String(quickMode));
+  modeBar.querySelector('#wizardGuidedMode').setAttribute('aria-pressed',String(!quickMode));
+  if(quickMode){
+   for(const node of group.keys())node.dataset.wizardHidden='false';
+   more.hidden=true;
+   return;
+  }
   for(const [node,config] of group){
    node.dataset.wizardHidden=String(config.step!==current||(config.optional&&!expanded[current]));
   }
@@ -241,6 +266,7 @@
   current=Math.max(0,Math.min(steps.length-1,index));
   render();
   if(scroll){
+   if(quickMode)return;
    wizard.querySelector('#wizardTitle').focus({preventScroll:true});
    wizard.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
   }
@@ -251,6 +277,7 @@
   const input=document.getElementById(id);
   const details=input?.closest('details');
   if(details)details.open=true;
+  if(quickMode&&input)input.scrollIntoView({block:'center'});
   if(input)input.focus({preventScroll:true});
   if(typeof notify==='function')notify('Preencha: '+(input?.closest('label')?.textContent||id).trim().slice(0,90));
  }
@@ -276,7 +303,7 @@
  next.addEventListener('click',()=>{if(validate(current))setStep(current+1,true)});
  more.addEventListener('click',()=>{expanded[current]=!expanded[current];render()});
  form.addEventListener('submit',event=>{
-  if(current<steps.length-1){
+  if(!quickMode&&current<steps.length-1){
    event.preventDefault();event.stopImmediatePropagation();
    if(validate(current))setStep(current+1,true);
    return;
