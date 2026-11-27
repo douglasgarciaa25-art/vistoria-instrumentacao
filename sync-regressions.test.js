@@ -158,9 +158,11 @@ test('interface móvel separa título e botões de sincronização da equipe',()
 });
 
 
-test('renovação automática consulta equipe a cada vinte segundos e usa fluxo único no botão',()=>{
+test('renovação automática consulta equipe a cada cinco segundos e usa fluxo único no botão',()=>{
  const src=file('google-drive-sync.js');
- assert.match(src,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'&&validToken\(\)&&navigator\.onLine!==false\)void syncTeam\(\);\},20000\)/);
+ assert.match(src,/const TEAM_SYNC_INTERVAL=5000/);
+ assert.match(src,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'&&validToken\(\)&&navigator\.onLine!==false&&!teamRunning&&teamSyncTimer===null\)void syncTeam\(\);\},TEAM_SYNC_INTERVAL\)/);
+ assert.match(src,/if\(validToken\(\)\)scheduleTeamSync\(500\)/);
  const manual=src.slice(src.indexOf("button(menu,'Atualizar da nuvem (mesmo ID)'"),src.indexOf("button(menu,'Revisar conflitos desta vistoria'"));
  assert.match(manual,/await syncTeam\(\)/);
  assert.doesNotMatch(manual,/crypto\.randomUUID|confirm\(|store\.put/);
@@ -406,4 +408,19 @@ test('fila automática em primeiro plano respeita conta e consulta PDF sem envio
  assert.match(src,/if\(receiveOnly!==true&&window\.VistoriaBackground\?\.run\)/);
  assert.match(src,/await window\.VistoriaBackground\.run\(member\.google_subject\)/);
  assert.match(worker,/expectedSubject!==null&&auth\.subject!==expectedSubject/);
+});
+
+test('salvamentos consecutivos são agrupados e nenhum envio é perdido durante sincronização',async()=>{
+ const vm=await import('node:vm'),src=file('google-drive-sync.js');
+ const code=src.slice(src.indexOf('  let teamRunning=false;'),src.indexOf('  function setTeamSyncStatus('));
+ const timers=new Map();let next=0,called=0;
+ const context=vm.createContext({navigator:{onLine:true},validToken:()=>true,
+  setTimeout:(cb,delay)=>{const id=++next;timers.set(id,{cb,delay});return id;},
+  clearTimeout:id=>timers.delete(id),syncTeam:async()=>{called++;}});
+ vm.runInContext(code,context);
+ const fire=()=>{const [id,job]=timers.entries().next().value;timers.delete(id);job.cb();};
+ vm.runInContext('teamRunning=true;scheduleTeamSync(500);scheduleTeamSync(500)',context);
+ assert.equal(timers.size,1);fire();assert.equal(called,0);assert.equal(timers.size,1);
+ vm.runInContext('teamRunning=false',context);fire();assert.equal(called,1);assert.equal(timers.size,0);
+ vm.runInContext('scheduleTeamSync(500)',context);context.navigator.onLine=false;fire();assert.equal(called,1);
 });

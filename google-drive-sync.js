@@ -471,6 +471,19 @@
     const d=await r.json().catch(()=>({error:'Servidor da equipe indisponível (HTTP '+r.status+').'}));if(!r.ok||d.error)throw Object.assign(Error(d.error||'Falha na vistoria compartilhada'),{status:r.status});if(d.segmented){if(!Number.isInteger(d.total)||d.total<1||d.total>16)throw Error('Quantidade de partes inválida');const chunks=[];let length=0;for(let i=0;i<d.total;i++){const p=await reportRequest('GET',id,null,false,false,version,i,d.revision);if(p.part!==i||p.total!==d.total||p.revision!==d.revision)throw Error('Download inconsistente');const chunk=Uint8Array.from(atob(p.payload),c=>c.charCodeAt(0));chunks.push(chunk);length+=chunk.length;}const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}return {...d,document:JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))};}return d;
   }
   let teamRunning=false;
+  // Um salvamento ocorrido durante a sincronização não pode perder seu envio.
+  const TEAM_SYNC_INTERVAL=5000;
+  let teamSyncTimer=null;
+  function scheduleTeamSync(delay=500){
+    if(!validToken()||navigator.onLine===false)return;
+    if(teamSyncTimer!==null)clearTimeout(teamSyncTimer);
+    teamSyncTimer=setTimeout(()=>{
+      teamSyncTimer=null;
+      if(!validToken()||navigator.onLine===false)return;
+      if(teamRunning){scheduleTeamSync(500);return;}
+      void syncTeam();
+    },delay);
+  }
   function setTeamSyncStatus(message){const status=$('gdrive-team-sync-result');if(status)status.textContent=message;}
   const TEAM_IDS='vistoria-team-known-ids';
   const LOCAL_COPY_IDS='vistoria-team-local-copy-ids';
@@ -851,7 +864,7 @@
           const d=await reportRequest('POST',item.report_id,{document:row.document,revision:previous.revision});
           baseline[item.report_id]={revision:d.revision,hash};
           localStorage.setItem(key,JSON.stringify(baseline));teamSent++;
-        }catch(e){failed(item.report_id,e);}
+        }catch(e){failed(item.report_id,e);if(e?.status===409&&typeof scheduleTeamSync==='function')scheduleTeamSync(500);}
       }
       if(accessToken!==runToken||!validToken())return;
       await showPendingQueue(member);
@@ -899,7 +912,7 @@
   }
   async function showReports(member,box,status){
     const section=document.createElement('section');section.className='cloud-team-reports';section.dataset.disclosureSubject=member.google_subject;const disclosureState=cloudDisclosureState(member.google_subject);disclosureState.showFinalized=typeof vistoriaShowFinalizedPreference==='function'&&vistoriaShowFinalizedPreference();box.append(section);
-    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As revisões da equipe renovam automaticamente a vistoria neste aparelho, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
+    const heading=document.createElement('h4');heading.textContent='Vistorias compartilhadas';section.append(heading);const hint=document.createElement('p');hint.className='cloud-subtitle';hint.textContent='As alterações salvas são enviadas automaticamente. Com internet e o aplicativo aberto, as revisões da equipe são consultadas a cada 5 segundos, mantendo o mesmo ID.';section.append(hint);const queueDetails=document.createElement('details');queueDetails.className='cloud-disclosure cloud-queue-details';const queueTitle=document.createElement('summary');queueTitle.textContent='Envios e sincronização automática';queueDetails.append(queueTitle);section.append(queueDetails);
     const autoKey='vistoria-team-auto:'+member.google_subject;
     const autoLabel=document.createElement('label');autoLabel.style.cssText='display:flex;align-items:center;gap:8px';
     const auto=document.createElement('input');auto.type='checkbox';auto.style.width='auto';auto.checked=localStorage.getItem(autoKey)==='1';
@@ -1250,8 +1263,8 @@
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume()});
     resume();
     setInterval(()=>{if(document.visibilityState==='visible'){if(validToken())sync();else void restoreSession();}},90000);
-    setInterval(()=>{if(document.visibilityState==='visible'&&validToken()&&navigator.onLine!==false)void syncTeam();},20000);
-    document.addEventListener('vistoria-saved',()=>{if(validToken())setTimeout(syncTeam,3000);if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(reg=>reg.sync?.register('vistoria-resume')).catch(()=>{});});
+    setInterval(()=>{if(document.visibilityState==='visible'&&validToken()&&navigator.onLine!==false&&!teamRunning&&teamSyncTimer===null)void syncTeam();},TEAM_SYNC_INTERVAL);
+    document.addEventListener('vistoria-saved',()=>{if(validToken())scheduleTeamSync(500);if('serviceWorker' in navigator)navigator.serviceWorker.ready.then(reg=>reg.sync?.register('vistoria-resume')).catch(()=>{});});
     navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type==='VISTORIA_RESUME')resume();});
     if(typeof window.download==='function') {
       const original=window.download;
