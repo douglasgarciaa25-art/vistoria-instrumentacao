@@ -15,15 +15,15 @@ test('histórico detalha campos sem expor conteúdo dos anexos',()=>{const a={"m
 
 test('resolução explícita preserva campos independentes e escolhe apenas o conflito',()=>{const base={meta:{title:'A',area:'X'},records:[]},local={meta:{title:'B',area:'X'},records:[]},remote={meta:{title:'C',area:'Y'},records:[]};const r=mergeReport(base,local,remote,new Map([[JSON.stringify(['meta','title']),'local']]));assert.deepEqual(r.document,{meta:{title:'B',area:'Y'},records:[]});assert.equal(r.conflicts.length,0);});
 
-test('conciliação automática conserva alterações independentes e escolhe texto remoto',async()=>{
+test('conciliação automática conserva alterações independentes e prioriza texto local editado',async()=>{
  const {autoResolveReport}=await import('./team-merge.mjs');
  const base={meta:{title:'A',sector:'Usina'},records:[{pointId:'point-001',status:'Pendente',problem:'A'}]};
  const local=structuredClone(base),remote=structuredClone(base);
  local.meta.title='B';local.records[0].problem='B';remote.meta.title='C';remote.records[0].status='Corrigido';
  const original=JSON.stringify([base,local,remote]);
  const result=autoResolveReport(base,local,remote);
- assert.deepEqual(result.document,{meta:{title:'C',sector:'Usina'},records:[{pointId:'point-001',status:'Corrigido',problem:'B'}]});
- assert.deepEqual(result.choices,[{path:['meta','title'],choice:'remote'}]);assert.equal(JSON.stringify([base,local,remote]),original);
+ assert.deepEqual(result.document,{meta:{title:'B',sector:'Usina'},records:[{pointId:'point-001',status:'Corrigido',problem:'B'}]});
+ assert.deepEqual(result.choices,[{path:['meta','title'],choice:'local'}]);assert.equal(JSON.stringify([base,local,remote]),original);
 });
 test('recuperação não presume exclusão ou decisão técnica divergente',async()=>{
  const {autoResolveReport}=await import('./team-merge.mjs');
@@ -38,3 +38,5 @@ test('normalização legada só preenche ausências, preserva fotos e originais'
  assert.equal(n.meta.reopenedAt,'');assert.equal(n.records[0].status,'');assert.equal(n.records[0].photos[0].caption,'');assert.equal(n.records[0].photos[0].src,d.records[0].photos[0].src);assert.equal(JSON.stringify(d),raw);
  const bad=structuredClone(d);bad.records[0].photos=[{caption:'sem foto'}];assert.equal(repairLegacyReport(bad,['title'],['tag']),null);
 });
+
+test('cópia local inalterada não sobrescreve correção publicada por outro técnico',async()=>{const {autoResolveReport}=await import('./team-merge.mjs');const base={meta:{title:'A'},records:[{pointId:'point-001',status:'Pendente'}]},local=structuredClone(base),remote=structuredClone(base);remote.records[0].status='Corrigido';assert.deepEqual(autoResolveReport(base,local,remote).document,remote);});

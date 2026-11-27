@@ -745,15 +745,9 @@
             localStorage.setItem(key,JSON.stringify(baseline));markTeamRenewed(item.report_id,received.revision);
             continue;
           }
-          // Sem base, não inferir quais campos são alterações locais. Renovar o mesmo ID
-          // e arquivar as duas versões em uma única transação, com aviso para revisão.
-          const archive={reportId:item.report_id,account:member.google_subject,baseRevision:null,remoteRevision:received.revision,local:row.document,remote:received.originalDocument||received.document,choices:[],reason:'missing-baseline',created:new Date().toISOString()};
-          if(!await replaceTeamLocal(item,row,received.document,member,archive)){teamDeferred++;continue;}
-          baseline[item.report_id]={revision:received.revision,hash:receivedHash};
-          localStorage.setItem(key,JSON.stringify(baseline));
-          teamReceived++;teamRecovered++;
-          markTeamRenewed(item.report_id,received.revision,true);
-          if(typeof refreshHistory==='function')await refreshHistory();
+          // Sem base, não inferir quais campos são alterações locais.
+          // Sem comprovação da origem, preservar a edição local ativa e não promover uma cópia antiga.
+          teamConflicts++;conflictFields.push(item.report_id+': alterações locais preservadas; base de comparação ausente');
           continue;
         }
         // Uma revisão remota e uma edição local podem ter avançado ao mesmo tempo.
@@ -780,13 +774,9 @@
                const archive={reportId:item.report_id,account:member.google_subject,baseRevision:previous.revision,remoteRevision:current.revision,local:row.document,remote:current.originalDocument||current.document,choices:[],created:new Date().toISOString()};
                if(!base||base.revision!==previous.revision||!await confirmedTeamBase(base.document,previous.hash)){
                  // Sem base comum verificável, não presumir quais campos mudaram.
-                 // Renovar a cópia publicada somente com arquivo local recuperável.
-                 archive.reason='unavailable-baseline';
-                 if(!await replaceTeamLocal(item,row,current.document,member,archive)){teamDeferred++;continue;}
-                 baseline[item.report_id]={revision:current.revision,hash:remoteHash};
-                 localStorage.setItem(key,JSON.stringify(baseline));teamReceived++;teamRecovered++;
-                 markTeamRenewed(item.report_id,current.revision,true);
-                 if(typeof refreshHistory==='function')await refreshHistory();
+                 // Não descartar edição pendente quando a base não pode ser confirmada.
+                 // A versão publicada continua no Drive; a local fica ativa e não é enviada às cegas.
+                 teamConflicts++;conflictFields.push(item.report_id+': edição local preservada; revisão-base não confirmada');
                  continue;
                }
                const {autoResolveReport,repairLegacyReport}=await import('./team-merge.mjs');

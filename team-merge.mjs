@@ -83,14 +83,14 @@ export function repairLegacyReport(document,metaKeys,itemKeys){
  if(copy.pending!==undefined&&copy.pending!==null){const p=copy.pending;if(!object(p)||!fields(p.fields,itemKeys)||!photos(p.photos))return null;if(!Object.hasOwn(p,'editing'))p.editing=null}
  return copy;
 }
-// Concilia campos independentes. Para texto divergente, a revisão publicada
-// prevalece, mas o chamador deve arquivar os originais antes de aplicar.
+// Concilia campos independentes. Com base comprovada, a edição local pendente
+// prevalece no mesmo campo de texto não crítico. O chamador arquiva ambas as versões.
 export function autoResolveReport(base,local,remote){
  const first=mergeReport(base,local,remote);
  if(!first.conflicts.length)return {...first,choices:[]};
  // Não presumir exclusão, identidade, ordem nem decisões técnicas divergentes.
  const sensitive=new Set(['status','condition','priority','finalizedAt','reopenedAt','completionDate','completionWork','completionBy','photos','deletedPoints','pending','checklistData','pointId','tag','equipment','pointWorkOrder']);
  if(first.conflicts.some(c=>c.reason!=='same-field'||c.path.some(k=>sensitive.has(k))))return {...first,choices:[]};
- const choices=first.conflicts.map(c=>({path:c.path,choice:'remote'}));
+ const choices=first.conflicts.map(c=>({path:c.path,choice:'local'}));
  return {...mergeReport(base,local,remote,new Map(choices.map(c=>[JSON.stringify(c.path),c.choice]))),choices};
 }

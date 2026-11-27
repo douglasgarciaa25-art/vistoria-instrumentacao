@@ -133,15 +133,17 @@ test('Drive pessoal não envia cópia antiga após conflito sem baseline',()=>{
  assert.doesNotMatch(src,/syncMap\[row\.id\]=remoteHash;saveMap\(\);conflicts\+\+/);
 });
 
-test('equipe renova o mesmo ID e arquiva versão divergente quando não há baseline',()=>{
+test('equipe não sobrescreve edição local divergente quando não há baseline',()=>{
  const src=file('google-drive-sync.js');
  assert.match(src,/if\(row&&!previous\)\{/);
  assert.match(src,/const received=await reportRequest\('GET',item\.report_id\)/);
  assert.match(src,/if\(receivedHash===localHash\)\{/);
  assert.match(src,/baseline\[item\.report_id\]=\{revision:received\.revision,hash:receivedHash\}/);
  assert.match(src,/if\(!latest\|\|await digest\(latest\.document\)!==localHash\)\{teamDeferred\+\+;continue;\}/);
- assert.match(src,/replaceTeamLocal\(item,row,received\.document,member,archive\)/);
- assert.match(src,/reason:'missing-baseline'/);
+ assert.match(src,/alterações locais preservadas; base de comparação ausente/);
+ assert.match(src,/edição local preservada; revisão-base não confirmada/);
+ const withoutBase=src.slice(src.indexOf('if(row&&!previous){'),src.indexOf('// Uma revisão remota e uma edição local'));
+ assert.doesNotMatch(withoutBase,/replaceTeamLocal\(/);
  assert.match(src,/if\(archive\)draft\.put\(archive,'team-conflict:'/);
  assert.match(src,/store\.put\(\{id,updated:item\.updated_at/);
  assert.match(src,/Campos em conflito/);
