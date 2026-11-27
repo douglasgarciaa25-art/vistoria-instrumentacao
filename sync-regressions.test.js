@@ -409,7 +409,7 @@ test('base antiga com foto reordenada só é recuperada com hash original compro
 test('fila automática em primeiro plano respeita conta e consulta PDF sem envio',()=>{
  const src=file('google-drive-sync.js'),worker=file('background-sync.js');
  assert.match(src,/if\(receiveOnly!==true&&window\.VistoriaBackground\?\.run\)/);
- assert.match(src,/await window\.VistoriaBackground\.run\(member\.google_subject\)/);
+ assert.match(src,/await window\.VistoriaBackground\.run\(member\.google_subject,async\(\)=>accessToken===runToken&&validToken\(\)&&queueMember\?\.google_subject===member\.google_subject/);
  assert.match(worker,/expectedSubject!==null&&auth\.subject!==expectedSubject/);
 });
 
