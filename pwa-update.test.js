@@ -6,7 +6,7 @@ const source=readFileSync(new URL('./pwa.js',import.meta.url),'utf8');
 function setup({saveError=false,busy=false,autoActivate=true,activateElsewhere=false}={}){
  const events=[],timers=new Map();let next=0,button=null;
  class Target{
-  constructor(){this.handlers=new Map();this.state='installed';this.inert=false;}
+  constructor(){this.handlers=new Map();this.state='installed';this.inert=false;this.style={};}
   addEventListener(n,fn){const set=this.handlers.get(n)||new Set();set.add(fn);this.handlers.set(n,set);}
   removeEventListener(n,fn){this.handlers.get(n)?.delete(fn);}
   emit(n){for(const fn of [...(this.handlers.get(n)||[])])fn();}
