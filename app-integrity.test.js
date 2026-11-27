@@ -467,13 +467,18 @@ test('seleção entre vistorias mantém IDs e referências e não exporta pontos
  const match=source.slice(source.indexOf(' function reportPointMatches('),source.indexOf(' function reportPointDetails('));
  const active={meta:{number:'RV-A',workOrder:'123',title:'Vistoria'},records:[{pointId:'shared',status:'Corrigido'},{pointId:'other',status:'Pendente'}]};
  const other={meta:{number:'RV-B',workOrder:'456',title:'Vistoria'},records:[{pointId:'shared',status:'Pendente'}]};
- let scope='all';
- const context={data:()=>active,activeReportId:'a',historyItems:[{id:'a',document:active},{id:'b',document:other}],selectedPoints:new Set(),$:()=>({value:scope}),window:{},structuredClone};
+
+ const context={data:()=>active,activeReportId:'a',historyItems:[{id:'a',document:active},{id:'b',document:other}],selectedPoints:new Set(),window:{},structuredClone};
  const result=vm.runInNewContext(section+snapshot+match+
   "\nselectedPoints.add(pointKey('b','shared')); const rows=scopedRows(); const docs=selectedSnapshots(); ({total:rows.length,selected:docs.length,ref:docs[0].meta.number,points:docs[0].records.length,pending:rows.filter(row=>reportPointMatches(row.r,'','Pendente')).length})",context);
  assert.equal(result.total,3);assert.equal(result.selected,1);assert.equal(result.ref,'RV-B');assert.equal(result.points,1);assert.equal(result.pending,2);
- scope='current';
- assert.equal(vm.runInContext('scopedRows().length',context),2);
+ assert.doesNotMatch(source,/id="reportScope"/);
+ assert.match(source,/Origem: <strong>Todas as vistorias/);
+ const legacy={meta:{number:'RV-C',title:'Vistoria'},records:[{tag:'LEGADO'},{pointId:'duplicate-id'},{pointId:'duplicate-id'}]};
+ context.historyItems.push({id:'c',document:legacy});
+ const before=JSON.stringify(legacy);
+ const recovered=vm.runInContext("selectedPoints.clear(); const legacyRows=scopedRows().filter(row=>row.id==='c'); for(const row of legacyRows)selectedPoints.add(row.key); ({count:legacyRows.length,keys:new Set(legacyRows.map(row=>row.key)).size,exported:selectedSnapshots()[0].records.length})",context);
+ assert.equal(recovered.count,3);assert.equal(recovered.keys,3);assert.equal(recovered.exported,3);assert.equal(JSON.stringify(legacy),before);
 });
 
 
